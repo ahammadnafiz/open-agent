@@ -11,6 +11,142 @@ import Testing
 @Suite("Review regressions")
 struct RegressionTests {
 
+  // MARK: - Typing reported success and typed nothing
+
+  /// `AXUIElementSetAttributeValue` returning `.success` does not mean the
+  /// value changed. Measured on WhatsApp's search field: the write returned
+  /// success, the field stayed empty, the step reported `dispatched=true`, and
+  /// the search results the next step needed never appeared.
+  ///
+  /// The keystroke fallback existed directly below it and was unreachable,
+  /// because it was guarded on a return code that lies.
+  @Test("a write that changed nothing falls back to keystrokes")
+  func ignoredWriteFallsBack() {
+    #expect(AXExecutor.writeWasIgnored("Zisan", before: "", after: ""))
+    #expect(AXExecutor.writeWasIgnored("Zisan", before: "old", after: "old"))
+    #expect(AXExecutor.writeWasIgnored("Zisan", before: nil, after: nil))
+  }
+
+  /// The happy path must not double-type.
+  @Test("a write that landed does not fall back")
+  func landedWriteDoesNotFallBack() {
+    #expect(!AXExecutor.writeWasIgnored("Zisan", before: "", after: "Zisan"))
+    #expect(!AXExecutor.writeWasIgnored("Zisan", before: "Zisan", after: "Zisan"))
+  }
+
+  /// **The narrow test matters more than the broad one.** A field that
+  /// transformed the text, or took part of it, has done something — typing it
+  /// again on top would duplicate it, which is a worse failure than the one
+  /// being fixed and one the next step's verification would have to untangle.
+  @Test(
+    "a field that transformed the text is left alone",
+    arguments: [("+1 555", "5551234567"), ("ZISAN", ""), ("Zis", "")])
+  func transformedValueIsNotRetyped(after: String, before: String) {
+    #expect(!AXExecutor.writeWasIgnored("Zisan", before: before, after: after))
+  }
+
+  // MARK: - WhatsApp was unaddressable by its own name
+
+  /// The window server reports WhatsApp's owner name as `U+200E WhatsApp` — a
+  /// LEFT-TO-RIGHT MARK carried through from the localized name, which its
+  /// `CFBundleName` does not have. `pid(forApp:)` matched exactly, so
+  /// `--app WhatsApp` reported "WhatsApp is not running" while WhatsApp sat on
+  /// screen with a standard window.
+  ///
+  /// Measured on this machine: `e2 80 8e 57 68 61 74 73 41 70 70`. The
+  /// character is invisible in a title, a screenshot and a log line, so nothing
+  /// short of a hexdump distinguishes the two strings.
+  @Test("an app name with a bidi mark matches the plain name")
+  func bidiMarkedAppNameMatches() {
+    let asReported = "\u{200E}WhatsApp"
+    #expect(asReported != "WhatsApp")  // the bug, in one line
+    #expect(WindowGuard.normalized(appName: asReported) == "whatsapp")
+    #expect(
+      WindowGuard.normalized(appName: asReported)
+        == WindowGuard.normalized(appName: "WhatsApp"))
+  }
+
+  /// The other format characters an app name can pick up. None of them carry
+  /// identity — they tell a text renderer what to do.
+  @Test(
+    "format characters never change identity",
+    arguments: [
+      "\u{200E}WhatsApp", "WhatsApp\u{200F}", "What\u{200D}sApp",
+      "\u{FEFF}WhatsApp", "  WhatsApp  ", "whatsapp",
+    ])
+  func formatCharactersStripped(variant: String) {
+    #expect(WindowGuard.normalized(appName: variant) == "whatsapp")
+  }
+
+  /// Normalising must not collapse names that are genuinely different, or
+  /// `--app Mail` would start resolving to Mailbox.
+  @Test("different apps stay different")
+  func distinctNamesStayDistinct() {
+    #expect(WindowGuard.normalized(appName: "Mail") != WindowGuard.normalized(appName: "Mailbox"))
+    #expect(WindowGuard.normalized(appName: "Notes") != WindowGuard.normalized(appName: "Note"))
+  }
+
+  // MARK: - A plan could not open the app it planned to open
+
+  /// `AXSource` resolves a pid in `init`, and the executable built it *before*
+  /// the loop ran. So `open-agent run … --app WhatsApp` with a plan whose first
+  /// step was `openApp` exited 2 with "WhatsApp is not running" — the step that
+  /// would have started it was never reached.
+  ///
+  /// Found by running the first real task on this binary. It is the same shape
+  /// as the defect `PlanStep.needsTarget` fixed inside the loop: a step naming
+  /// no on-screen element still has to happen somewhere.
+  @Test("a plan whose next step opens the app says which app to open")
+  func launchTargetNamesTheApp() {
+    let plan = Plan(steps: [
+      PlanStep(kind: .openApp, target: "WhatsApp", payload: "WhatsApp"),
+      PlanStep(kind: .click, target: "the search field", payload: nil),
+    ])
+    #expect(plan.launchTarget(atPlanIndex: 0, appName: "WhatsApp") == "WhatsApp")
+  }
+
+  /// **This is the safety half, and it is the more important one.** An agent
+  /// that launched an application nobody mentioned would be inventing actions.
+  @Test("a plan that does not open an app launches nothing")
+  func noLaunchWithoutAPlannedOpen() {
+    let plan = Plan(steps: [
+      PlanStep(kind: .click, target: "the search field", payload: nil),
+      PlanStep(kind: .openApp, target: "Mail", payload: "Mail"),
+    ])
+    #expect(plan.launchTarget(atPlanIndex: 0, appName: "WhatsApp") == nil)
+  }
+
+  /// A plan that opens an app at step two has not asked for it at step one.
+  /// Only the step that is actually next counts, or `resume` after an unrelated
+  /// failure would relaunch something the user had since quit.
+  @Test("only the step that is next counts")
+  func onlyTheNextStepCounts() {
+    let plan = Plan(steps: [
+      PlanStep(kind: .openApp, target: "WhatsApp", payload: "WhatsApp"),
+      PlanStep(kind: .click, target: "the search field", payload: nil),
+    ])
+    #expect(plan.launchTarget(atPlanIndex: 1, appName: "WhatsApp") == nil)
+  }
+
+  /// An exhausted plan has nothing left to ask for, and an out-of-range index
+  /// must not read backwards into a step already taken.
+  @Test("an exhausted or out-of-range plan launches nothing")
+  func exhaustedPlanLaunchesNothing() {
+    let plan = Plan(steps: [PlanStep(kind: .openApp, target: "WhatsApp", payload: "WhatsApp")])
+    #expect(plan.launchTarget(atPlanIndex: 1, appName: "WhatsApp") == nil)
+    #expect(plan.launchTarget(atPlanIndex: 99, appName: "WhatsApp") == nil)
+    #expect(Plan(steps: []).launchTarget(atPlanIndex: 0, appName: "WhatsApp") == nil)
+  }
+
+  /// `openApp` carries its app in the payload, but a plan that named it only in
+  /// `target` should still work rather than launching an app called "".
+  @Test("a payload-less openApp falls back to the session's app")
+  func payloadlessOpenAppFallsBack() {
+    let plan = Plan(steps: [PlanStep(kind: .openApp, target: "WhatsApp", payload: nil)])
+    #expect(plan.launchTarget(atPlanIndex: 0, appName: "WhatsApp") == "WhatsApp")
+    #expect(plan.launchTarget(atPlanIndex: 0, appName: "") == nil)
+  }
+
   // MARK: - Budget survived only one invocation
 
   /// `LoopState.budget` was a computed `Budget()`, so it was never encoded and

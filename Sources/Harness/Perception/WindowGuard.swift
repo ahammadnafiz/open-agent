@@ -53,15 +53,38 @@ public enum WindowGuard {
     }
   }
 
+  /// An application name reduced to the part that identifies it.
+  ///
+  /// **WhatsApp reports its owner name as `U+200E` + `WhatsApp`** — a
+  /// LEFT-TO-RIGHT MARK the window server carries through from the app's
+  /// localized name, and which its own `CFBundleName` does not have. Measured
+  /// on this machine: `e2 80 8e 57 68 61 74 73 41 70 70`. So an exact match on
+  /// "WhatsApp" never found it, and the app was unaddressable by the only name
+  /// anybody calls it.
+  ///
+  /// The character is invisible by construction. It does not appear in a window
+  /// title, a screenshot, or a log line — the only way to see it is to hexdump
+  /// the string, which is not where anyone starts looking when an app that is
+  /// plainly on screen reports as "not running".
+  ///
+  /// Format characters (Unicode general category Cf — bidi marks, zero-width
+  /// joiners, the BOM) are therefore dropped from both sides before comparing.
+  /// They carry no identity; they exist to tell a text renderer what to do.
+  public static func normalized(appName: String) -> String {
+    String(appName.unicodeScalars.filter { $0.properties.generalCategory != .format })
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+  }
+
   /// Resolves an application name to its pid.
   ///
   /// Matches case-insensitively on the window owner name, preferring the owner
   /// with the largest on-screen window — an app with a stray 1×1 helper window
   /// should still resolve to the one the user can see.
   public static func pid(forApp name: String) throws -> pid_t {
-    let wanted = name.lowercased()
+    let wanted = normalized(appName: name)
     let matches = windows().filter {
-      $0.layer == 0 && $0.ownerName.lowercased() == wanted
+      $0.layer == 0 && normalized(appName: $0.ownerName) == wanted
     }
     guard let best = matches.max(by: { $0.bounds.area < $1.bounds.area }) else {
       throw PerceptionError.appNotRunning(name)

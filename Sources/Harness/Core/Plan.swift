@@ -12,6 +12,28 @@ public struct Plan: Codable, Sendable, Equatable {
 
   /// `true` when the plan has no steps left to attempt at `index`.
   public func isExhausted(at index: Int) -> Bool { index >= steps.count }
+
+  /// The app this plan wants opened before anything can be perceived, or `nil`.
+  ///
+  /// `AXSource` resolves a pid in `init`, so an app that is not running is a
+  /// hard failure *before the loop starts* — which made a plan whose first step
+  /// is `openApp` impossible to run at all. The executable needs to know, ahead
+  /// of the loop, whether the plan itself asked for that launch.
+  ///
+  /// **Returning `nil` is the point.** It is what stops the agent launching an
+  /// application nobody mentioned. Only a step the plan already declared, and
+  /// only the one that is actually next — a plan that opens an app at step
+  /// five has not asked for it at step one.
+  ///
+  /// - Parameter appName: the session's app, used when the step names a target
+  ///   but carries no payload.
+  public func launchTarget(atPlanIndex index: Int, appName: String) -> String? {
+    guard let step = steps.dropFirst(max(0, index)).first, step.kind == .openApp else {
+      return nil
+    }
+    let name = step.payload ?? appName
+    return name.isEmpty ? nil : name
+  }
 }
 
 /// One intent. Targets are named **semantically** — "the compose button" — never

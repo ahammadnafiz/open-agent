@@ -405,6 +405,15 @@ public enum Constants {
     /// Electron's `AXManualAccessibility` unlock is debounced at a hard-coded
     /// 2 s in `electron_application.mm`, and every toggle restarts it.
     public static let electronUnlockDelay: Duration = .seconds(3)
+
+    /// How long to wait for an app the plan asked to open to draw a window.
+    ///
+    /// `/usr/bin/open` returns once the app is *launched*, not once it has
+    /// drawn anything. A cold start of a large app is seconds; a warm one is
+    /// instant. Polling spans both, where a fixed sleep would either stall
+    /// every warm launch or fail every cold one.
+    public static let launchTimeout: Duration = .seconds(20)
+    public static let launchPollInterval: Duration = .milliseconds(250)
   }
 
   // MARK: - Screen capture and OCR (tier 3)

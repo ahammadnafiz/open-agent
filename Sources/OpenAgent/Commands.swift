@@ -242,7 +242,7 @@ enum Commands {
       }
     } else {
       do {
-        axSource = try AXSource(appName: session.appName)
+        axSource = try await nativeSource(for: session)
       } catch {
         fail(describe(error))
       }
@@ -292,6 +292,107 @@ enum Commands {
         reason: result.reason
       )
     )
+  }
+
+  // MARK: - Native session
+
+  /// Builds the native source, launching the app first when the plan's next
+  /// step is what would have launched it.
+  ///
+  /// `AXSource` resolves a pid in `init`, so an app that is not running is a
+  /// hard failure *before the loop starts*. That made a plan whose first step
+  /// is `openApp` impossible to run — and "open WhatsApp and message someone"
+  /// is the shape of most real tasks, so the failure was not an edge case.
+  ///
+  /// It is the same class of bug `PlanStep.needsTarget` fixed inside the loop:
+  /// a step that names no on-screen element still has to happen somewhere, and
+  /// perception is not somewhere it can happen.
+  ///
+  /// **The launch is not an action the plan did not ask for.** It is the step
+  /// the plan already declared, hoisted because perception cannot be
+  /// constructed without it — and only ever that step, because an agent that
+  /// launched an app nobody mentioned would be inventing actions, which is the
+  /// thing the whole safety model rests on it not doing. The loop still
+  /// executes the step; `open -a` on a running app only brings it forward, so
+  /// it appears once in the audit log with its own verdict, exactly as if it
+  /// had run in order.
+  private static func nativeSource(for session: Session) async throws -> AXSource {
+    if let source = try? AXSource(appName: session.appName) { return source }
+
+    // Running, but not reachable from here — on another Space, or closed to
+    // the Dock. Bringing forward the app the caller named is not an action the
+    // agent invented; it is the app it was told to drive, and is about to.
+    //
+    // `open -a` rather than `NSRunningApplication.activate()`: an app closed to
+    // the Dock has no window to raise, and only a reopen makes it draw one.
+    // Measured: WhatsApp sits in the Dock with zero windows, which `activate()`
+    // leaves exactly as it found it.
+    //
+    // A failure here falls through rather than throwing, because the plan may
+    // still carry an `openApp` that knows a name this did not.
+    if runningApp(named: session.appName) != nil {
+      try? AXExecutor.launch(app: session.appName)
+      if let source = try await awaitWindow(for: session.appName) { return source }
+    }
+
+    // Not running at all. Launching is a bigger step than raising, so it
+    // happens only when the plan itself asked for it — an agent that launched
+    // an application nobody mentioned would be inventing actions, which is the
+    // thing the whole safety model rests on it not doing.
+    guard
+      let name = session.plan.launchTarget(
+        atPlanIndex: session.state.planIndex, appName: session.appName)
+    else {
+      throw PerceptionError.appNotRunning(session.appName)
+    }
+
+    Log.info("launching \(name) — the plan opens it, and perception cannot start before it does")
+    try AXExecutor.launch(app: name)
+    if let source = try await awaitWindow(for: session.appName) { return source }
+    throw PerceptionError.appNotRunning(session.appName)
+  }
+
+  /// The running application with this name, whichever Space it is on.
+  ///
+  /// **`CGWindowListCopyWindowInfo(.optionOnScreenOnly)` reports only the
+  /// current Space**, so an app on another desktop is indistinguishable from
+  /// one that was never launched. The host agent runs from a terminal, which is
+  /// almost never on the same Space as the app being driven — so every
+  /// `needs_eyes` callback failed on the resume with "is not running", about an
+  /// app that was plainly running and had already been driven for three steps.
+  ///
+  /// It answers one question only — *may* this app be brought forward, or would
+  /// that be launching something nobody asked for. The bringing forward is done
+  /// with `open -a`, which also works on an app closed to the Dock.
+  ///
+  /// `.regular` only: a menu-bar agent or background helper sharing a name with
+  /// a real app is not the thing the caller meant to drive.
+  private static func runningApp(named name: String) -> NSRunningApplication? {
+    let wanted = WindowGuard.normalized(appName: name)
+    return NSWorkspace.shared.runningApplications.first {
+      $0.activationPolicy == .regular
+        && WindowGuard.normalized(appName: $0.localizedName ?? "") == wanted
+    }
+  }
+
+  /// Polls until the app has a window this process can actually see.
+  ///
+  /// A window, not just a pid. An app that has launched or been raised but
+  /// drawn nothing observes as *empty*, which reads as "that screen has nothing
+  /// on it" rather than "it is still coming up" — the distinction Q6 exists
+  /// for. Polling rather than sleeping, because a cold start of a large app is
+  /// seconds and raising one that is already open is instant.
+  private static func awaitWindow(for appName: String) async throws -> AXSource? {
+    let deadline = ContinuousClock.now.advanced(by: Constants.AX.launchTimeout)
+    while ContinuousClock.now < deadline {
+      if let source = try? AXSource(appName: appName),
+        WindowGuard.hasVisibleWindow(pid: source.pid)
+      {
+        return source
+      }
+      try await Task.sleep(for: Constants.AX.launchPollInterval)
+    }
+    return nil
   }
 
   // MARK: - Browser session

@@ -39,12 +39,15 @@ public struct AXExecutor: Executor {
         throw ExecutionError.missingPayload(kind: action.kind)
       }
       let element = try resolveRequired(action)
+      let before = Self.stringValue(of: element)
       // Try the attribute first — it is atomic and fires the right
       // notifications on well-behaved Cocoa controls.
       let set = AXUIElementSetAttributeValue(
         element, kAXValueAttribute as CFString, text as CFTypeRef
       )
-      if set != .success {
+      if set != .success
+        || Self.writeWasIgnored(text, before: before, after: Self.stringValue(of: element))
+      {
         AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         try KeySynthesis.type(text)
       }
@@ -83,13 +86,48 @@ public struct AXExecutor: Executor {
     }
   }
 
+  /// The element's `AXValue`, when it is a string.
+  static func stringValue(of element: AXUIElement) -> String? {
+    var raw: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &raw) == .success
+    else { return nil }
+    return raw as? String
+  }
+
+  /// Whether the write reported success and changed nothing.
+  ///
+  /// **`AXUIElementSetAttributeValue` returning `.success` does not mean the
+  /// value changed.** Measured on WhatsApp's search field: the write returned
+  /// success, the field stayed empty, the step reported `dispatched=true`, and
+  /// the search results the next step needed never appeared. The keystroke
+  /// fallback below it existed for exactly this and was unreachable, because it
+  /// was guarded on a return code that lies.
+  ///
+  /// This is mechanics, not verification — the distinction `Step.swift` is
+  /// built around. Jev decides whether the *task* moved; this asks only whether
+  /// the API did the thing it just said it did.
+  ///
+  /// The test is deliberately narrow: fall back only when the field still holds
+  /// **exactly** what it held before. A field that transformed the text, or
+  /// accepted part of it, has done *something*, and typing it again on top
+  /// would duplicate it — a worse failure than the one being fixed, and one the
+  /// next step's verification would have to untangle.
+  static func writeWasIgnored(_ text: String, before: String?, after: String?) -> Bool {
+    guard after != text else { return false }
+    return after == before
+  }
+
   /// Launches an application by name.
   ///
   /// `/usr/bin/open` rather than `NSWorkspace`: `Harness` is declared headless
   /// in `Package.swift` and importing AppKit here to launch a process would
   /// trade that boundary for nothing. `open` is also what waits for an already
   /// running instance to come forward, which is the common case.
-  static func launch(app name: String) throws {
+  ///
+  /// Public because the executable has to be able to launch an app *before*
+  /// the loop exists: `AXSource` resolves a pid in `init`, so a plan whose
+  /// first step is `openApp` cannot be perceived until that step has happened.
+  public static func launch(app name: String) throws {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
     process.arguments = ["-a", name]
