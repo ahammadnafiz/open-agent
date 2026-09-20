@@ -232,6 +232,11 @@ enum Commands {
         let (client, browserSource) = try await browserSession()
         bidiClient = client
         source = browserSource
+        // Work in our own tab, from the first observation onward. Reusing the
+        // one this task opened earlier when there is one, so a run plus two
+        // resumes is one tab and not three.
+        await client.adoptTab(session.browserContext)
+        session.browserContext = try await client.openAgentTab()
         do {
           // The AX executor still exists: `openApp` and native fallbacks are
           // reachable from a browser task.

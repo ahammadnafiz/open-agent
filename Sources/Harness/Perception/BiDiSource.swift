@@ -44,12 +44,33 @@ struct BiDiSnapshot: Sendable {
   /// under me" is distinguishable from "the click missed".
   let guards: [String: String]
   let pageKey: String
+  /// What the page thinks its own window is. Zero means the tab has never been
+  /// laid out, and every element then fails the in-viewport test at once.
+  let viewport: CGSize
+  /// Counts only, for when nothing survives the filter.
+  let funnel: String
+  /// Total DOM nodes. Still climbing means the page is still building itself.
+  let nodeCount: Int
+  /// What the document says about itself: `loading`, `interactive`, `complete`.
+  let readyState: String
 
   init(_ raw: [String: Any]) {
     url = (raw["url"] as? String) ?? ""
     title = (raw["title"] as? String) ?? ""
     text = (raw["text"] as? String) ?? ""
     pageKey = (raw["page_key"] as? String) ?? ""
+    let f = (raw["funnel"] as? [String: Any]) ?? [:]
+    nodeCount = (f["all"] as? Double).map { Int($0) } ?? 0
+    readyState = (f["ready"] as? String) ?? "complete"
+    funnel =
+      "all=\((f["all"] as? Double).map { Int($0) } ?? -1) "
+      + "a=\((f["anchors"] as? Double).map { Int($0) } ?? -1) "
+      + "btn=\((f["buttons"] as? Double).map { Int($0) } ?? -1) "
+      + "raw=\((f["raw"] as? Double).map { Int($0) } ?? -1) "
+      + "ready=\((f["ready"] as? String) ?? "?")"
+    let size = (raw["viewport"] as? [String: Any]) ?? [:]
+    viewport = CGSize(
+      width: (size["w"] as? Double) ?? 0, height: (size["h"] as? Double) ?? 0)
     actions = ((raw["actions"] as? [Any]) ?? []).compactMap {
       ($0 as? [String: Any]).flatMap(SnapshotAction.init)
     }
@@ -86,7 +107,10 @@ public actor BiDiSource: ElementSource {
     let snapshot = BiDiSnapshot(raw)
     latest = snapshot
 
-    Log.debug("bidi snapshot: \(snapshot.actions.count) actions on \(snapshot.url)")
+    Log.debug(
+      "bidi snapshot: \(snapshot.actions.count) actions on \(snapshot.url) "
+        + "viewport \(Int(snapshot.viewport.width))x\(Int(snapshot.viewport.height)) "
+        + snapshot.funnel)
 
     return snapshot.actions.map { action in
       Element(
@@ -107,6 +131,15 @@ public actor BiDiSource: ElementSource {
         bounds: action.bounds
       )
     }
+  }
+
+  public func readiness() async -> String {
+    // **A document that says it is still loading is not settled, however still
+    // it looks.** Instagram's inbox parks at ~507 nodes with `readyState:
+    // loading` for seconds — stable, and nowhere near finished. Reporting the
+    // state rather than a count lets the caller refuse to settle on it.
+    guard let latest else { return "" }
+    return latest.readyState == "complete" ? "\(latest.nodeCount)" : "loading"
   }
 
   /// The snapshot's own fingerprint of the page.

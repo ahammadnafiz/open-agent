@@ -397,6 +397,14 @@ public actor AgentLoop {
       executionResult = ExecutionResult(dispatched: false, via: source.kind)
     }
 
+    // **The steps that need this most were the ones not getting it.** Settling
+    // lived only on the targeted path, and `navigate` and `openApp` are
+    // targetless — so the two actions that replace the entire screen were the
+    // two that were judged immediately, before anything had arrived. Instagram
+    // was read at 157 nodes with no links and `readyState: loading`, and the
+    // next step escalated with "no candidates to choose from".
+    if executionResult.dispatched { await settle(from: screenBefore) }
+
     record(
       action: action, result: executionResult, sourceKind: source.kind,
       verdict: verdict, confirmed: confirmed, stepStarted: stepStarted,
@@ -421,12 +429,58 @@ public actor AgentLoop {
   /// See `Constants.Execution.settleTimeout` for what this cost buys.
   private func settle(from before: String) async {
     let deadline = ContinuousClock.now.advanced(by: settleTimeout)
+    var previous: String?
+    var stable = 0
     while ContinuousClock.now < deadline {
       try? await Task.sleep(for: Constants.Execution.settlePollInterval)
+      // **A failed observation here means "not yet", not "give up".** During a
+      // navigation the document is being replaced, so the snapshot script has
+      // nothing to run against and throws — and returning on that turned the
+      // whole settle into a single failed poll. The next step then observed a
+      // page that had not finished arriving and escalated with "no candidates
+      // to choose from", on a page that had twelve of them a moment later.
       guard let elements = try? await source.observe(),
-        let now = try? CandidateFilter.reduce(elements).describe()
-      else { return }
-      if now != before { return }
+        let described = try? CandidateFilter.reduce(elements).describe()
+      else { continue }
+      // The element list *and* how finished the page claims to be. A shell with
+      // a navigation rail on it is stable at twelve elements while the content
+      // the step needs is still being built — see `ElementSource.readiness()`.
+      let readiness = await source.readiness()
+      // A page that reports itself unfinished is never settled, no matter how
+      // long it has looked the same. Bounded by the ceiling either way.
+      if readiness == "loading" {
+        previous = nil
+        continue
+      }
+      let now = described + "\u{1F}" + readiness
+      // **Changed is not the same as finished.** Returning on the first
+      // difference was enough for a click, and wrong for a navigation: a
+      // single-page application paints its chrome, which is a change, and then
+      // fills in the content the step actually needs. Instagram reported
+      // `readyState: loading` with a navigation bar and no page — a step judged
+      // there sees somewhere that exists and has nothing on it.
+      //
+      // So: wait for it to change, then wait for it to stop changing. Two
+      // consecutive identical observations is the cheapest definition of
+      // "settled" that does not require knowing what the page is.
+      // **A screen with nothing on it is never "settled".** The rule used to be
+      // "changed, then stable", and a page still painting its skeleton is
+      // stable at empty — Instagram reported 157 nodes, zero links, zero
+      // buttons and `readyState: loading`, twice in a row, and that counted as
+      // settled. The next step then escalated with "no candidates to choose
+      // from" against a page that was still arriving.
+      //
+      // Waiting for two identical NON-EMPTY observations is both simpler and
+      // stricter. A step that genuinely changes nothing still returns in two
+      // polls; a page that has not finished is waited out to the ceiling, which
+      // is the outcome worth paying for.
+      if !now.isEmpty, now == previous {
+        stable += 1
+        if stable >= Constants.Execution.settleStableChecks { return }
+      } else {
+        stable = 0
+      }
+      previous = now
     }
   }
 

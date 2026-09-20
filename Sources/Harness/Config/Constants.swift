@@ -355,8 +355,21 @@ public enum Constants {
     /// This *saves* time despite being a wait. A wasted retry costs a Jev call,
     /// an execution and another observation; polling stops the moment the
     /// screen differs, which is usually the first poll.
-    public static let settleTimeout: Duration = .milliseconds(1_200)
+    /// Raised for single-page applications, which load and then render.
+    /// Instagram answered `readyState: loading` with its navigation bar up and
+    /// its content absent; a step judged there sees a page that is technically
+    /// present and has nothing on it.
+    public static let settleTimeout: Duration = .seconds(10)
     public static let settlePollInterval: Duration = .milliseconds(150)
+
+    /// How many identical observations in a row count as settled.
+    ///
+    /// **Two was not enough for a real application.** Instagram's inbox holds
+    /// at 526 nodes and `readyState: complete` for a beat, then fills in its
+    /// conversations — so a step judged after 300ms of quiet sees a navigation
+    /// rail and calls it the page. Ten polls is 1.5s of genuine stillness,
+    /// which is the difference between a pause and an ending.
+    public static let settleStableChecks = 10
   }
 
   // MARK: - Recovery

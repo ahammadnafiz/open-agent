@@ -25,6 +25,8 @@ case "windows": Probe.windows()
 case "bidi-dom":
   await Probe.bidiDOM(
     url: arguments.count > 2 ? arguments[2] : "https://en.wikipedia.org/wiki/Accessibility")
+case "bidi-ax":
+  await Probe.bidiAX(url: arguments.count > 2 ? arguments[2] : nil)
 case "browser-login": Probe.browserLogin()
 case "battery-eval": await Probe.batteryEval()
 case "capture-fixtures": await Probe.captureFixtures()
@@ -334,6 +336,59 @@ enum Probe {
       print("region. Never nudge the threshold to make this pass.")
     }
     exit(1)
+  }
+
+  // MARK: - bidi-ax
+
+  /// Does BiDi give us what CDP's `Accessibility.getFullAXTree` gives
+  /// browser-harness?
+  ///
+  /// Measured on Instagram in Chrome: a DOM selector whitelist finds 24
+  /// actionable elements on a page where the accessibility tree finds 76. The
+  /// whitelist is what `SnapshotScript` uses, and it is why the agent reported
+  /// `a=11 btn=0` on an inbox full of controls.
+  ///
+  /// CDP is not available on a Gecko browser, so the question is whether
+  /// `browsingContext.locateNodes` with an accessibility locator reaches the
+  /// same computed roles. If it does, the fix keeps the user's own browser.
+  static func bidiAX(url: String?) async {
+    let handle: BrowserLauncher.Handle
+    do {
+      handle = try await BrowserLauncher.ensureDrivable(allowRestart: true)
+    } catch {
+      print("probe failed: \(error)")
+      return
+    }
+    let client = BiDiClient(port: handle.port)
+    do {
+      try await client.connect()
+      if let url { try await client.navigate(to: url) }
+
+      let roles = [
+        "button", "link", "textbox", "searchbox", "combobox", "checkbox",
+        "tab", "menuitem", "switch", "option", "listbox", "radio",
+      ]
+      print("role         nodes")
+      print("───────────  ─────")
+      var total = 0
+      for role in roles {
+        do {
+          let found = try await client.locateByRole(role)
+          total += found
+          print(pad(role, 13) + "\(found)")
+        } catch {
+          print(pad(role, 13) + "unsupported: \(error)")
+        }
+      }
+      print("")
+      print("total        \(total)")
+      print("")
+      print("one button node, raw:")
+      print((try? await client.locateRaw("button")) ?? "none")
+    } catch {
+      print("probe failed: \(error)")
+    }
+    await client.close()
   }
 
   // MARK: - capture-fixtures

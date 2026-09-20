@@ -16,9 +16,60 @@ import Foundation
 /// Design adapted from `browser-use/jev-ultrafast` (MIT). See ADR 0010.
 enum SnapshotScript {
 
+  /// The stale-target fingerprint, defined once.
+  ///
+  /// **It used to be written twice** — once here and once inline in
+  /// `BiDiExecutor` — and the two never agreed. The snapshot hashed the
+  /// computed role and the ARIA name; the executor hashed
+  /// `getAttribute('role') || tagName` and `innerText`. For an `<a href>` one
+  /// said `link` and the other said `a`, and for any control whose accessible
+  /// name is not its text they disagreed outright. Every comparison was
+  /// therefore a coin flip, and on Instagram it came up "stale" on a row that
+  /// had not moved.
+  ///
+  /// Identity and geometry only. The element id already says it is the same
+  /// node, so text added nothing and made the check brittle on live content: a
+  /// conversation row rewrites its own preview and timestamp every few seconds.
+  /// What this answers is "did the page move under me" — did it shift, or
+  /// become disabled, between the decision and the click.
+  static let guardFunction = #"""
+    window.__oaRole = window.__oaRole || ((el) => {
+      const ROLES = new Set([
+        'button','link','checkbox','radio','textbox','combobox','listbox','option',
+        'menuitem','menuitemcheckbox','menuitemradio','tab','switch','searchbox','slider',
+      ]);
+      const explicit = (el.getAttribute('role') || '').toLowerCase();
+      if (ROLES.has(explicit)) return explicit;
+      switch (el.tagName) {
+        case 'BUTTON': return 'button';
+        case 'A': return el.hasAttribute('href') ? 'link' : '';
+        case 'SELECT': return 'combobox';
+        case 'TEXTAREA': return 'textbox';
+        case 'SUMMARY': return 'button';
+        case 'INPUT': {
+          const t = (el.type || 'text').toLowerCase();
+          if (t === 'checkbox') return 'checkbox';
+          if (t === 'radio') return 'radio';
+          if (t === 'search') return 'searchbox';
+          if (['button', 'submit', 'reset', 'image'].includes(t)) return 'button';
+          return 'textbox';
+        }
+        default:
+          return el.isContentEditable ? 'textbox' : (explicit || '');
+      }
+    });
+
+    window.__oaGuard = window.__oaGuard || ((el, roleValue) => {
+      const r = el.getBoundingClientRect();
+      const off = el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true';
+      return [roleValue, Math.round(r.left), Math.round(r.top), off ? 1 : 0].join('|');
+    });
+    """#
+
   /// Returns a single JSON object. Every field the harness reads is documented
   /// in `BiDiSnapshot`.
   static let source = #"""
+    \#(guardFunction)
     (() => {
       const MAX_ACTIONS = 250;      // their cap; ours is Constants.Jev.maxCandidates = 255
       const TEXT_LIMIT  = 6000;
@@ -97,8 +148,23 @@ enum SnapshotScript {
         const img = el.querySelector('img[alt]');
         if (img && img.alt.trim()) return img.alt.trim();
 
-        const t = el.getAttribute('title') || el.getAttribute('placeholder');
-        return t ? t.trim() : '';
+        // `aria-placeholder` is how a `contenteditable` composer names itself
+        // — there is no `placeholder` attribute on a div. Instagram's message
+        // box carries one and nothing else, so it was dropped for having no
+        // name, and a conversation offered its emoji, voice, photo and GIF
+        // buttons while the thing you type into was absent from the list.
+        const t = el.getAttribute('title')
+          || el.getAttribute('placeholder')
+          || el.getAttribute('aria-placeholder');
+        if (t && t.trim()) return t.trim();
+
+        // A text box with no name at all is still the only thing on the page
+        // you can type into. Naming it by its role keeps it addressable instead
+        // of invisible; a nameless *button* stays dropped, because there is
+        // nothing to tell one from another and the denylist has nothing to read.
+        const r = window.__oaRole(el);
+        if (r === 'textbox' || r === 'searchbox') return r;
+        return '';
       };
 
       const ROLES = new Set([
@@ -106,27 +172,7 @@ enum SnapshotScript {
         'menuitem','menuitemcheckbox','menuitemradio','tab','switch','searchbox','slider',
       ]);
 
-      const role = (el) => {
-        const explicit = (el.getAttribute('role') || '').toLowerCase();
-        if (ROLES.has(explicit)) return explicit;
-        switch (el.tagName) {
-          case 'BUTTON': return 'button';
-          case 'A': return el.hasAttribute('href') ? 'link' : '';
-          case 'SELECT': return 'combobox';
-          case 'TEXTAREA': return 'textbox';
-          case 'SUMMARY': return 'button';
-          case 'INPUT': {
-            const t = (el.type || 'text').toLowerCase();
-            if (t === 'checkbox') return 'checkbox';
-            if (t === 'radio') return 'radio';
-            if (t === 'search') return 'searchbox';
-            if (['button', 'submit', 'reset', 'image'].includes(t)) return 'button';
-            return 'textbox';
-          }
-          default:
-            return el.isContentEditable ? 'textbox' : (explicit || '');
-        }
-      };
+      const role = (el) => window.__oaRole(el);
 
       const kindOf = (el, r) => {
         if (r === 'combobox' && el.tagName === 'SELECT') return 'select';
@@ -225,7 +271,14 @@ enum SnapshotScript {
 
         // Guards are how the executor tells "the page changed under me" from
         // "the click missed". Compared immediately before acting.
-        guards[key] = [rr, label, Math.round(r.left), Math.round(r.top), disabled(el) ? 1 : 0].join('|');
+        // **Identity and geometry, not text.** The guard answers "did the page
+        // move under me" — a control that shifted, or became disabled, between
+        // the decision and the click. The element id already says it is the
+        // same node, so the label added nothing to that and made the check
+        // brittle on anything live: an Instagram conversation row rewrites its
+        // own preview and timestamp every few seconds, and the click was
+        // refused as stale on a row that had not moved a pixel.
+        guards[key] = window.__oaGuard(el, rr);
       }
 
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -242,6 +295,15 @@ enum SnapshotScript {
       return {
         url: location.href,
         title: document.title,
+        // Where elements are lost, when none survive. Counted only, never
+        // content — this is a funnel, not a page dump.
+        funnel: {
+          all: document.querySelectorAll('*').length,
+          anchors: document.querySelectorAll('a[href]').length,
+          buttons: document.querySelectorAll('button,[role="button"]').length,
+          raw: raw.length,
+          ready: document.readyState,
+        },
         viewport: { w: vw, h: vh },
         scroll: { y: window.scrollY, height: document.documentElement.scrollHeight },
         text: text.slice(0, TEXT_LIMIT),

@@ -69,6 +69,22 @@ public protocol ElementSource: Sendable {
   var kind: SourceKind { get }
 }
 
+/// How finished a screen looks, beyond the elements it is offering.
+///
+/// **A page can be stable and not ready.** Instagram's inbox reports
+/// `readyState: complete` with its navigation rail rendered and its
+/// conversations absent — twelve elements, unchanged between polls, for
+/// seconds. Waiting for the element list to stop moving therefore stopped too
+/// early, on a shell.
+///
+/// The DOM node count keeps climbing while a single-page application builds
+/// itself, so it separates "nothing more is coming" from "nothing has arrived
+/// yet". Sources that have no such signal return an empty string and settle on
+/// their element list alone, exactly as before.
+extension ElementSource {
+  public func readiness() async -> String { "" }
+}
+
 extension ElementSource {
   /// A compact textual rendering for the Jev `state`. **Not** the same as
   /// `observe()` — this is what lands in `screen_now`, and Jev's documented

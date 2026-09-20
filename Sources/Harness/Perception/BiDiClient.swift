@@ -89,6 +89,8 @@ public actor BiDiClient {
   private var contextID: String?
   /// The tab this run opened for itself, once it has one.
   private var agentTabID: String?
+  /// The container the user's own tab is in, so the agent's tab can join it.
+  private var userContextID: String?
   private let connectTimeout: Duration
   private let retryDelay: Duration
 
@@ -212,13 +214,40 @@ public actor BiDiClient {
     guard let contexts = tree["contexts"] as? [[String: Any]], !contexts.isEmpty else {
       throw BiDiError.noBrowsingContext
     }
-    let loaded = contexts.first { context in
+    // A loaded tab, and where there is a choice, one in a named container.
+    //
+    // **Containers are separate cookie jars, and `default` is where automation
+    // lands.** Firefox calls them containers, Zen calls them workspaces; a
+    // person who organises their browsing into them is signed in *there*, and
+    // a tab opened in `default` is a stranger in the same browser. Measured:
+    // their Instagram sat logged in under user context `5f26d6ed…` while the
+    // agent's tab in `default` was served the login page — which reads exactly
+    // like "you are not logged in", and they were.
+    //
+    // The assumption, stated plainly: when named containers are in use, the
+    // user's real session is in one of them rather than in `default`. A
+    // browser with no containers has every tab in `default` and is unaffected.
+    // With several named containers this picks the first with a page loaded,
+    // which is a guess — the protocol exposes no notion of which tab the
+    // person is looking at.
+    let loaded = contexts.filter { context in
       guard let url = context["url"] as? String else { return false }
       return !Self.isBlank(url)
     }
-    guard let id = (loaded ?? contexts.first)?["context"] as? String else {
+    let chosen =
+      loaded.first(where: { ($0["userContext"] as? String).map { $0 != "default" } ?? false })
+      ?? loaded.first
+      ?? contexts.first
+    guard let id = chosen?["context"] as? String else {
       throw BiDiError.noBrowsingContext
     }
+    // **Remember which container that tab is in.** Firefox containers — Zen
+    // calls them workspaces — each have their own cookie jar, so a tab opened
+    // in `default` is signed out of everything the user is signed in to
+    // elsewhere. Measured: their Instagram sat logged in under user context
+    // `5f26d6ed…` while the agent's tab, created in `default`, was served the
+    // login page. It read exactly like "you are not logged in", and they were.
+    userContextID = chosen?["userContext"] as? String
     return id
   }
 
@@ -335,9 +364,39 @@ public actor BiDiClient {
   ///
   /// The tab is left open when the run ends. The result of the task is in it,
   /// and closing it would take that away the moment it became useful.
-  private func openAgentTab() async throws -> String {
+  public func adoptTab(_ id: String?) async {
+    guard let id else { return }
+    // Only if it is still there. A tab the user closed between invocations is
+    // not an error — it is a reason to open a fresh one.
+    guard let tree = try? await send("browsingContext.getTree", [:]),
+      let contexts = tree["contexts"] as? [[String: Any]]
+    else { return }
+    let ids = contexts.compactMap { $0["context"] as? String }
+    guard ids.contains(id) else {
+      Log.debug("previous tab \(id) is gone; open tabs: \(ids.joined(separator: ", "))")
+      return
+    }
+    agentTabID = id
+    contextID = id
+  }
+
+  /// The id of the tab this run is working in, for the caller to carry forward.
+  public func agentTab() -> String? { agentTabID }
+
+  /// Opens the tab this run works in, and makes everything point at it.
+  ///
+  /// **Called before the first observation, not lazily on the first
+  /// navigation.** Observing whatever tab happened to be open meant judging the
+  /// task against a page that had nothing to do with it — measured: a leftover
+  /// Instagram login tab from an earlier run produced `blocked 0.91` at step 0,
+  /// before the agent had navigated anywhere or done anything at all.
+  public func openAgentTab() async throws -> String {
     if let agentTabID { return agentTabID }
-    let created = try await send("browsingContext.create", ["type": "tab"])
+    // Join the container the user's tab is in, so the agent shares their
+    // session. Without it the agent is a stranger in the same browser.
+    var params: [String: any Sendable] = ["type": "tab"]
+    if let userContextID { params["userContext"] = userContextID }
+    let created = try await send("browsingContext.create", params)
     guard let id = created["context"] as? String else {
       throw BiDiError.noBrowsingContext
     }
@@ -347,8 +406,42 @@ public actor BiDiClient {
     // Best effort: a tab that exists but is not focused is still drivable, and
     // failing here would abandon a navigation that is about to work.
     _ = try? await send("browsingContext.activate", ["context": id])
-    Log.debug("opened the agent's own tab: \(id)")
+    Log.debug("opened the agent's own tab: \(id) in container \(userContextID ?? "default")")
     return id
+  }
+
+  /// How many nodes the browser itself reports for an accessibility role.
+  ///
+  /// `browsingContext.locateNodes` with an accessibility locator asks the
+  /// browser for its *computed* role, which is the thing a DOM selector cannot
+  /// know: a `div` that Instagram wires up as a button has no `role="button"`
+  /// attribute and no `<button>` tag, and only the accessibility layer calls it
+  /// a button.
+  public func locateByRole(_ role: String) async throws -> Int {
+    let result = try await send(
+      "browsingContext.locateNodes",
+      [
+        "context": try context(),
+        "locator": ["type": "accessibility", "value": ["role": role]],
+      ]
+    )
+    return ((result["nodes"] as? [Any]) ?? []).count
+  }
+
+  /// One raw located node, for inspecting the shape BiDi returns.
+  public func locateRaw(_ role: String) async throws -> String {
+    let result = try await send(
+      "browsingContext.locateNodes",
+      [
+        "context": try context(),
+        "locator": ["type": "accessibility", "value": ["role": role]],
+      ]
+    )
+    guard let first = (result["nodes"] as? [Any])?.first,
+      let data = try? JSONSerialization.data(withJSONObject: first),
+      let text = String(data: data, encoding: .utf8)
+    else { return "none" }
+    return text
   }
 
   /// Dispatches real input events.

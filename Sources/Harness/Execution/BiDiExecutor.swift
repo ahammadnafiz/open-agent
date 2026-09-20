@@ -145,12 +145,13 @@ public struct BiDiExecutor: Executor {
       const cy = Math.min(Math.max(r.top + r.height / 2, 0), window.innerHeight - 1);
       const top = document.elementFromPoint(cx, cy);
       const occluded = !(top && (top === el || el.contains(top) || top.contains(el)));
-      const role = el.getAttribute('role') || el.tagName.toLowerCase();
-      const disabled = el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true';
+      const role = window.__oaRole(el);
       return {
         x: cx, y: cy, occluded: occluded,
-        guard: [role, (el.innerText || el.value || '').trim().slice(0, 200),
-                Math.round(r.left), Math.round(r.top), disabled ? 1 : 0].join('|'),
+        // One definition, shared with the snapshot. See
+        // `SnapshotScript.guardFunction` for why this used to be written twice
+        // and why the two never matched.
+        guard: window.__oaGuard(el, role),
       };
     })()
     """
