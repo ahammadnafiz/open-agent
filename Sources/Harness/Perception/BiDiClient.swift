@@ -16,6 +16,45 @@ public enum BiDiError: Error, Equatable, Sendable {
   case scriptFailed(String)
 }
 
+/// The socket, behind a seam.
+///
+/// Injected so session lifecycle is testable without a browser. The bug this
+/// exists to guard is not hypothetical: `close()` used to cancel the socket
+/// without ending the BiDi session, which left the session alive inside the
+/// browser bound to a connection that no longer existed. Every later
+/// `session.new` was then refused with *"Maximum number of active sessions"* —
+/// a browser that is running, listening, and undrivable until it is killed.
+public protocol BiDiTransport: Sendable {
+  func send(_ text: String) async throws
+  func receive() async throws -> String
+  func cancel()
+}
+
+/// The live transport.
+final class WebSocketTransport: BiDiTransport {
+  private let task: URLSessionWebSocketTask
+
+  init(session: URLSession, port: Int) throws {
+    guard let url = URL(string: "ws://127.0.0.1:\(port)/session") else {
+      throw BiDiError.handshakeFailed("bad url")
+    }
+    task = session.webSocketTask(with: url)
+    task.resume()
+  }
+
+  func send(_ text: String) async throws { try await task.send(.string(text)) }
+
+  func receive() async throws -> String {
+    switch try await task.receive() {
+    case .string(let s): return s
+    case .data(let d): return String(decoding: d, as: UTF8.self)
+    @unknown default: throw BiDiError.malformedResponse("unknown frame")
+    }
+  }
+
+  func cancel() { task.cancel(with: .normalClosure, reason: nil) }
+}
+
 /// A minimal WebDriver BiDi client over `URLSessionWebSocketTask`.
 ///
 /// Foundation only. `SPEC.md` § Tech Stack picked this on purpose: *"WebSocket —
@@ -28,16 +67,35 @@ public enum BiDiError: Error, Equatable, Sendable {
 /// draining until the matching `id` arrives.
 public actor BiDiClient {
   private let port: Int
-  private var socket: URLSessionWebSocketTask?
-  private let session: URLSession
+  private var socket: (any BiDiTransport)?
+  private let makeTransport: @Sendable (Int) throws -> any BiDiTransport
   private var nextID = 1
   private var contextID: String?
+  private let connectTimeout: Duration
+  private let retryDelay: Duration
 
-  public init(port: Int = Constants.Browser.bidiPort) {
+  /// - Parameter connectTimeout: how long to keep retrying while the browser
+  ///   starts. Cold start was measured at 5–7 s, so the default is a
+  ///   connect-retry ceiling rather than a sleep. Injectable because a test
+  ///   that exercises the retry path should not spend the real ceiling doing
+  ///   it — a twenty-second unit test is one people stop running.
+  public init(
+    port: Int = Constants.Browser.bidiPort,
+    connectTimeout: Duration = Constants.Browser.launchTimeout,
+    retryDelay: Duration = .milliseconds(300),
+    makeTransport: (@Sendable (Int) throws -> any BiDiTransport)? = nil
+  ) {
     self.port = port
-    let configuration = URLSessionConfiguration.ephemeral
-    configuration.timeoutIntervalForRequest = Constants.Jev.requestTimeout.inSeconds
-    session = URLSession(configuration: configuration)
+    self.connectTimeout = connectTimeout
+    self.retryDelay = retryDelay
+    if let makeTransport {
+      self.makeTransport = makeTransport
+    } else {
+      let configuration = URLSessionConfiguration.ephemeral
+      configuration.timeoutIntervalForRequest = Constants.Jev.requestTimeout.inSeconds
+      let session = URLSession(configuration: configuration)
+      self.makeTransport = { try WebSocketTransport(session: session, port: $0) }
+    }
   }
 
   // MARK: - Lifecycle
@@ -47,7 +105,7 @@ public actor BiDiClient {
   /// Cold start was measured at 5–7 s, so this polls up to
   /// `Constants.Browser.launchTimeout` rather than sleeping a fixed amount.
   public func connect() async throws {
-    let deadline = ContinuousClock.now + Constants.Browser.launchTimeout
+    let deadline = ContinuousClock.now + connectTimeout
     var lastError: (any Error)?
 
     while ContinuousClock.now < deadline {
@@ -73,9 +131,9 @@ public actor BiDiClient {
         // A half-open socket left behind here is what leaks the session, so the
         // retry path tears it down the same way `close()` does.
         if socket != nil { _ = try? await send("session.end", [:]) }
-        socket?.cancel(with: .goingAway, reason: nil)
+        socket?.cancel()
         socket = nil
-        try? await Task.sleep(for: .milliseconds(300))
+        try? await Task.sleep(for: retryDelay)
       }
     }
     Log.warn("bidi never came up on port \(port): \(lastError.map { "\($0)" } ?? "no answer")")
@@ -95,18 +153,13 @@ public actor BiDiClient {
       // failing here would mask whatever actually went wrong first.
       _ = try? await send("session.end", [:])
     }
-    socket?.cancel(with: .normalClosure, reason: nil)
+    socket?.cancel()
     socket = nil
     contextID = nil
   }
 
   private func openSocket() async throws {
-    guard let url = URL(string: "ws://127.0.0.1:\(port)/session") else {
-      throw BiDiError.handshakeFailed("bad url")
-    }
-    let task = session.webSocketTask(with: url)
-    task.resume()
-    socket = task
+    socket = try makeTransport(port)
   }
 
   /// The top-level browsing context — the tab the agent drives.
@@ -138,19 +191,12 @@ public actor BiDiClient {
     nextID += 1
     let payload: [String: Any] = ["id": id, "method": method, "params": params]
     let data = try JSONSerialization.data(withJSONObject: payload)
-    try await socket.send(.string(String(decoding: data, as: UTF8.self)))
+    try await socket.send(String(decoding: data, as: UTF8.self))
 
     // BiDi multiplexes events onto the same socket. Anything without our id is
     // an event; drop it rather than mistaking it for a reply.
     while true {
-      let message = try await socket.receive()
-      let text: String
-      switch message {
-      case .string(let s): text = s
-      case .data(let d): text = String(decoding: d, as: UTF8.self)
-      @unknown default: throw BiDiError.malformedResponse("unknown frame")
-      }
-
+      let text = try await socket.receive()
       guard let object = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
       else { continue }
       guard let replyID = object["id"] as? Int, replyID == id else { continue }

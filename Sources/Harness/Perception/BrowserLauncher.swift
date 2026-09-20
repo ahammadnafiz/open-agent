@@ -30,6 +30,60 @@ public enum BrowserLauncher {
     case launchFailed(String)
   }
 
+  /// The operating-system facts `ensureDrivable` reasons about.
+  ///
+  /// Injected so the launch *decision* can be tested without a browser. The
+  /// decision is the part that went wrong: the first version launched on every
+  /// failed connect, which is what stacked empty windows beside the browser the
+  /// user was working in. That is a branch, and a branch belongs in a test.
+  public struct Probes: Sendable {
+    public var isListening: @Sendable (Int) -> Bool
+    public var runningBrowsers: @Sendable (String) -> [Int32]
+    public var binaryExists: @Sendable (String) -> Bool
+    public var quit: @Sendable (String) throws -> Void
+    public var waitForExit: @Sendable (String, Duration) async throws -> Void
+    /// Returns the pid of the browser it started.
+    public var launch: @Sendable (String, String, Int) throws -> Int32
+
+    public init(
+      isListening: @escaping @Sendable (Int) -> Bool,
+      runningBrowsers: @escaping @Sendable (String) -> [Int32],
+      binaryExists: @escaping @Sendable (String) -> Bool,
+      quit: @escaping @Sendable (String) throws -> Void,
+      waitForExit: @escaping @Sendable (String, Duration) async throws -> Void,
+      launch: @escaping @Sendable (String, String, Int) throws -> Int32
+    ) {
+      self.isListening = isListening
+      self.runningBrowsers = runningBrowsers
+      self.binaryExists = binaryExists
+      self.quit = quit
+      self.waitForExit = waitForExit
+      self.launch = launch
+    }
+
+    public static let live = Probes(
+      isListening: { BrowserLauncher.isListening(port: $0) },
+      runningBrowsers: { BrowserLauncher.runningBrowsers(binary: $0) },
+      binaryExists: { FileManager.default.fileExists(atPath: $0) },
+      quit: { try BrowserLauncher.quitGracefully(applicationName: $0) },
+      waitForExit: { try await BrowserLauncher.waitForExit(binary: $0, deadline: $1) },
+      launch: { binary, profile, port in
+        try FileManager.default.createDirectory(
+          atPath: profile, withIntermediateDirectories: true)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: binary)
+        process.arguments =
+          Constants.Browser.launchArgs + [
+            "--remote-debugging-port", "\(port)", "--profile", profile,
+          ]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { throw LaunchError.launchFailed("\(error)") }
+        return process.processIdentifier
+      }
+    )
+  }
+
   // MARK: - Process discovery
 
   /// PIDs of running browser processes for this binary, parents only.
@@ -85,63 +139,54 @@ public enum BrowserLauncher {
     binary: String = Constants.Browser.zenBinary,
     profileOverride: String? = nil,
     port: Int = Constants.Browser.bidiPort,
-    allowRestart: Bool
+    allowRestart: Bool,
+    probes: Probes = .live
   ) async throws -> Handle {
-    guard FileManager.default.fileExists(atPath: binary) else {
+    guard probes.binaryExists(binary) else {
       throw LaunchError.binaryMissing(binary)
     }
     let profile = BrowserProfile.active(override: profileOverride)
 
-    // Already drivable. Attach; do not start a second browser. Launching on
-    // every failed connect is what stacks up empty windows.
-    if isListening(port: port) {
+    // Already drivable. Attach; do NOT start a second browser.
+    //
+    // This check is the whole fix for the stacked-windows bug. Connecting has
+    // its own retry loop, and when launching lived inside that loop every
+    // failed attempt started another browser — each one grabbing a profile,
+    // none of them reachable.
+    if probes.isListening(port) {
       Log.info("attaching to the browser already listening on port \(port)")
       return Handle(
-        processIdentifier: runningBrowsers(binary: binary).first ?? 0,
+        processIdentifier: probes.runningBrowsers(binary).first ?? 0,
         port: port, profile: profile, restartedExistingBrowser: false
       )
     }
 
-    let running = runningBrowsers(binary: binary)
+    let running = probes.runningBrowsers(binary)
     var restarted = false
 
     if !running.isEmpty {
+      // A browser is up but has no debug port, and the port cannot be added to
+      // a running process. The only way through is a restart, and that closes a
+      // window the user may be working in — so it is the caller's call, never a
+      // silent default in here.
       guard allowRestart else {
         throw LaunchError.profileLocked(profile)
       }
       // Quit through the application, not with a signal. Gecko saves session
-      // state on a clean quit, so the tabs come back when it relaunches; a
-      // SIGKILL loses them and leaves the profile lock behind.
+      // state on a clean quit, so the tabs come back; a SIGKILL loses them and
+      // leaves the profile lock behind.
       Log.info("quitting the running browser so its profile can be driven")
-      try quitGracefully(applicationName: "Zen")
-      try await waitForExit(binary: binary, deadline: Constants.Browser.quitTimeout)
+      try probes.quit("Zen")
+      try await probes.waitForExit(binary, Constants.Browser.quitTimeout)
       restarted = true
     }
 
-    try FileManager.default.createDirectory(
-      atPath: profile, withIntermediateDirectories: true
-    )
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: binary)
-    process.arguments =
-      Constants.Browser.launchArgs + [
-        "--remote-debugging-port", "\(port)",
-        "--profile", profile,
-      ]
-    process.standardOutput = FileHandle.nullDevice
-    process.standardError = FileHandle.nullDevice
-
-    do {
-      try process.run()
-    } catch {
-      throw LaunchError.launchFailed("\(error)")
-    }
-    Log.info("launched browser pid \(process.processIdentifier) on port \(port)")
+    let pid = try probes.launch(binary, profile, port)
+    Log.info("launched browser pid \(pid) on port \(port)")
     Log.info("profile: \(profile)")
 
     return Handle(
-      processIdentifier: process.processIdentifier, port: port,
+      processIdentifier: pid, port: port,
       profile: profile, restartedExistingBrowser: restarted
     )
   }
