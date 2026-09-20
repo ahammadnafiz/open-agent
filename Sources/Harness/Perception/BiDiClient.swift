@@ -87,6 +87,8 @@ public actor BiDiClient {
   private let makeTransport: @Sendable (Int) throws -> any BiDiTransport
   private var nextID = 1
   private var contextID: String?
+  /// The tab this run opened for itself, once it has one.
+  private var agentTabID: String?
   private let connectTimeout: Duration
   private let retryDelay: Duration
 
@@ -187,6 +189,8 @@ public actor BiDiClient {
     socket?.cancel()
     socket = nil
     contextID = nil
+    // The tab itself stays open — it holds the result of the task.
+    agentTabID = nil
   }
 
   private func openSocket() async throws {
@@ -303,11 +307,48 @@ public actor BiDiClient {
     return try JSONSerialization.data(withJSONObject: plain)
   }
 
+  /// Navigates, in a tab this run opened for itself.
+  ///
+  /// **The agent does not take over the tab you are reading.** Navigating
+  /// whichever context `getTree` returned replaced the page the user had open,
+  /// in their own browser, with no way back but history — observed: an
+  /// Instagram login page appeared where their page had been.
+  ///
+  /// A person given this task opens a tab for it. So does this.
   public func navigate(to url: String) async throws {
+    let target = try await openAgentTab()
     try await send(
       "browsingContext.navigate",
-      ["context": try context(), "url": url, "wait": "complete"]
+      ["context": target, "url": url, "wait": "complete"]
     )
+  }
+
+  /// The tab this run works in, created on first use and reused after.
+  ///
+  /// Once per session, not once per navigation: a multi-step task that visits
+  /// three pages is still one piece of work, and scattering a tab per step is
+  /// the other way to make a mess of someone's browser.
+  ///
+  /// Everything after this points at that tab — `contextID` moves — so
+  /// observation, clicks and typing all act on the page the agent put there
+  /// rather than on whatever the user has in front of them.
+  ///
+  /// The tab is left open when the run ends. The result of the task is in it,
+  /// and closing it would take that away the moment it became useful.
+  private func openAgentTab() async throws -> String {
+    if let agentTabID { return agentTabID }
+    let created = try await send("browsingContext.create", ["type": "tab"])
+    guard let id = created["context"] as? String else {
+      throw BiDiError.noBrowsingContext
+    }
+    agentTabID = id
+    contextID = id
+    // Bring it to the front, so what the agent is doing is what the user sees.
+    // Best effort: a tab that exists but is not focused is still drivable, and
+    // failing here would abandon a navigation that is about to work.
+    _ = try? await send("browsingContext.activate", ["context": id])
+    Log.debug("opened the agent's own tab: \(id)")
+    return id
   }
 
   /// Dispatches real input events.

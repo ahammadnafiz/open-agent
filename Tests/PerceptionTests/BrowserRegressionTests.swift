@@ -45,6 +45,58 @@ private func err(_ id: Int, _ message: String) -> String {
 
 private let oneContext = #"{"contexts":[{"context":"ctx-1","url":"about:blank"}]}"#
 
+@Suite("The agent's own tab — regression")
+struct AgentTabRegressionTests {
+
+  /// **Navigating took over the page the user was reading.** `getTree` returns
+  /// the tabs that are open; driving one of them replaces whatever is in it,
+  /// in the user's own browser, with no way back but history. Observed: an
+  /// Instagram login page appeared where their page had been.
+  ///
+  /// A person given a browser task opens a tab for it.
+  @Test("navigate opens a tab instead of taking over the current one")
+  func navigateOpensItsOwnTab() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),  // session.new
+      ok(2, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
+      ok(3, #"{"context":"agent-tab"}"#),  // browsingContext.create
+      ok(4),  // browsingContext.activate
+      ok(5),  // browsingContext.navigate
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    #expect(try await client.context() == "users-tab", "attaches to what is open")
+
+    try await client.navigate(to: "https://instagram.com/")
+    #expect(await transport.methods().contains("browsingContext.create"))
+    #expect(try await client.context() == "agent-tab", "and works in its own tab after")
+  }
+
+  /// Once per session, not once per navigation. A task that visits three pages
+  /// is still one piece of work, and a tab per step is the other way to make a
+  /// mess of someone's browser.
+  @Test("a multi-step task reuses the one tab it opened")
+  func oneTabPerSession() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),
+      ok(2, oneContext),
+      ok(3, #"{"context":"agent-tab"}"#),
+      ok(4),
+      ok(5),  // first navigate
+      ok(6),  // second navigate
+      ok(7),  // third navigate
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    try await client.navigate(to: "https://a.example/")
+    try await client.navigate(to: "https://b.example/")
+    try await client.navigate(to: "https://c.example/")
+
+    let creates = await transport.methods().filter { $0 == "browsingContext.create" }
+    #expect(creates.count == 1, "one tab, not three")
+  }
+}
+
 @Suite("Executor routing — regression")
 struct ExecutorRoutingRegressionTests {
 
