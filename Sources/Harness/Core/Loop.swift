@@ -328,7 +328,7 @@ public actor AgentLoop {
       // ── ACT ── narration and execution are one call ───────────────
       let executionResult: ExecutionResult
       do {
-        let executor = try executors.executor(for: action.target)
+        let executor = try executors.executor(for: action.target, kind: action.kind)
         executionResult = try await hud.narrating(action, target: element) {
           try await executor.execute(action)
         }
@@ -388,7 +388,7 @@ public actor AgentLoop {
 
     let executionResult: ExecutionResult
     do {
-      let executor = try executors.executor(for: nil)
+      let executor = try executors.executor(for: nil, kind: action.kind)
       executionResult = try await hud.narrating(action, target: nil) {
         try await executor.execute(action)
       }

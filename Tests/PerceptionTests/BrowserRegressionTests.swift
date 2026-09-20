@@ -45,6 +45,57 @@ private func err(_ id: Int, _ message: String) -> String {
 
 private let oneContext = #"{"contexts":[{"context":"ctx-1","url":"about:blank"}]}"#
 
+@Suite("Executor routing — regression")
+struct ExecutorRoutingRegressionTests {
+
+  /// **`navigate` names no element, and that is not the same as being native.**
+  ///
+  /// Every targetless action was routed to the AX executor, which refuses
+  /// `navigate` by construction — so a `--browser` task died on its first step
+  /// with *"navigate (ADR 0006: browser work is deferred)"* while a perfectly
+  /// good BiDi session sat open beside it. The browser tier's own entry point
+  /// was unreachable.
+  @Test("navigate goes to the browser when there is one")
+  func navigateGoesToBiDi() throws {
+    let bidi = BiDiExecutor(
+      client: BiDiClient(port: 9333, makeTransport: { _ in FakeBiDiTransport(replies: []) }),
+      source: BiDiSource(
+        client: BiDiClient(port: 9333, makeTransport: { _ in FakeBiDiTransport(replies: []) })))
+    let registry = ExecutorRegistry(
+      ax: AXExecutor(source: AXSource(appName: "Zen", pid: 1)),
+      captured: CapturedExecutor(pid: 1, appName: "Zen", frameHash: { nil }),
+      bidi: bidi)
+    let chosen = try registry.executor(for: nil, kind: .navigate)
+    #expect(chosen is BiDiExecutor)
+  }
+
+  /// `openApp` stays native even in a browser task: launching an application is
+  /// a native operation whatever the eventual target world turns out to be.
+  @Test("openApp stays native even with a browser open")
+  func openAppStaysNative() throws {
+    let bidi = BiDiExecutor(
+      client: BiDiClient(port: 9333, makeTransport: { _ in FakeBiDiTransport(replies: []) }),
+      source: BiDiSource(
+        client: BiDiClient(port: 9333, makeTransport: { _ in FakeBiDiTransport(replies: []) })))
+    let registry = ExecutorRegistry(
+      ax: AXExecutor(source: AXSource(appName: "Zen", pid: 1)),
+      captured: CapturedExecutor(pid: 1, appName: "Zen", frameHash: { nil }),
+      bidi: bidi)
+    #expect(try registry.executor(for: nil, kind: .openApp) is AXExecutor)
+  }
+
+  /// With no browser session, `navigate` must still fail loudly rather than
+  /// silently doing something else.
+  @Test("navigate without a browser is refused, not rerouted")
+  func navigateWithoutBrowser() throws {
+    let registry = ExecutorRegistry(
+      ax: AXExecutor(source: AXSource(appName: "Zen", pid: 1)),
+      captured: CapturedExecutor(pid: 1, appName: "Zen", frameHash: { nil }),
+      bidi: nil)
+    #expect(try registry.executor(for: nil, kind: .navigate) is AXExecutor)
+  }
+}
+
 @Suite("BiDi session lifecycle — regression")
 struct BiDiSessionRegressionTests {
 

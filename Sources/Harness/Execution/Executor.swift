@@ -14,7 +14,7 @@ public protocol Executor: Sendable {
 /// A protocol so the loop can be tested without a screen, and so a fake can
 /// assert exactly which actions reached execution.
 public protocol ExecutorProviding: Sendable {
-  func executor(for ref: ElementRef?) throws -> any Executor
+  func executor(for ref: ElementRef?, kind: ActionKind) throws -> any Executor
 }
 
 /// Dispatch from a ref to the executor that can act on it.
@@ -36,7 +36,19 @@ public struct ExecutorRegistry: ExecutorProviding {
     self.bidi = bidi
   }
 
-  public func executor(for ref: ElementRef?) throws -> any Executor {
+  public func executor(for ref: ElementRef?, kind: ActionKind) throws -> any Executor {
+    // **`navigate` is a browser operation that happens to name no element.**
+    // Routing every targetless action to the native executor sent it there
+    // too, where it is refused by construction — so the browser tier's own
+    // entry point was unreachable, and a `--browser` task died on step one
+    // with "navigate (ADR 0006: browser work is deferred)" while a perfectly
+    // good BiDi session sat open beside it.
+    //
+    // The rest still belong to AX: launching an application is a native
+    // operation whatever the eventual target world turns out to be, and
+    // waiting belongs to nobody in particular.
+    if kind == .navigate, let bidi { return bidi }
+
     // No target: openApp / navigate / wait. These are app-level and the AX
     // executor owns them, because launching is a native operation whatever
     // the eventual target world turns out to be.

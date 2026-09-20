@@ -35,6 +35,17 @@ public struct AXSource: ElementSource {
     self.appName = appName
   }
 
+  /// Direct construction, for tests that need a registry rather than a live
+  /// application.
+  ///
+  /// Deliberately not `public`: nothing outside the package should hold a
+  /// source for an app it has not resolved, because the resolution is what
+  /// proves the app is running and on screen.
+  init(appName: String, pid: pid_t) {
+    self.appName = appName
+    self.pid = pid
+  }
+
   public init(appName: String) throws {
     self.pid = try WindowGuard.pid(forApp: appName)
     self.appName = appName

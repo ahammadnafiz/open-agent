@@ -232,12 +232,25 @@ enum Commands {
         let (client, browserSource) = try await browserSession()
         bidiClient = client
         source = browserSource
-        // The AX executor still exists: `openApp` and native fallbacks are
-        // reachable from a browser task.
-        axSource = try AXSource(appName: "Zen")
+        do {
+          // The AX executor still exists: `openApp` and native fallbacks are
+          // reachable from a browser task.
+          axSource = try await raisedSource(appName: "Zen", launchIfMissing: nil)
+        } catch {
+          // **Ending the session is not optional on the failure path.** A
+          // process that exits between `connect` and `close` leaves the browser
+          // holding its one WebDriver session for a client that no longer
+          // exists, and the next run has to restart the browser to clear it —
+          // which is a window closing in the user's face, caused by an error
+          // that had nothing to do with them. This exact leak is what made
+          // every browser invocation restart Zen.
+          await client.close()
+          fail(describe(error))
+        }
         pid = axSource.pid
         bidiExecutor = BiDiExecutor(client: client, source: browserSource)
       } catch {
+        await bidiClient?.close()
         fail(describe(error))
       }
     } else {
@@ -317,7 +330,28 @@ enum Commands {
   /// it appears once in the audit log with its own verdict, exactly as if it
   /// had run in order.
   private static func nativeSource(for session: Session) async throws -> AXSource {
-    if let source = try? AXSource(appName: session.appName) { return source }
+    try await raisedSource(
+      appName: session.appName,
+      launchIfMissing: session.plan.launchTarget(
+        atPlanIndex: session.state.planIndex, appName: session.appName)
+    )
+  }
+
+  /// An `AXSource` for an app that may not be reachable from here yet.
+  ///
+  /// Every caller needs this, not just the one that first hit it. A browser
+  /// task builds an AX source for Zen so that `openApp` and native fallbacks
+  /// stay available, and it failed with "Zen is not running" against a browser
+  /// the launcher had just started — because Zen was not frontmost and
+  /// `CGWindowList` reports only the current Space.
+  ///
+  /// - Parameter launchIfMissing: the app to start when nothing is running.
+  ///   `nil` means raise-only: refuse rather than launch something nobody
+  ///   asked for.
+  private static func raisedSource(
+    appName: String, launchIfMissing: String?
+  ) async throws -> AXSource {
+    if let source = try? AXSource(appName: appName) { return source }
 
     // Running, but not reachable from here — on another Space, or closed to
     // the Dock. Bringing forward the app the caller named is not an action the
@@ -330,26 +364,23 @@ enum Commands {
     //
     // A failure here falls through rather than throwing, because the plan may
     // still carry an `openApp` that knows a name this did not.
-    if runningApp(named: session.appName) != nil {
-      try? AXExecutor.launch(app: session.appName)
-      if let source = try await awaitWindow(for: session.appName) { return source }
+    if runningApp(named: appName) != nil {
+      try? AXExecutor.launch(app: appName)
+      if let source = try await awaitWindow(for: appName) { return source }
     }
 
     // Not running at all. Launching is a bigger step than raising, so it
     // happens only when the plan itself asked for it — an agent that launched
     // an application nobody mentioned would be inventing actions, which is the
     // thing the whole safety model rests on it not doing.
-    guard
-      let name = session.plan.launchTarget(
-        atPlanIndex: session.state.planIndex, appName: session.appName)
-    else {
-      throw PerceptionError.appNotRunning(session.appName)
+    guard let name = launchIfMissing else {
+      throw PerceptionError.appNotRunning(appName)
     }
 
     Log.info("launching \(name) — the plan opens it, and perception cannot start before it does")
     try AXExecutor.launch(app: name)
-    if let source = try await awaitWindow(for: session.appName) { return source }
-    throw PerceptionError.appNotRunning(session.appName)
+    if let source = try await awaitWindow(for: appName) { return source }
+    throw PerceptionError.appNotRunning(appName)
   }
 
   /// The running application with this name, whichever Space it is on.

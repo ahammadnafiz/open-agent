@@ -37,7 +37,9 @@ actor RecordingExecutor: Executor, ExecutorProviding {
   private(set) var executed: [Action] = []
   var shouldFail = false
 
-  nonisolated func executor(for ref: ElementRef?) throws -> any Executor { self }
+  nonisolated func executor(for ref: ElementRef?, kind: ActionKind) throws -> any Executor {
+    self
+  }
 
   func execute(_ action: Action) async throws -> ExecutionResult {
     executed.append(action)
