@@ -141,12 +141,28 @@ Answer with an index. Never a coordinate.
 ## Step 4 — Report what actually happened
 
 **A call returning is not evidence that anything worked.** The binary reports
-*mechanics* — the click was dispatched. Only the next step's verification
-reports *progress*. A click can land perfectly and change nothing.
+*mechanics* — the click was dispatched. Verification is what reports
+*progress*, and a click can land perfectly and change nothing.
 
-So: say what the final `status` was. If it is `completed`, say what was done. If
-it is anything else, say what stopped and where. Do not write "I've sent the
-email" because a command exited 0.
+**The last step is verified too, so `status` is the answer.** Verification of a
+step arrives inside the next step's batch, and the final step of a plan has no
+next step — so it used to return `needs_plan` having never looked at the screen
+its last action produced. A send that worked and a send that pressed the wrong
+button were indistinguishable. The loop now takes one more look when the plan
+runs out:
+
+- `completed` — the plan finished **and** the screen was checked against the
+  task. Say what was done.
+- `needs_plan` with `task_done` and `progressed` in the reason — every step ran
+  and the result still does not look like the task. Read those numbers before
+  you claim anything; a low `progressed` means the last action changed nothing.
+- `needs_plan` saying only that the plan is exhausted — nothing was dispatched,
+  so there was nothing to verify.
+
+So: say what the final `status` was. If it is anything but `completed`, say what
+stopped and where. Do not write "I've sent the email" because a command exited
+0 — and do not go reading the page yourself to find out. If the status does not
+tell you, that is a defect worth reporting, not a gap to paper over.
 
 ## Browser tasks
 

@@ -176,9 +176,7 @@ public actor AgentLoop {
           .budgetExhausted, since: started, reason: "budget ceiling: \(ceiling.rawValue)")
       }
       guard !plan.isExhausted(at: planIndex) else {
-        // The plan ran out and Jev never said the task was done. That is
-        // a route problem, not a failure — the host can extend it.
-        return result(.needsPlan, since: started, reason: "plan exhausted at step \(planIndex)")
+        return await verifyLastStep(since: started)
       }
 
       let planStep = plan.steps[planIndex]
@@ -662,6 +660,81 @@ public actor AgentLoop {
     lastPlanIndex = planIndex
     stepIndex += 1
     planIndex += 1
+  }
+
+  /// One last look, after the plan runs out.
+  ///
+  /// **The final action of a plan was never verified.** Verification of step N
+  /// arrives inside step N+1's batch, and when the plan ends there is no N+1 —
+  /// so the loop returned `needs_plan` from the top of the next iteration
+  /// having never once looked at the screen its last action produced. A send
+  /// that worked and a send that pressed the wrong button returned the
+  /// identical status and the identical reason.
+  ///
+  /// That put the host in an impossible position, because this project also
+  /// tells it never to report success on the strength of a command exiting 0.
+  /// Reported from a real session: *"The binary gave no verdict on whether the
+  /// send worked, so I did not take it on faith"* — and the host went and read
+  /// the page over a raw websocket to find out. The evidence existed; the
+  /// binary simply never asked for it.
+  ///
+  /// So it asks. One observation, one batched call, about the action that has
+  /// no successor. `candidates` is deliberately empty: nothing is being
+  /// selected here, and an empty option set is what keeps Jev from being handed
+  /// a choice it was not asked to make.
+  ///
+  /// A failure to read or judge is reported as the exhaustion it always was,
+  /// rather than as a verdict nobody obtained.
+  private func verifyLastStep(since started: ContinuousClock.Instant) async -> LoopResult {
+    let exhausted = "plan exhausted at step \(planIndex)"
+    // Nothing was dispatched, so there is nothing to verify and the old answer
+    // is the whole answer.
+    guard let lastAction, plan.steps.indices.contains(lastPlanIndex) else {
+      return result(.needsPlan, since: started, reason: exhausted)
+    }
+
+    // No `waitUntilReady` here. `settle` has just run for this very action and
+    // its whole job is to wait out the screen it produced; asking again would
+    // pay the readiness budget a second time for one screen.
+    guard let elements = try? await source.observe(),
+      let screenNow = try? CandidateFilter.reduce(elements).describe()
+    else {
+      return result(
+        .needsPlan, since: started,
+        reason: "\(exhausted); the screen could not be read to verify it")
+    }
+
+    guard
+      let verdict = try? await jev.step(
+        StepContext(
+          task: task,
+          planStep: PlanStepDTO(plan.steps[lastPlanIndex]),
+          lastAction: ActionDTO(lastAction),
+          screenBefore: screenBefore,
+          screenNow: screenNow,
+          recentHistory: Array(history.suffix(Constants.Jev.historyWindow)),
+          candidates: [:],
+          taskContext: taskContext
+        ),
+        budgetRemaining: Constants.Budget.stepTimeout
+      )
+    else {
+      return result(
+        .needsPlan, since: started,
+        reason: "\(exhausted); it could not be judged")
+    }
+    budget.chargeDollars(verdict.usage.dollars)
+    totalCost += verdict.usage.dollars
+
+    if verdict.taskDone >= Constants.Jev.taskDone {
+      return result(.completed, since: started, reason: "task_done \(fmt(verdict.taskDone))")
+    }
+    // Still not a failure — the route may simply be short — but now it says
+    // what was actually seen instead of only that the steps ran out.
+    return result(
+      .needsPlan, since: started,
+      reason: "\(exhausted); task_done \(fmt(verdict.taskDone)) "
+        + "progressed \(fmt(verdict.progressed))")
   }
 
   // MARK: - Routing

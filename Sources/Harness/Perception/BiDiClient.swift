@@ -1,6 +1,50 @@
 import Foundation
 
 /// Errors from the WebDriver BiDi transport.
+extension BiDiError {
+  /// Whether this error means *what is on that port cannot be driven*, as
+  /// opposed to *this request was wrong*.
+  ///
+  /// **A listening port is not a drivable browser, and treating it as one left
+  /// every run after an abandoned one failing until a human killed the
+  /// browser.** `BrowserLauncher.ensureDrivable` attaches whenever something
+  /// answers on the port, so a browser left over from a run that died gets
+  /// adopted rather than replaced — and then the next BiDi call fails.
+  /// Reported from a real session: *"open-agent logged 'attaching to Zen,
+  /// already listening' instead of relaunching it, then BiDi came back
+  /// noBrowsingContext ... quitting Zen freed the port; the rerun launched Zen
+  /// itself and worked."*
+  ///
+  /// All three have the same remedy and no other one:
+  ///
+  /// * `sessionHeldElsewhere` — the one WebDriver session belongs to a dead
+  ///   connection, and only the owning process exiting releases it.
+  /// * `noBrowsingContext` — the session exists but there is no tab to drive,
+  ///   which a fresh launch always has.
+  /// * `notListening` — something holds the port without completing a
+  ///   handshake. From out here a half-dead browser and a starting one look
+  ///   identical, and by the time this is thrown the retry ceiling has already
+  ///   been paid.
+  ///
+  /// Everything else is a real failure and must keep surfacing as one.
+  public var meansTheBrowserIsUndrivable: Bool {
+    switch self {
+    case .sessionHeldElsewhere, .noBrowsingContext, .notListening: true
+    default: false
+    }
+  }
+
+  /// What to tell the person before their browser restarts.
+  public var undrivableDiagnosis: String {
+    switch self {
+    case .sessionHeldElsewhere: "the browser holds a session for a client that is gone"
+    case .noBrowsingContext: "the browser is listening but has no tab to drive"
+    case .notListening: "the port is held by something that never completed a handshake"
+    default: "the browser cannot be driven"
+    }
+  }
+}
+
 public enum BiDiError: Error, Equatable, Sendable {
   /// The browser never opened its debug port. Cold start is 5–7 s measured, so
   /// this is a connect-retry ceiling rather than a sleep — a fixed sleep either

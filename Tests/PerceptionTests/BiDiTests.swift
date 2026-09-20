@@ -194,3 +194,39 @@ struct ReadinessRuleTests {
     #expect(BiDiSource.readiness(readyState: "complete", busy: 0, nodeCount: 2573) == "2573")
   }
 }
+
+
+/// **A listening port is not a drivable browser.** A browser left behind by a
+/// run that died keeps answering on the port, so `ensureDrivable` adopts it
+/// and the next BiDi call fails — and every run after an abandoned one failed
+/// until a human killed the browser by hand.
+@Suite("Telling an undrivable browser from a bad request")
+struct UndrivableBrowserTests {
+
+  @Test("the three failures that a restart fixes are the three that ask for one")
+  func restartWorthyErrors() {
+    #expect(BiDiError.sessionHeldElsewhere(port: 9333).meansTheBrowserIsUndrivable)
+    #expect(BiDiError.noBrowsingContext.meansTheBrowserIsUndrivable)
+    #expect(BiDiError.notListening(port: 9333).meansTheBrowserIsUndrivable)
+  }
+
+  @Test("a real failure is not answered by restarting the browser")
+  func realFailuresAreNot() {
+    // Quitting the browser cannot make a malformed response well-formed, and
+    // restarting on these would turn one bad reply into a restart loop.
+    #expect(!BiDiError.malformedResponse("no result").meansTheBrowserIsUndrivable)
+    #expect(!BiDiError.disconnected.meansTheBrowserIsUndrivable)
+    #expect(!BiDiError.command(method: "script.evaluate", message: "boom")
+      .meansTheBrowserIsUndrivable)
+  }
+
+  @Test("each diagnosis says which of the three it was")
+  func diagnosesReadDifferently() {
+    let said = Set([
+      BiDiError.sessionHeldElsewhere(port: 9333).undrivableDiagnosis,
+      BiDiError.noBrowsingContext.undrivableDiagnosis,
+      BiDiError.notListening(port: 9333).undrivableDiagnosis,
+    ])
+    #expect(said.count == 3, "a restart the user did not ask for should say why")
+  }
+}

@@ -750,6 +750,66 @@ struct BusyMarkerRegressionTests {
     #expect(
       elapsed < .seconds(1.6),
       "a permanent spinner held the step at its ceiling in both phases")
-    #expect(await judge.callCount == 1, "and it still judged the page once")
+    // Twice, and both are load-bearing: one call chooses the action, and one
+    // verifies it once the plan runs out. See `verifyLastStep`.
+    #expect(await judge.callCount == 2, "and it still judged the page, then verified it")
+  }
+}
+
+
+/// **The last action of a plan was never verified.** Verification of step N
+/// arrives in step N+1's batch, and when the plan ends there is no N+1 — so
+/// the loop reported `needs_plan` having never looked at the screen its final
+/// action produced. A send that worked and a send that pressed the wrong
+/// button returned the identical status and reason, which left the host no
+/// in-band way to tell them apart.
+@Suite("The last step gets verified too")
+struct FinalVerificationTests {
+
+  @Test("a finished plan whose last step worked reports completed")
+  func aFinishedPlanCompletes() async {
+    // First verdict selects the action; the second is the verification that
+    // used to never happen.
+    let judge = ScriptedJudge([
+      Make.verdict(taskDone: 0.05),
+      Make.verdict(taskDone: 0.96),
+    ])
+
+    let outcome = await Make.loop(
+      plan: Make.plan([.click]), judge: judge, settleTimeout: .zero
+    ).run()
+
+    #expect(outcome.status == .completed)
+    #expect(outcome.reason.contains("task_done"))
+    #expect(await judge.callCount == 2, "one call to choose, one to verify")
+  }
+
+  @Test("a finished plan whose last step did nothing says what it saw")
+  func anUnverifiedPlanSaysWhy() async {
+    let judge = ScriptedJudge([Make.verdict(progressed: 0.11, taskDone: 0.05)])
+
+    let outcome = await Make.loop(
+      plan: Make.plan([.click]), judge: judge, settleTimeout: .zero
+    ).run()
+
+    #expect(outcome.status == .needsPlan)
+    // Still not a failure — the route may simply be short — but the reason now
+    // carries the evidence instead of only "the steps ran out".
+    #expect(outcome.reason.contains("task_done"), "the reason was \(outcome.reason)")
+    #expect(outcome.reason.contains("progressed"), "the reason was \(outcome.reason)")
+  }
+
+  /// Nothing dispatched means nothing to verify, and asking anyway spends a
+  /// call to learn that the screen never changed.
+  @Test("an empty plan is not verified")
+  func anEmptyPlanIsNotVerified() async {
+    let judge = ScriptedJudge([Make.verdict()])
+
+    let outcome = await Make.loop(
+      plan: Make.plan([]), judge: judge, settleTimeout: .zero
+    ).run()
+
+    #expect(outcome.status == .needsPlan)
+    #expect(await judge.callCount == 0)
   }
 }

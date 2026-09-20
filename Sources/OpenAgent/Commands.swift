@@ -450,18 +450,45 @@ enum Commands {
   static func browserSession() async throws -> (BiDiClient, BiDiSource) {
     do {
       return try await attachBrowser(forceRestart: false)
-    } catch BiDiError.sessionHeldElsewhere {
-      // The browser is up and listening, and holding its one WebDriver session
-      // for a client that has since exited. Nothing on this side can adopt that
-      // session or end it, and waiting is waiting for nothing — the session
-      // dies with the process, so the process has to go.
+    } catch let error as BiDiError where error.meansTheBrowserIsUndrivable {
+      // The browser is up but cannot be driven. Nothing on this side can fix
+      // that — the state belongs to the other process — and waiting is waiting
+      // for nothing, so the process has to go.
       //
       // Restarting is the same graceful quit ADR 0011 already does: the tabs
-      // come back. It happens once, and only on this specific diagnosis.
-      Log.info("the browser holds a session for a client that is gone — restarting it once")
+      // come back. It happens once, and only on these diagnoses.
+      Log.info("\(error.undrivableDiagnosis) — restarting the browser once")
       return try await attachBrowser(forceRestart: true)
     }
   }
+
+  /// Errors that mean *what is on that port cannot be driven*, as opposed to
+  /// *this request was wrong*.
+  ///
+  /// **A listening port is not a drivable browser, and treating it as one left
+  /// every run after an abandoned one failing until a human killed Zen.**
+  /// `ensureDrivable` attaches whenever something answers on the port, so a
+  /// browser left over from a run that died gets adopted rather than replaced
+  /// — and then the very next BiDi call fails. Reported from a real session:
+  /// *"open-agent logged 'attaching to Zen, already listening' instead of
+  /// relaunching it, then BiDi came back noBrowsingContext ... quitting Zen
+  /// freed the port; the rerun launched Zen itself and worked."*
+  ///
+  /// All three failures have the same remedy and no other one:
+  ///
+  /// * `sessionHeldElsewhere` — the one WebDriver session belongs to a dead
+  ///   connection, and only the owning process exiting releases it.
+  /// * `noBrowsingContext` — the session exists but the browser has no tab to
+  ///   drive, which a fresh launch always has.
+  /// * `notListening` — something holds the port without completing a
+  ///   handshake. A half-dead browser looks identical to a starting one from
+  ///   out here, and the retry ceiling has already been paid by the time this
+  ///   is thrown.
+  ///
+  /// The retry is bounded by construction: the second attempt is not wrapped
+  /// in this catch, so a browser that is genuinely broken fails on its own
+  /// error rather than looping.
+  /// See `BiDiError.meansTheBrowserIsUndrivable`.
 
   private static func attachBrowser(forceRestart: Bool) async throws -> (BiDiClient, BiDiSource) {
     // `allowRestart: true` — the agent may quit a running browser to free its
