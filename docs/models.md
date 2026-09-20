@@ -56,11 +56,14 @@ let system = """
 You plan macOS computer-use tasks as an ordered list of concrete UI steps.
 
 Use only these kinds:
-  openApp, navigate, click, type, scroll, focus, select, read, wait,
+  openApp, navigate, click, type, pressKey, scroll, focus, select, read, wait,
   publish, send, delete, purchase
 
 Rules:
 - Name targets semantically ("the compose button"), never as coordinates.
+- pressKey takes exactly one of: enter, tab, escape. Use it to commit a
+  recipient or tag chip, to dismiss a dropdown, or to leave a field — never
+  as a substitute for clicking something you can name.
 - Set declaredIrreversible true ONLY for steps that publish, send, delete,
   or purchase.
 - Do not plan verification steps. The harness verifies every step itself.
@@ -98,20 +101,37 @@ struct VisionRequest {
 }
 
 enum VisionAnswer {
-    case element(Int)             // index into candidates
-    case none                     // target genuinely not present → recovery ladder
+    case element(index: Int, label: String)   // index into candidates, + what it is
+    case none                                 // genuinely not present → recovery ladder
 }
 ```
 
 Render the candidate bounding boxes onto the screenshot with their numbers, and
-send the numbered list as text alongside. The model replies with a number.
+send the numbered list as text alongside. The model replies with a number **and a
+short description of what it picked** — "the paper-aeroplane send icon", four or
+five words.
+
+**The label is not decoration.** 74.2% of pressable elements measured across 7
+apps are icon-only with no text anywhere, and the tier 3b detector returns boxes
+without labels by design. On exactly those targets `LabelDenylist` has nothing to
+match, and without this string the safety classifier falls back to the planner's
+declaration alone — the single-mechanism design ADR 0001 rejects. The label costs
+a handful of output tokens on a call already costing $0.00096 and makes the
+denylist functional at tier 4. See [ADR 0007](./adr/0007-captured-targets-execute-by-synthesized-event.md).
+
+It is attacker-influenced, because it is read off pixels the page controls. That
+is admissible **only** because it is an upgrade-only input: it can make the agent
+ask more often, never less.
 
 This is [Set-of-Marks](./adr/0004-vision-is-cloud-and-returns-an-index.md), and
 it is doing two jobs at once:
 
-- **It preserves the contract.** Vision resolves a *target*, not a point. Nothing
-  in the system emits a coordinate, so the label denylist keeps both of its
-  inputs and ADR 0001 is untouched.
+- **It preserves the contract.** Vision resolves a *target*, not a point — it
+  answers with an index, never a location. Where the selected target has no
+  element tree behind it, `CapturedExecutor` computes a click point from the
+  box's own bounds at act time; that is the only place in the system a coordinate
+  exists, and it is downstream of every gate. ADR 0001 is untouched because the
+  denylist still has a label to inspect — see ADR 0007.
 - **It is more accurate than asking for a coordinate.** Pairing a detector with
   numbered marks moved GPT-4V from **16.2% → 73.0%** on ScreenSpot. Turning a
   grounding problem back into a selection problem is the single highest-leverage
@@ -129,14 +149,6 @@ costs accuracy and tokens.
 **Privacy, stated plainly:** escalation sends an image of the window to a third
 party. The HUD must indicate when this happens. A task operating on a window with
 sensitive content will transmit it.
-
-Screenshot scope is the focused window, not the display. A full-screen capture
-includes the agent's own HUD, other applications, and whatever else is on screen,
-all of which is irrelevant context that costs accuracy and tokens.
-
-**Privacy note worth being explicit about:** escalation sends an image of the
-window to a third party. The HUD indicates when this happens. A task on a window
-containing sensitive content will transmit it.
 
 ### 1.4 Retry and cost
 

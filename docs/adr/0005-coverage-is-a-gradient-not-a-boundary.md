@@ -6,6 +6,16 @@ Date: 2026-09-18
 
 Accepted. Supersedes [ADR 0003](./0003-coverage-boundary-is-where-text-exists.md).
 
+**Corrected 2026-09-20 by [ADR 0007](./0007-captured-targets-execute-by-synthesized-event.md).**
+The coverage argument below is sound, and two of its consequences were wrong.
+This ADR established that a candidate list can be manufactured from pixels — a
+claim about *perception* — and then asserted that the safety model and the
+no-coordinate contract were unaffected, which are claims about *execution* and
+did not follow. At the time this was written no `ElementRef` case and no
+`Executor` existed for a target with no element tree, so tiers 3 and 4 were
+observable but not actionable, and the denylist had nothing to match on an
+unlabelled icon. ADR 0007 closes both. The two paragraphs are marked inline.
+
 ## Context
 
 ADR 0003 drew a hard line: the agent operates where a text tree already exists,
@@ -41,6 +51,13 @@ clicks. See ADR 0004.
 None of these removes the requirement that an action name its target by identity.
 An OCR box carries a label. A detector box carries a number. Both are identities
 a confirmation dialog can display and a denylist can inspect.
+
+> **Corrected — ADR 0007.** The last sentence is wrong about the detector box. A
+> denylist is a regex over label text; a number is not something it can inspect,
+> and the tier 3b detector returns boxes *without* labels by design — that is why
+> it costs 9.71 ms rather than the 2,940 ms a captioner would add. Since 74.2% of
+> pressable elements are icon-only, this was not an edge case. ADR 0007 supplies
+> the missing label by having tier 4 return `{index, label}`.
 
 ## Decision
 
@@ -96,6 +113,14 @@ zero observations on a Retina screenshot.
 **The safety model is unaffected.** Every tier produces a labelled identity, so
 the upgrade-only classifier keeps both of its inputs everywhere the agent
 operates, and no path emits a coordinate.
+
+> **Corrected — ADR 0007.** Neither half held. An unlabelled icon is not a
+> labelled identity, so the classifier lost an input on the modal element of the
+> tiers this ADR added. And a target with no element tree cannot be actuated by
+> dispatch, so `CapturedExecutor` computes a click point from the target's own
+> bounds — a coordinate, downstream of every gate, never present in an `Action`.
+> The invariant that survives is narrower and worth stating exactly: **an
+> identity is never a coordinate, and no model ever emits one.**
 
 **Two prerequisites are now load-bearing and were not in the original design.**
 Tier 3 needs Screen Recording permission. Tiers 2 and 3 need the target window

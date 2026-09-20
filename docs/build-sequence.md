@@ -99,18 +99,25 @@ Pure logic. No network, no UI, no browser. Fully unit-testable.
 
 ### 1.2 Core types
 
-- **Acceptance:** `ActionKind`, `Action`, `ElementRef`, `Element`, `Plan`,
-  `PlanStep`, `Step`, `StepVerdict`, `Budget` compile and round-trip through
-  `Codable`. `ElementRef` has **no coordinate case**.
+- **Acceptance:** `ActionKind`, `Key`, `Action`, `ElementRef`, `Provenance`,
+  `Element`, `Plan`, `PlanStep`, `Step`, `StepVerdict`, `Budget` compile and
+  round-trip through `Codable`. **No case of `ElementRef` is a bare coordinate**:
+  `.captured` carries a bbox, a label and a provenance, and the point is computed
+  from it only inside `CapturedExecutor` (ADR 0007). A test asserts `Action` has
+  no `CGPoint`-typed field at any depth.
 - **Verify:** `swift test --filter CoreTypesTests`
 - **Files:** `Sources/Harness/Core/{Task,Action,Budget}.swift`
 
 ### 1.3 Safety classifier — *do this before anything that can act*
 
-- **Acceptance:** `classify(_:target:)` returns `max(declared, byLabel)`. A test
-  enumerates **every** `ActionKind` × a denylist-matching label and asserts the
-  result is `.irreversible` in every case. A second test asserts no input can
-  produce `.reversible` where either input said `.irreversible`.
+- **Acceptance:** `classify(_:target:)` returns the `max` of all five inputs —
+  declared kind, source label, vision label, submit label, unnamed-captured.
+  A test enumerates **every** `ActionKind` × a denylist-matching label and asserts
+  `.irreversible` in every case, then repeats the sweep independently for each of
+  the other three string inputs. A further test asserts no input can produce
+  `.reversible` where any input said `.irreversible`. Two cases that only exist
+  since ADR 0007/0008 and are easy to omit: `.captured` with an empty label from
+  every source, and `pressKey(.enter)` where only `submitLabel` matches.
 - **Verify:** `swift test --filter SafetyTests` — must be 100% branch coverage.
 - **Files:** `Sources/Harness/Safety/{Irreversibility,LabelDenylist}.swift`
 - **Why here:** Nothing that executes an action may exist before the thing that
@@ -167,11 +174,19 @@ Pure logic. No network, no UI, no browser. Fully unit-testable.
   against a launched Zen. Frames without an `id` route to an event stream, not
   the pending table.
 - **Verify:** `swift run Probe bidi-dom https://en.wikipedia.org/wiki/Accessibility`
-  → expect ~3,684 DOM nodes, ~600 actionable, **42 after filtering**.
+  → expect ~3,684 DOM nodes, ~600 actionable, **42 after filtering**. Then
+  `swift run Probe bidi-dom https://outlook.office.com/mail` → expect a non-empty
+  candidate list; an empty one means shadow piercing regressed, not that the page
+  has no controls.
 - **Files:** `Sources/Harness/Perception/BiDiSource.swift`
 - **Gotchas, all hit during design:** `--no-remote` is mandatory; the port serves
   WebSocket only and has no `/json/version`; readiness is a connect-retry loop,
   not a sleep.
+- **The observation script must cross open shadow roots.** `querySelectorAll`
+  stops at a shadow boundary, so a web-components app returns a near-empty list
+  that reads to the agent as "nothing actionable here" rather than as an error —
+  the same silent-failure shape as `AXWindows.first` and `minimumTextHeight`.
+  Closed roots cannot be pierced and fall to tier 3/4 by design.
 
 ### 3.2 AX source — **FIRST perception task under native-first**
 
@@ -276,10 +291,12 @@ it emits separate observations. When it merges, the text really is adjacent.
 
 ### 4.3 Executors
 
-- **Acceptance:** BiDi click/type/navigate and AX press/set work against live
-  targets. Typing uses **real key events** (`input.performActions`), not `.value`
-  assignment — modern web apps do not observe the latter.
-- **Verify:** `swift run Probe execute --bidi click "Search"` on a fixture page.
+- **Acceptance:** BiDi click/type/navigate/pressKey and AX press/set/pressKey work
+  against live targets. Typing uses **real key events** (`input.performActions`),
+  not `.value` assignment — modern web apps do not observe the latter.
+  `pressKey` sends W3C key codes over BiDi and `CGEvent` over AX — ADR 0008.
+- **Verify:** `swift run Probe execute --bidi click "Search"` on a fixture page,
+  then `--bidi pressKey enter` in a recipient field and assert a chip committed.
 - **Files:** `Sources/Harness/Execution/{BiDiExecutor,AXExecutor}.swift`
 - **Note:** the executor reports *mechanics*. It never reports progress — that is
   the next step's Jev batch, and conflating the two is the failure this whole
@@ -297,10 +314,28 @@ it emits separate observations. When it merges, the text really is adjacent.
 ### 4.5 Vision fallback
 
 - **Acceptance:** On escalation, captures the **focused window only**, sends it
-  with the candidate list, and returns the same `Action` type. It does not emit
-  coordinates unless the target is genuinely absent from the candidates.
-- **Verify:** `swift run Probe escalate --fixture canvas-page`
+  with the candidate list, and returns `{index, label}` — never a coordinate, and
+  `none` when the target is genuinely absent. The label is not optional: it is the
+  denylist's only input on an unlabelled icon (ADR 0007).
+- **Verify:** `swift run Probe escalate --fixture canvas-page` — assert every
+  non-`none` answer carries a non-empty label.
 - **Files:** `Sources/Harness/Planning/VisionFallback.swift`
+
+### 4.6 Captured executor — *the only path that synthesizes an event*
+
+- **Acceptance:** A `.captured` ref with provenance `.detectorBox` or
+  `.visionMark` clicks correctly on a GPU-rendered surface. `.ocrLine` is
+  **refused**, not clicked. Execution is refused when the window cannot be raised
+  and verified on screen. The step log carries the frame hash.
+- **Verify:** `swift run Probe execute --captured "New Tab" --app ghostty`, then
+  assert `ExecutionError.ocrLineNotActionable` on an OCR-provenance fixture and
+  `.windowNotVisible` with the window minimized.
+- **Files:** `Sources/Harness/Execution/CapturedExecutor.swift`
+- **Why last in this phase:** it is the only component that can click the wrong
+  application. Everything that can gate it — selection, denylist, confirmation,
+  window guard (3.5) — exists by now.
+- **Open:** the whole tier is unmeasured (Q7). Land `Probe captured-eval` with a
+  labelled fixture set alongside this task, not after it.
 
 ---
 
@@ -372,8 +407,8 @@ it emits separate observations. When it merges, the text really is adjacent.
                      │    3.3 Launch ┘       │
                      └──→ 4.2 Planner ───────┤
                           4.4 Compose ───────┤
-                          4.5 Vision ────────┘
-                                             │
+                          4.5 Vision ────────┴──→ 4.6 Captured
+                                             │         │
                                         5.x HUD ──→ 6.x Validation
 ```
 
@@ -381,7 +416,9 @@ it emits separate observations. When it merges, the text really is adjacent.
 independent of each other.
 
 **Strictly sequential:** 1.3 (Safety) before anything that can act. 0.3 (Fixtures)
-before 1.4. 2.2 before 2.3.
+before 1.4. 2.2 before 2.3. **3.5 (Window guard) and 4.5 (Vision) before 4.6
+(Captured)** — 4.6 is the only component that can click a different application,
+and both of those are what stop it.
 
 ---
 

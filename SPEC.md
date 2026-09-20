@@ -59,7 +59,9 @@ explicit approval.
 - Not multi-user, not networked, not a service.
 - Not a Jev benchmark. Jev is a component; if it proves unsuitable for a job,
   that job moves elsewhere.
-- **Not a mouse.** It does not move a cursor or click coordinates. See below.
+- **Not a mouse.** It never moves a cursor, never plans in coordinates, and no
+  model it calls returns one. On surfaces that expose no element tree it does
+  synthesize a click at a box it identified by label — see Coverage below.
 
 ### Coverage — a gradient, not a boundary
 
@@ -74,7 +76,11 @@ reasoning and the measurements.
 | **2** | Accessibility tree | label, role, state, real actions | **100% hit · 100% gated · 100% gate precision · 473 ms** |
 | **3** | Screen capture + Vision OCR | label, bbox | Electron (4% labelled), GPU-rendered, canvas |
 | **3b** | ANE icon detector | bbox only | 58 ms at imgsz 1280 |
-| **4** | Vision model + numbered marks | index | **83% — 100% text, 71% icon · 4.8 s** |
+| **4** | Vision model + numbered marks | index + label | **83% — 100% text, 71% icon · 4.8 s** |
+
+Tiers 1 and 2 *dispatch* to an element. Tiers 3 and 4 have no element to dispatch
+to and actuate with a synthesized event instead — ADR 0007. Everything above the
+executor is identical across all four.
 
 Each step takes the highest tier available for its target and falls through on
 failure. A task is never refused for being on the wrong surface; it is answered
@@ -83,8 +89,16 @@ more slowly and less accurately as it descends.
 Three things that are easy to assume away:
 
 - **Vision resolves a target, never a point.** It sees a screenshot with the
-  candidates drawn on it as numbered boxes and returns a *number*. Nothing in
-  this system emits a coordinate.
+  candidates drawn on it as numbered boxes and returns a *number*, plus a short
+  description of what it picked so the denylist has something to match. No model
+  in this system ever emits a coordinate.
+- **An identity is never a coordinate — but tiers 3 and 4 actuate with one.**
+  Where a target has no element tree, `CapturedExecutor` computes a click point
+  from that target's own bounding box at act time. It sits downstream of
+  selection, the denylist and the confirmation gate, and it never appears in an
+  `Action`, in a plan, or as a step's logged identity.
+  [ADR 0007](./docs/adr/0007-captured-targets-execute-by-synthesized-event.md)
+  has the reasoning and what it cost.
 - **Tier 3 is a supplement, not the universal layer.** Measured across 7 apps
   and 624 pressable elements: OCR reaches 25.8%, accessibility labels 62.7%, and
   **74.2% of elements are icon-only with no text anywhere.** Icons go to tier 4.
@@ -95,6 +109,33 @@ Three things that are easy to assume away:
   resolution (2/2 px at DPR 1, 6/5 px at DPR 3). Control boundaries have to come
   from the tier-3b detector. Until then, tier 3 feeds tier 4's marks rather than
   being selected from.
+
+---
+
+### The browser the agent drives is its own, and this surprises people
+
+**The agent cannot use a browser you already have open.** The BiDi debug port can
+only be set at process start, so the agent launches its own Zen against its own
+profile at `~/Library/Application Support/computer-agent/zen-profile`. A browser
+you opened has no port and cannot be attached to, at any tier.
+
+This is a safety decision, not a limitation to engineer away — see § Boundaries,
+*never run against a profile holding accounts the user did not explicitly assign
+to it.* The cost is a **one-time manual setup per site**: the agent profile
+starts logged into nothing, so the first task touching a new site returns
+`blocked ≈ 0.95` and stops. That is correct behaviour and it looks like a bug the
+first time, so it is written down here.
+
+The setup, once per site:
+
+1. `swift run Probe browser-login` launches Zen on the agent profile.
+2. Log in by hand. Complete any 2FA.
+3. Quit. The session cookie now lives in the agent's profile.
+
+Native targets have the equivalent prerequisite and it is cheaper: Accessibility
+permission is granted **per binary**, so the shipped `.app` and the `Probe`
+binary each need their own grant. Screen Recording is a third grant, and since
+ADR 0007 it gates execution at tiers 3–4, not just observation.
 
 ---
 
@@ -192,9 +233,10 @@ computer-agent/
 │   │   ├── Composition/
 │   │   │   └── OnDeviceWriter.swift   Apple FM
 │   │   ├── Execution/
-│   │   │   ├── Executor.swift         Protocol
+│   │   │   ├── Executor.swift         Protocol + total `for(ref:)` switch
 │   │   │   ├── BiDiExecutor.swift
-│   │   │   └── AXExecutor.swift
+│   │   │   ├── AXExecutor.swift
+│   │   │   └── CapturedExecutor.swift Tiers 3–4, synthesized events — ADR 0007
 │   │   ├── Safety/
 │   │   │   ├── Irreversibility.swift  Upgrade-only classifier
 │   │   │   └── LabelDenylist.swift
@@ -253,8 +295,12 @@ Conventions, in order of how often they are violated:
   Pass `Double` around; threshold once, at the decision site.
 - **Every model call site names its failure mode in a comment.** Which jagged
   edge applies here, and what catches it if the model is wrong.
-- **`ElementRef` never holds coordinates.** If you find yourself adding `x`/`y`,
-  the design has been violated — see [ADR 0001](./docs/adr/0001-irreversibility-is-upgrade-only.md).
+- **A coordinate exists in exactly one file.** `CapturedExecutor` turns a
+  `.captured` ref's bbox into a click point. If `x`/`y` or a `CGPoint` appears
+  anywhere else — in an `Action`, a plan, a Jev state, a log's identity field, or
+  a model's response type — the design has been violated. See
+  [ADR 0001](./docs/adr/0001-irreversibility-is-upgrade-only.md) and
+  [ADR 0007](./docs/adr/0007-captured-targets-execute-by-synthesized-event.md).
 - **Errors are typed and exhaustive.** No `throws` without a concrete error enum.
 - Documentation comments explain *why*, never *what*. The code says what.
 
@@ -333,7 +379,15 @@ across identical inputs (measured: ±5 percentage points). So:
 
 - Let any component downgrade an action from irreversible to reversible.
 - Put a model on the irreversible boundary. It is deterministic by design.
-- Emit or accept an action targeting screen coordinates.
+  A model-supplied *string* may feed the denylist, because that input can only
+  raise the classification; a model-supplied *verdict* may not.
+- Emit or accept an action whose **identity** is a screen coordinate. Computing a
+  click point inside `CapturedExecutor`, from the bounds of an already-selected,
+  already-gated, already-named target, is the one permitted exception — ADR 0007.
+- Execute a `.captured` ref whose provenance is `.ocrLine`. A merged OCR line
+  spans several controls and its centre lands on an arbitrary one of them.
+- Synthesize a click without first raising the target window and verifying it is
+  on screen. The click lands on whatever is topmost at that point.
 - Run the agent against a browser profile holding accounts the user did not
   explicitly assign to it.
 - Commit an API key, a captured screenshot, or a DOM fixture containing session
@@ -463,3 +517,24 @@ fallback contradicts "on-device" as a product claim.
 Which window the agent operates on when an app has several, and what happens when
 the target is on another Space, is entirely unspecified. Native scope makes this
 real; browser-only scope would have avoided it.
+
+**Q7 — The captured tier is entirely unmeasured. — NEW, and it is the largest
+unknown in the system.**
+[ADR 0007](./docs/adr/0007-captured-targets-execute-by-synthesized-event.md) makes
+tiers 3 and 4 executable, and unlike every other decision here it rests on reading
+the types rather than on numbers from this machine. Three things need measuring
+before any of it is trusted: the end-to-end hit rate of a captured click on a real
+GPU-rendered surface; how often tier 4 returns a label the denylist can use; and
+how often `confirmUnnamedCaptured` actually fires, since if it is frequent the
+real defect is tier 4's label output rather than the flag. Needs a
+`Probe captured-eval` subcommand with a labelled fixture set, the same shape as
+`battery-eval`.
+
+**Q8 — `pressKey(.enter)` on native targets has no submission target. — NEW.**
+[ADR 0008](./docs/adr/0008-keystrokes-are-an-action-kind.md) classifies `enter`
+against the focused element's implicit submission target, which is computable in
+the DOM and does not exist in the accessibility API. The uncovered case is a
+native text field whose window sends on `enter` with no denylist-reachable label.
+No example has been collected yet. If one exists, the mitigation is to classify
+`pressKey(.enter)` as irreversible for `.ax` targets by default and absorb the
+extra confirmations.

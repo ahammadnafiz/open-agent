@@ -139,7 +139,27 @@ DOM itself.
   const out = [];
   let idx = 0;
 
-  for (const e of document.querySelectorAll(SEL)) {
+  // `document.querySelectorAll` does NOT cross a shadow boundary. Any app built
+  // on web components — Outlook Web, YouTube, most design systems — returns a
+  // near-empty candidate list from a plain query, which reads to the agent as
+  // "nothing actionable here" rather than as an error. That is the same silent
+  // -failure shape as AXWindows.first and minimumTextHeight; see §2.2 and §2.5.
+  //
+  // Finding shadow hosts requires visiting every element, so this walks '*'
+  // rather than SEL. Measured cost is in the noise at the page sizes seen so
+  // far (3,684 nodes on the Wikipedia fixture); re-measure if a page is slow.
+  const collect = (root, acc) => {
+    for (const e of root.querySelectorAll('*')) {
+      if (e.matches(SEL)) acc.push(e);
+      if (e.shadowRoot) collect(e.shadowRoot, acc);   // open roots only
+    }
+    return acc;
+  };
+
+  // A CLOSED shadow root cannot be pierced from script, by design. Those
+  // subtrees are invisible to tier 1 and fall through to tier 3/4, which is
+  // exactly what the gradient is for — ADR 0005, and ADR 0007 for execution.
+  for (const e of collect(document, [])) {
     const r = e.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) continue;                  // rendered
     const st = getComputedStyle(e);
@@ -159,6 +179,12 @@ DOM itself.
       label,
       enabled: !e.disabled && e.getAttribute('aria-disabled') !== 'true',
       submit: e.type === 'submit' || e.getAttribute('role') === 'button' && e.form != null,
+      // What pressing Enter in this element would activate. A text field does
+      // not carry the label of the button its form submits to, and that label
+      // is the only thing standing between `pressKey(.enter)` in a To-field and
+      // an unconfirmed send — ADR 0008.
+      submitLabel: (e.form && e.form.querySelector(
+        'button:not([type=button]),[type=submit]'))?.innerText?.trim().slice(0, 80) || '',
       x: Math.round(r.x), y: Math.round(r.y),
       w: Math.round(r.width), h: Math.round(r.height)
     });
@@ -483,6 +509,43 @@ OmniParser as shipped takes ~120 s per screenshot on a Mac or OOMs, because a
 `do_resize=False` branch is applied only on CUDA and crops get upscaled 64×64 →
 768×768. Note also its detector weights are **AGPL**, not MIT.
 
+## 2.6 Execution without an element tree (tiers 3–4)
+
+Tiers 1 and 2 dispatch to an element: the browser or the OS routes the effect and
+no point is involved. Tiers 3 and 4 have no element to dispatch to, so actuation
+is a synthesized `CGEvent` click at the centre of the target's box.
+
+Full reasoning, and why this does not breach ADR 0001, is in
+[ADR 0007](./adr/0007-captured-targets-execute-by-synthesized-event.md). The
+mechanics, and the three things that must be true first:
+
+```swift
+// Screen coordinates, from a bbox captured in a known frame.
+let p = CGPoint(x: bbox.midX, y: bbox.midY)
+for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+    CGEvent(mouseEventSource: nil, mouseType: type,
+            mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
+}
+```
+
+1. **`provenance != .ocrLine`.** Vision returns line observations, so a box may
+   span `"Donate Create account Log in"` and its centre lands on an arbitrary one
+   of the three. Splitting by gap was measured impossible (§2.5). OCR boxes feed
+   tier 4's marks; they are never clicked directly.
+2. **The window is raised and verified on screen** via
+   `CGWindowListCopyWindowInfo`. A point click hits whatever is topmost at that
+   point — which, unlike every other tier, can be a different application. This
+   is why Open Question Q6 is a correctness prerequisite and not a test-rig
+   detail.
+3. **The frame hash is in the step log.** A bbox is meaningless without the
+   capture it was measured in, and a step nobody can replay is a step nobody can
+   audit.
+
+Coordinates are computed here and nowhere else. Nothing upstream — planner,
+Jev, the vision model, the `Action`, the log's identity field — carries one.
+
+---
+
 ## 3. The shared contract
 
 Both sources produce the same `[Element]`, and the rest of the harness cannot
@@ -490,12 +553,16 @@ tell them apart:
 
 ```swift
 public struct Element: Sendable, Hashable {
-    public let ref: ElementRef    // .dom(handle:selector:label:) | .ax(path:role:label:)
+    public let ref: ElementRef    // .dom | .ax | .captured — see harness.md §2.1
     public let role: String
     public let label: String
+    public let visionLabel: String  // tier 4's own name for it; "" otherwise. Denylist input.
+    public let submitLabel: String  // what Enter here would activate; "" otherwise. ADR 0008.
     public let enabled: Bool
     public let inViewport: Bool
-    public let bounds: CGRect     // filter + vision ONLY. Never reaches an Action.
+    public let bounds: CGRect     // filter + vision. Reaches an Action ONLY inside
+                                  // `.captured`, and is turned into a point only
+                                  // by CapturedExecutor at act time — ADR 0007.
 }
 ```
 

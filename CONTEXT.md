@@ -29,9 +29,17 @@ cannot be recovered locally — publishing, sending, deleting, purchasing.
 A published post deleted seconds later is still Irreversible: it was public.
 
 ## Element Reference
-How an Action names its target: by the identity the system already gives that
-element (accessibility path, DOM selector), never by pixel coordinate. Two runs
-of the same Task on the same screen must produce the same Element Reference.
+How an Action names its target. An Element Reference is an identity, never a
+location — usually one the system already provides (accessibility path, DOM
+selector). Two runs of the same Task on the same screen must produce the same
+Element Reference.
+
+## Captured Target
+An Element Reference for something no element tree describes: a region of the
+screen together with whatever could name it. It is still an identity — it can be
+shown in a Confirmation, matched against a denylist, and read in a log — but it
+is the only kind whose activation is a location rather than a dispatch, and the
+only kind that can be produced with no name at all.
 
 ## Risk Gate
 The judgment applied to Reversible Actions to decide whether to execute them

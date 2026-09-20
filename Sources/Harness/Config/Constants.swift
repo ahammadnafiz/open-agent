@@ -195,6 +195,31 @@ public enum Constants {
 
         /// Roles that imply form submission regardless of label.
         public static let submitRoles: Set<String> = ["submit", "menuitem-destructive"]
+
+        /// Keys whose effect is routed through `labelDenylist` before executing.
+        ///
+        /// `enter` only. `tab` moves focus and activates nothing; `escape`
+        /// dismisses, which is reversible by construction. `enter` is classified
+        /// against the focused element's *submission target*, not the element
+        /// itself — a To-field carries no hint that its form submits to `Send`.
+        ///
+        /// Reasoned, not measured. See ADR 0008, and Open Question Q8 for the
+        /// uncovered case: a native text field whose window sends on `enter`
+        /// with no label the denylist can reach.
+        public static let gatedKeys: Set<String> = ["enter"]
+
+        /// A `.captured` target that neither OCR, the tier 3b detector, nor the
+        /// vision model could name is classified `.irreversible` unconditionally.
+        ///
+        /// This is the narrow form of "confirm every icon". Blanket confirmation
+        /// was rejected as unusable — Chrome is 83% icon-only — but a target
+        /// nothing in the system can describe cannot be denylisted at all, and
+        /// acting on it unconfirmed is the one case with no mechanism behind it.
+        ///
+        /// Expected to fire rarely, because tier 4 labels what it selects. If it
+        /// fires often, tier 4's label output is not working and that is the bug
+        /// to fix — not this flag. Measure with `Probe run-task` before changing.
+        public static let confirmUnnamedCaptured = true
     }
 
     // MARK: - Budgets

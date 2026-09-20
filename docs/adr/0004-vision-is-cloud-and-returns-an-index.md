@@ -93,7 +93,16 @@ recovery ladder rather than guessing.
 
 **ADR 0003's contract holds without a patch.** Vision resolves a target, not a
 point. Nothing in the system emits a coordinate, so the label denylist retains
-both of its inputs and ADR 0001 is untouched. Had we chosen a local grounding
+both of its inputs and ADR 0001 is untouched.
+
+> **Corrected 2026-09-20 — [ADR 0007](./0007-captured-targets-execute-by-synthesized-event.md).**
+> True while ADR 0003 was in force, because the surfaces with no element tree were
+> out of scope. ADR 0005 brought them in and this paragraph was not revisited.
+> Vision still answers with an index and no model emits a coordinate; but where
+> the selected target has no element to dispatch to, the executor computes a click
+> point from the target's own bounds. The denylist keeps its inputs only because
+> ADR 0007 adds the label this ADR's response format did not carry — the vision
+> answer is now `{index, label}`, not `index` alone. Had we chosen a local grounding
 model we would have had to hit-test its returned point back against the candidate
 list — workable, but it reintroduces coordinates at exactly the boundary the
 safety model was built to protect.

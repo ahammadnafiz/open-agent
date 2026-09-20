@@ -76,7 +76,7 @@ that verifies in a separate call pays twice for nothing.
 /// which is the entire reason this is an enum and not a string.
 public enum ActionKind: String, Codable, Sendable, CaseIterable {
     // Reversible
-    case openApp, navigate, click, type, scroll, focus, select, read, wait
+    case openApp, navigate, click, type, pressKey, scroll, focus, select, read, wait
     // Irreversible by default — always confirmed, never auto-executed
     case publish, send, delete, purchase
 
@@ -88,26 +88,56 @@ public enum ActionKind: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// Identity of a UI element. Never coordinates — see ADR 0001.
+/// Keys `pressKey` may send. Closed for the same reason `ActionKind` is —
+/// see ADR 0008. Arrow and editing keys are deliberately absent: an
+/// autocomplete suggestion is a clickable element tiers 1–2 already resolve.
 ///
-/// A coordinate cannot be risk-gated: nobody can tell whether clicking (847,203)
-/// publishes a post or scrolls a list. Both cases below carry enough identity to
-/// be named in a confirmation dialog and re-resolved on a later step.
+/// `enter` is the only key with an effect the denylist must reason about, and
+/// it is classified against the focused element's *implicit submission target*,
+/// not the field itself. A newline smuggled into `type`'s payload is not an
+/// acceptable substitute: the confirmation shows the payload verbatim and a
+/// trailing newline renders as nothing.
+public enum Key: String, Codable, Sendable, CaseIterable {
+    case enter, tab, escape
+}
+
+/// Identity of a UI element. An identity is never a coordinate — see ADR 0001.
+///
+/// A raw coordinate cannot be risk-gated: nobody can tell whether clicking
+/// (847,203) publishes a post or scrolls a list. Every case below carries enough
+/// identity to be named in a confirmation dialog, matched by the denylist, and
+/// written to a log a human can read months later.
+///
+/// `.captured` is the one case whose *actuation* is a point, computed inside the
+/// executor from `bbox` at act time — see ADR 0007. The point is never part of
+/// the ref, never what a model emits, and never what the log records as the
+/// identity. The distinction is not cosmetic: it is what keeps the denylist and
+/// the confirmation dialog functional on surfaces that expose no element tree.
 public enum ElementRef: Codable, Sendable, Hashable {
     /// Web. `handle` is a BiDi script.NodeRemoteValue sharedId; `selector` is a
     /// human-readable fallback used for logging and re-resolution after reload.
-    case dom(handle: String, selector: String, label: String)
+    case dom(handle: String, selector: String, label: String, submitLabel: String)
     /// Native. `path` is the index chain from the window root, which is stable
     /// only within one observation — always re-observe before acting.
     case ax(path: [Int], role: String, label: String)
+    /// Tier 3/4. No element tree exists for this target. `label` may be empty,
+    /// in which case `classify` returns `.irreversible` unconditionally.
+    /// A ref with `provenance == .ocrLine` is never executed — see ADR 0007.
+    case captured(bbox: CGRect, label: String, provenance: Provenance)
 
     var label: String { … }
 }
 
+public enum Provenance: String, Codable, Sendable {
+    case ocrLine       // Vision RecognizeTextRequest — may span several controls
+    case detectorBox   // tier 3b — one control, no label
+    case visionMark    // tier 4 resolved a numbered mark to this box
+}
+
 public struct Action: Codable, Sendable {
     public let kind: ActionKind
-    public let target: ElementRef?      // nil only for openApp / wait
-    public let payload: String?         // text to type, url to navigate, app to open
+    public let target: ElementRef?      // nil only for openApp / navigate / wait
+    public let payload: String?         // text to type, url, app name, or Key raw value
     public let rationale: String        // one line, for the log and the confirmation
 }
 ```
@@ -410,17 +440,38 @@ enum Reversibility: Comparable { case reversible, irreversible }   // irreversib
 func classify(_ action: Action, target: Element?) -> Reversibility {
     let declared: Reversibility =
         action.kind.isIrreversibleByDefault ? .irreversible : .reversible
-    let byLabel: Reversibility =
-        target.map { LabelDenylist.matches($0) } ?? false ? .irreversible : .reversible
-    return max(declared, byLabel)
+
+    // Whatever the source named this element. Empty for an unlabelled icon.
+    let bySource = LabelDenylist.matches(target?.label)
+
+    // What tier 4 called the element it selected. Attacker-influenced — it is
+    // read off pixels — and admissible anyway, because it can only ever RAISE
+    // the classification. See ADR 0007.
+    let byVision = LabelDenylist.matches(target?.visionLabel)
+
+    // What `Enter` would actually activate. A text field does not carry the
+    // label of the button its form submits to. See ADR 0008.
+    let bySubmit = action.kind == .pressKey && action.payload == Key.enter.rawValue
+        ? LabelDenylist.matches(target?.submitLabel) : false
+
+    // A captured target nothing could name. Rare, and the right way to be wrong.
+    let unnamed = target?.isCapturedWithNoLabel ?? false
+
+    return max(declared, .from(bySource), .from(byVision), .from(bySubmit), .from(unnamed))
 }
 ```
 
 `LabelDenylist` is a compiled regex over the target's label and role, plus a
 `role == "submit"` check. It exists because **the verb never tells you what a
 click does** — publishing a tweet is `click("Post")`, and `click` is reversible.
-The declared intent and the label rule are independent; both must fail silently
-and simultaneously for an unconfirmed irreversible action to occur.
+The five inputs are independent; **all** of them must fail silently and
+simultaneously for an unconfirmed irreversible action to occur.
+
+Every input is upgrade-only, and that is what lets two of them accept
+model-derived and page-derived strings. ADR 0001 forbids a component *relaxing*
+the boundary. An attacker who controls what the vision model reads, or what a
+form's submit button says, can make the agent ask the user **more** often —
+never less.
 
 Accepted cost: a search form whose button says "Submit" asks once. That is the
 correct direction to be wrong in.
@@ -443,11 +494,44 @@ public protocol Executor: Sendable {
 **BiDi** — `script.callFunction` against the element's `sharedId` for click and
 focus, `input.performActions` for real key events when typing (synthetic `value`
 assignment does not fire the listeners that modern web apps depend on),
-`browsingContext.navigate` with `wait: "complete"` for navigation.
+`browsingContext.navigate` with `wait: "complete"` for navigation, and
+`input.performActions` with the W3C key code (`` enter, `` tab,
+`` escape) for `pressKey`.
 
 **AX** — `AXUIElementPerformAction(el, kAXPressAction)` for click,
 `AXUIElementSetAttributeValue(el, kAXValueAttribute, …)` for typing where
 supported, falling back to `CGEvent` key synthesis with the element focused.
+`pressKey` is `CGEvent` with the element focused first — there is no AX action
+for a keystroke.
+
+**Captured** — `CGEvent` mouse down/up at the centre of `bbox`, in screen
+coordinates. Three preconditions, each enforced rather than assumed:
+
+```swift
+func execute(_ action: Action) async throws -> ExecutionResult {
+    guard case .captured(let bbox, _, let provenance) = action.target else { … }
+
+    // 1. An OCR line box may span several controls, and its centre lands on an
+    //    arbitrary one of them. ADR 0005 measured that splitting by gap is
+    //    impossible. This is the worst failure available, so it is refused.
+    guard provenance != .ocrLine else { throw ExecutionError.ocrLineNotActionable }
+
+    // 2. A point click lands on whatever is topmost THERE. Unlike tiers 1–2,
+    //    which dispatch to an element, this can hit another application
+    //    entirely. Q6 is a correctness prerequisite here, not a nuisance.
+    guard try await window.raiseAndVerifyOnScreen() else { throw ExecutionError.windowNotVisible }
+
+    // 3. The bbox is meaningless without the frame it was measured in. The log
+    //    carries the hash or the step is unreplayable — ADR 0007.
+    try log.attach(screenshotHash: observation.frameHash)
+    …
+}
+```
+
+**Every `ElementRef` case has exactly one executor, and `Executor.for(ref)` is
+total.** A ref the harness can produce but not act on is the defect ADR 0007 was
+written to close; if a case is ever added, this switch is where it must be
+handled rather than defaulted.
 
 Both return a result carrying whether the call itself succeeded. **That is not
 verification.** A click can be dispatched perfectly and change nothing; only the
