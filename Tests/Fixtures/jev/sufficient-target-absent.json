@@ -1,0 +1,28 @@
+{
+  "name": "sufficient-target-absent",
+  "provenance": "The missing negative case. `sufficient` had one fixture, on the `above` side only, so nothing could tell whether it recognises a target that is NOT in the list — which is the entire reason the question exists. Live runs on WhatsApp returned 0.62-0.69 repeatedly, straddling the 0.70 floor, and the gate had no way to see it.",
+  "state": {
+    "task": "reply to the latest message and send it",
+    "plan_step": {
+      "kind": "send",
+      "target": "the send button beside the message field",
+      "payload": null
+    },
+    "last_action": null,
+    "screen_before": "<AXButton> Chats\n<AXButton> Calls\n<AXTextField> Search",
+    "screen_now": "<AXButton> Chats\n<AXButton> Calls\n<AXTextField> Search\n<AXButton> Archived\n<AXButton> Starred",
+    "recent_history": [],
+    "candidates": {
+      "e0": "Chats",
+      "e1": "Calls",
+      "e2": "Search",
+      "e3": "Archived",
+      "e4": "Starred"
+    },
+    "task_context": "",
+    "expected_target": null
+  },
+  "expect": {
+    "sufficient": "below"
+  }
+}

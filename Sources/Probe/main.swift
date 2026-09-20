@@ -187,6 +187,16 @@ enum Probe {
     print("\(fixtures.count) fixtures x \(repeats) repeats")
     print("")
 
+    // "question/side" -> every observed value for fixtures asserting that side.
+    //
+    // **Grouped by side, because a question with fixtures on both sides has a
+    // bimodal distribution and an aggregate mean over it describes nothing.**
+    // `risk_destructive` averaged 0.45 across a fixture that should score near
+    // 0 and one that should score near 1; that number is not about either of
+    // them. Worse, the straddle test was switched off entirely whenever a
+    // question had both sides — so the better the fixture coverage, the less
+    // the gate checked.
+    var byGroup: [String: [Double]] = [:]
     // question -> every observed value, and whether each landed correctly
     var values: [String: [Double]] = [:]
     var errors: [String: Int] = [:]
@@ -194,6 +204,7 @@ enum Probe {
     var targetHits = 0
     var targetTotal = 0
     var cost = 0.0
+    var wrongCases: [String: [String]] = [:]
 
     for fixture in fixtures {
       for repeatIndex in 1...repeats {
@@ -224,9 +235,17 @@ enum Probe {
             let threshold = BatteryFixture.threshold(for: question)
           else { continue }
           values[question, default: []].append(value)
+          byGroup["\(question)/\(side.rawValue)", default: []].append(value)
           counts[question, default: 0] += 1
           let correct = side == .above ? value >= threshold : value < threshold
-          if !correct { errors[question, default: 0] += 1 }
+          if !correct {
+            errors[question, default: 0] += 1
+            // Naming the fixture is the difference between "this question is
+            // wrong half the time" and knowing which half.
+            wrongCases[question, default: []].append(
+              "\(fixture.name) wanted \(side == .above ? "≥" : "<") \(fmt(threshold, 2)), "
+                + "got \(fmt(value, 3))")
+          }
         }
 
         // The ambiguous fixtures assert nothing but still contribute variance,
@@ -242,37 +261,36 @@ enum Probe {
       }
     }
 
-    print("question          n    err      mean    sd       straddles?")
-    print("────────────────  ───  ───────  ──────  ───────  ──────────")
+    print("question / side       n    err      mean    sd       straddles?")
+    print("────────────────────  ───  ───────  ──────  ───────  ──────────")
 
     var straddling: [String] = []
-    for question in values.keys.sorted() {
-      let observations = values[question] ?? []
+    for group in byGroup.keys.sorted() {
+      let observations = byGroup[group] ?? []
       guard !observations.isEmpty else { continue }
-      let n = counts[question] ?? observations.count
-      let err = errors[question] ?? 0
+      let question = String(group.split(separator: "/")[0])
       let mean = observations.reduce(0, +) / Double(observations.count)
       let variance =
         observations.reduce(0) { $0 + pow($1 - mean, 2) } / Double(observations.count)
       let sd = variance.squareRoot()
 
-      // The gate. Not "was the mean right" — did any single repeat land on the
-      // wrong side of the line while another landed on the right side.
+      // The gate, asked of one side at a time. Every observation in this group
+      // is expected on the same side of the line, so any disagreement between
+      // repeats is the question failing to separate a case from itself — which
+      // is what a straddle is, and it is invisible in an aggregate.
       let threshold = BatteryFixture.threshold(for: question) ?? 0
       let anyAbove = observations.contains { $0 >= threshold }
       let anyBelow = observations.contains { $0 < threshold }
-      // Straddling only counts within a question whose fixtures agree on a
-      // side; a question with both above- and below-expectations legitimately
-      // produces values on both sides.
-      let sides = Set(
-        fixtures.compactMap { $0.expect[question]?.rawValue }
-      )
-      let straddles = anyAbove && anyBelow && sides.count == 1
-      if straddles { straddling.append(question) }
+      let straddles = anyAbove && anyBelow
+      if straddles { straddling.append(group) }
+
+      let err = observations.filter { value in
+        group.hasSuffix("/above") ? value < threshold : value >= threshold
+      }.count
 
       print(
-        pad(question, 18) + pad("\(observations.count)", 5)
-          + pad("\(err)/\(n)", 9) + pad(fmt(mean, 3), 8)
+        pad(group, 22) + pad("\(observations.count)", 5)
+          + pad("\(err)/\(observations.count)", 9) + pad(fmt(mean, 3), 8)
           + pad(fmt(sd, 4), 9) + (straddles ? "STRADDLES" : "no")
       )
     }
@@ -284,14 +302,38 @@ enum Probe {
     print("")
     print("cost              $\(fmt(cost, 4))")
 
-    if straddling.isEmpty {
-      print("\nPASS — no question straddles its threshold")
-    } else {
+    // **A question that is simply wrong must fail this, and it did not.**
+    // PASS/FAIL used to depend only on straddling, so the `err` column was
+    // printed and then ignored — `risk_destructive` answered 5 of its 10
+    // fixtures wrongly and the gate still said PASS. A gate that reports a
+    // number it does not act on is decoration.
+    //
+    // Straddling and being wrong are different faults with different repairs,
+    // so they are reported separately: a straddle means the question cannot
+    // separate its cases, and an error means it separates them the wrong way.
+    let wrong = wrongCases.keys.sorted()
+
+    if straddling.isEmpty, wrong.isEmpty {
+      print("\nPASS — every question separates its cases, on the correct side")
+      return
+    }
+
+    if !wrong.isEmpty {
+      print("\nFAIL — wrong answers:")
+      for question in wrong {
+        let cases = wrongCases[question] ?? []
+        print("  \(question): \(cases.count)/\(counts[question] ?? 0)")
+        for detail in Set(cases).sorted() { print("      \(detail)") }
+      }
+      print("Reword the question so it separates these cases. Moving the")
+      print("threshold to cover them makes the gate agree with a wrong answer.")
+    }
+    if !straddling.isEmpty {
       print("\nFAIL — straddling: \(straddling.joined(separator: ", "))")
       print("Reword the question, or move the threshold away from the crowded")
       print("region. Never nudge the threshold to make this pass.")
-      exit(1)
     }
+    exit(1)
   }
 
   // MARK: - capture-fixtures

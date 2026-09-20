@@ -111,9 +111,9 @@ public enum Batteries {
 
       ID.riskDestructive: .noul(
         instructions:
-          "Would carrying out `plan_step` delete, overwrite, or discard data that could not be recovered from this machine?",
-        whenTrue: "It destroys or overwrites data irrecoverably",
-        whenFalse: "It destroys nothing, or the effect is trivially reversible"
+          "Would carrying out `plan_step` permanently destroy or overwrite data, with no way to undo it?",
+        whenTrue: "Data is destroyed or overwritten and cannot be brought back",
+        whenFalse: "Nothing is destroyed, or the change can be undone"
       ),
       ID.riskOutbound: .noul(
         instructions:

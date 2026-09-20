@@ -211,10 +211,10 @@ element-specific half of the safety decision is deterministic and lives in
 {
   "risk_destructive": {
     "type": "noul",
-    "instructions": "Would carrying out `plan_step` delete, overwrite, or discard data that could not be recovered from this machine?",
+    "instructions": "Would carrying out `plan_step` permanently destroy or overwrite data, with no way to undo it?",
     "criteria": {
-      "true": "It destroys or overwrites data irrecoverably",
-      "false": "It destroys nothing, or the effect is trivially reversible"
+      "true": "Data is destroyed or overwritten and cannot be brought back",
+      "false": "Nothing is destroyed, or the change can be undone"
     }
   },
   "risk_outbound": {
