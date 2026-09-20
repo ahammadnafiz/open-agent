@@ -22,7 +22,7 @@ public enum Constants {
         public static let jev = "jev-1.13.0"
 
         /// OpenRouter IDs. Configuration, not truth — the catalogue moves.
-        public static var planner = "anthropic/claude-sonnet-5"      // $2.00/M
+        public static let planner = "anthropic/claude-sonnet-5"      // $2.00/M
 
         /// Vision escalation. Chosen by measurement, not reputation — see ADR 0004.
         ///
@@ -35,10 +35,10 @@ public enum Constants {
         /// flash-lite is the only one below the ceiling, and the gap is entirely on
         /// icon targets — which is the only class tier 4 ever sees, since tiers 1–3
         /// already resolve anything text-labelled.
-        public static var vision = "google/gemini-3.8-flash"          // $0.75/M
+        public static let vision = "google/gemini-3.8-flash"          // $0.75/M
 
         /// Used only when a replan has already failed once at the default tier.
-        public static var replanEscalated = "anthropic/claude-opus-5"
+        public static let replanEscalated = "anthropic/claude-opus-5"
     }
 
     // MARK: - Jev thresholds
@@ -266,7 +266,7 @@ public enum Constants {
         /// The debug port can only be enabled at process start, so the agent
         /// cannot attach to a browser the user opened. It owns this profile;
         /// the user's daily profile is never touched, never quit, never exposed.
-        public static var agentProfilePath =
+        public static let agentProfilePath =
             NSString(string: "~/Library/Application Support/computer-agent/zen-profile")
                 .expandingTildeInPath
 
@@ -382,5 +382,50 @@ public enum Constants {
         /// hole, and one that defaults to "no" is a task that dies while the
         /// user is reading.
         public static let confirmationTimeout: Duration? = nil
+
+        // -- Cursor overlay -----------------------------------------------
+        //
+        // The agent drives other people's applications, so without a drawn
+        // cursor the only evidence anything is happening is windows changing by
+        // themselves. These values buy legibility with wall-clock time, and
+        // that time is charged to `Budget.maxMachineTime` like any other.
+        //
+        // Styling — corner radii, blur, colour — deliberately does NOT live
+        // here. This file is what a human reviews before a release, and padding
+        // it with cosmetics hides the values that decide behaviour.
+
+        /// Master switch. Off costs ~400 ms less per step and makes the agent
+        /// invisible while it works. On is the default because an agent nobody
+        /// can watch is an agent nobody can interrupt.
+        public static let motionEnabled = true
+
+        /// Pointer speed. Chosen to read as deliberate rather than instant —
+        /// an instantaneous jump conveys no direction, and direction is the
+        /// information the overlay exists to carry. Not measured; tune by eye.
+        public static let pixelsPerSecond: Double = 2_600
+
+        /// Floor and ceiling on travel time, so a short hop still reads as
+        /// movement and a corner-to-corner sweep does not stall the step.
+        public static let minMoveSeconds: Double = 0.26
+        public static let maxMoveSeconds: Double = 0.62
+
+        /// How long the target ring is visible before the cursor sets off.
+        ///
+        /// This is the anticipation window — the user sees WHERE before WHAT.
+        /// It is the overlay's entire safety contribution and the reason it is
+        /// not purely decorative, so it is the last value that should be cut
+        /// for speed.
+        public static let anticipationSeconds: Double = 0.14
+
+        /// Press-and-release, then a beat before the ring clears. Below ~0.1 s
+        /// the click reads as a flicker rather than as an action.
+        public static let pressSeconds: Double = 0.13
+        public static let settleSeconds: Double = 0.10
+
+        /// Worst case added per step: anticipation + maxMove + press + settle
+        /// = 0.99 s. Typical: ~0.6 s. Over a 10-step task that is 6 s against a
+        /// 90 s ceiling. Acceptable; revisit if `maxSteps` tasks become normal.
+        public static let worstCaseOverheadSeconds: Double =
+            anticipationSeconds + maxMoveSeconds + pressSeconds + settleSeconds
     }
 }

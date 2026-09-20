@@ -365,6 +365,35 @@ it emits separate observations. When it merges, the text really is adjacent.
   vision flag, cost, elapsed, and the Jev model version that answered.
 - **Verify:** Run a task, inspect the log, confirm a replay is reconstructible.
 
+### 5.4 Cursor overlay — **DONE 2026-09-20, ahead of sequence**
+
+Built before the loop because it is a product decision that has to be *watched*
+to be judged, and judging it later means changing it when it is expensive to.
+
+- **Acceptance:** A click-through panel draws a cursor, a target ring, a
+  narration chip and a click ripple over every application, across Spaces and
+  over full-screen windows, without stealing focus or swallowing a single event.
+- **Verify:** `swift run ComputerAgent` — plays a scripted mail task with no
+  harness behind it. ✅ builds clean, runs, exits.
+- **Files:** `Sources/ComputerAgent/HUD/{CursorOverlay,CursorView}.swift`
+- **The rule it must keep:** the overlay **reads** a target and never produces
+  one. It consumes `Element.bounds`, which perception already captures for the
+  candidate filter and the vision marks. Nothing it computes reaches an `Action`,
+  a plan, a Jev state or the classifier. If a cursor position ever becomes an
+  input, this has become the coordinate-driven design ADR 0003 rejected.
+- **Coordinate conversion is the whole difficulty**, and it is done once at the
+  boundary in `CursorOverlay.toLocal`. Three systems meet and disagree twice:
+  Quartz/AX/CGEvent (primary top-left, y down), `NSScreen.frame` (primary
+  bottom-left, y up), SwiftUI-in-hosting-view (view top-left, y down).
+  **On a single display the conversion is the identity**, so a wrong
+  implementation looks perfect until a second monitor appears. Verified on this
+  machine (1 display, identity) and against a synthetic display-above-primary
+  arrangement (4/4 cases). **Not yet verified on real hardware with two
+  displays** — do that before trusting it.
+- **Cost:** ~0.6 s typical per acting step, 0.99 s worst case, charged to
+  `Budget.maxMachineTime` like anything else. `Constants.HUD.motionEnabled`
+  turns it off.
+
 ---
 
 ## Phase 6 — Validation

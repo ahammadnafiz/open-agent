@@ -211,6 +211,8 @@ computer-agent/
 │   ├── ComputerAgent/           Executable: SwiftUI app entry
 │   │   ├── App.swift
 │   │   └── HUD/                 Floating panel, confirmation sheet
+│   │       ├── CursorOverlay.swift  Click-through panel + coordinate flip
+│   │       └── CursorView.swift     Cursor, target ring, narration, ripple
 │   ├── Harness/                 Library: everything headless
 │   │   ├── Core/
 │   │   │   ├── Task.swift       Task, Step, Outcome
