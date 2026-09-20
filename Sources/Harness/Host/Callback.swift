@@ -16,6 +16,20 @@ public enum HostStatus: String, Codable, Sendable, CaseIterable {
   /// retrying a login wall produces another login wall.
   case blocked
   case completed
+  /// Every step ran, and the screen cannot say whether it worked.
+  ///
+  /// **`task_done` asks whether the screen *shows* the task complete, which is
+  /// not the same question as whether it succeeded.** A publish is the case
+  /// where they come apart: measured on Facebook, a post that had plainly gone
+  /// up scored 0.02, because the feed the agent lands on does not show it —
+  /// the posted text was in neither the element list nor the page text.
+  ///
+  /// Reporting that as `needs_plan` told the host the route was wrong and
+  /// invited more steps for work that was already done. Reporting it as
+  /// `completed` would be a claim nothing supports. This is the honest third
+  /// answer: the mechanics all ran, and confirmation has to come from
+  /// somewhere other than this screen.
+  case unverified
   case failed
   case budgetExhausted = "budget_exhausted"
 }

@@ -784,19 +784,36 @@ struct FinalVerificationTests {
     #expect(await judge.callCount == 2, "one call to choose, one to verify")
   }
 
-  @Test("a finished plan whose last step did nothing says what it saw")
-  func anUnverifiedPlanSaysWhy() async {
+  /// **`task_done` asks whether the screen *shows* the task complete, which is
+  /// not whether it succeeded.** For a publish the two come apart: measured on
+  /// Facebook, a post that had plainly gone up scored 0.02, because the feed
+  /// the agent lands on shows neither the post nor its text. Reporting that as
+  /// `needs_plan` told the host the route was wrong and invited more steps for
+  /// work already done.
+  @Test("every step ran but the screen cannot confirm it — that is its own answer")
+  func aDispatchedPlanThatCannotBeConfirmed() async {
     let judge = ScriptedJudge([Make.verdict(progressed: 0.11, taskDone: 0.05)])
 
     let outcome = await Make.loop(
       plan: Make.plan([.click]), judge: judge, settleTimeout: .zero
     ).run()
 
-    #expect(outcome.status == .needsPlan)
-    // Still not a failure — the route may simply be short — but the reason now
-    // carries the evidence instead of only "the steps ran out".
+    #expect(outcome.status == .unverified, "it was reported as a routing problem")
     #expect(outcome.reason.contains("task_done"), "the reason was \(outcome.reason)")
-    #expect(outcome.reason.contains("progressed"), "the reason was \(outcome.reason)")
+  }
+
+  /// When nothing landed, the route really is the problem.
+  @Test("a plan whose last step never dispatched is still a route problem")
+  func anUndispatchedPlanIsARouteProblem() async {
+    let judge = ScriptedJudge([Make.verdict(progressed: 0.11, taskDone: 0.05)])
+    let executor = RecordingExecutor()
+    await executor.setShouldFail(true)
+
+    let outcome = await Make.loop(
+      plan: Make.plan([.click]), judge: judge, executor: executor, settleTimeout: .zero
+    ).run()
+
+    #expect(outcome.status == .needsPlan)
   }
 
   /// Nothing dispatched means nothing to verify, and asking anyway spends a

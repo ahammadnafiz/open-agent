@@ -740,8 +740,23 @@ public actor AgentLoop {
     if verdict.taskDone >= Constants.Jev.taskDone {
       return result(.completed, since: started, reason: "task_done \(fmt(verdict.taskDone))")
     }
-    // Still not a failure — the route may simply be short — but now it says
-    // what was actually seen instead of only that the steps ran out.
+
+    // **A low `task_done` after every step dispatched is not a route problem.**
+    // The question it answers is whether the screen *shows* the task complete,
+    // and for a publish that is a different question from whether it worked:
+    // measured on Facebook, a post that had gone up scored 0.02, because the
+    // feed the agent lands on shows neither the post nor its text. Calling
+    // that `needs_plan` told the host to write more steps for work already
+    // done, and it is what sent one host off to read the page over a raw
+    // websocket to find out the truth.
+    if steps.last?.result.dispatched == true {
+      return result(
+        .unverified, since: started,
+        reason: "every step ran; the screen does not show the outcome "
+          + "(task_done \(fmt(verdict.taskDone)))")
+    }
+
+    // Nothing landed, so the route really is the problem.
     return result(
       .needsPlan, since: started,
       reason: "\(exhausted); task_done \(fmt(verdict.taskDone)) "

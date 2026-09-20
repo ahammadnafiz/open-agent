@@ -103,6 +103,7 @@ whole price of a run that reads as deliberate rather than teleported.
 | `status` | What it means | What you do |
 |---|---|---|
 | `completed` | the task is visibly done | report what happened |
+| `unverified` | every step ran, and the end screen cannot show whether it worked | **do not call it done, and do not add steps.** See below. |
 | `needs_eyes` | text was not enough to find the target | **look at `screenshot`**, then `resume <session> --eyes <n>` with the number on the box, or `--eyes none` if the target genuinely is not there |
 | `needs_plan` | the route was wrong | read `history` and `candidates`, write new steps, `resume <session> --plan plan.json` |
 | `blocked` | login wall, permission prompt, CAPTCHA, paywall | **stop.** See below. |
@@ -149,20 +150,34 @@ step arrives inside the next step's batch, and the final step of a plan has no
 next step — so it used to return `needs_plan` having never looked at the screen
 its last action produced. A send that worked and a send that pressed the wrong
 button were indistinguishable. The loop now takes one more look when the plan
-runs out:
+runs out, and answers one of three ways:
 
-- `completed` — the plan finished **and** the screen was checked against the
-  task. Say what was done.
-- `needs_plan` with `task_done` and `progressed` in the reason — every step ran
-  and the result still does not look like the task. Read those numbers before
-  you claim anything; a low `progressed` means the last action changed nothing.
-- `needs_plan` saying only that the plan is exhausted — nothing was dispatched,
-  so there was nothing to verify.
+- `completed` — the plan finished **and** the screen shows the task done.
+- `unverified` — every step dispatched, and the end screen cannot say whether
+  it worked.
+- `needs_plan` — the last step never dispatched, so the route is the problem.
+
+### `unverified` is not failure, and not success
+
+**It means the evidence is somewhere this screen is not.** The verification asks
+whether the screen *shows* the task complete, which for a publish is a different
+question from whether it succeeded. Measured: a Facebook post that had plainly
+gone up scored `task_done 0.02`, because the feed the agent lands on shows
+neither the post nor its text — 72 candidates, none of them containing it.
+
+So when you see it:
+
+- **Do not report the task as done.** Nothing here supports that.
+- **Do not add plan steps.** The work already ran; more steps repeat it, and on
+  a send or a publish that means doing it twice.
+- Say plainly what dispatched and that confirmation is not available from the
+  end screen. If the user needs certainty, the honest move is to say where they
+  can look — their own timeline, their sent folder — or to ask them.
 
 So: say what the final `status` was. If it is anything but `completed`, say what
 stopped and where. Do not write "I've sent the email" because a command exited
-0 — and do not go reading the page yourself to find out. If the status does not
-tell you, that is a defect worth reporting, not a gap to paper over.
+0 — and do not go reading the page yourself to turn `unverified` into a claim
+the binary would not make.
 
 ## Browser tasks
 

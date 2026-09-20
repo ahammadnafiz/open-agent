@@ -40,9 +40,10 @@ struct AgentLoopTests {
       plan: Make.plan([.click]), judge: judge, executor: executor
     ).run()
 
-    // The single plan step ran, then the plan was exhausted.
+    // The single plan step ran — once, not retried — then the plan was
+    // exhausted with the screen unable to confirm the outcome.
     #expect(await executor.executed.count == 1)
-    #expect(result.status == .needsPlan)
+    #expect(result.status == .unverified)
   }
 
   /// SPEC.md § S2 — verification catches an induced failure on the *next*
