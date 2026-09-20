@@ -53,6 +53,8 @@ struct BiDiSnapshot: Sendable {
   let nodeCount: Int
   /// What the document says about itself: `loading`, `interactive`, `complete`.
   let readyState: String
+  /// The content area's origin on screen, in CSS pixels.
+  let screenOrigin: CGPoint
 
   init(_ raw: [String: Any]) {
     url = (raw["url"] as? String) ?? ""
@@ -68,6 +70,9 @@ struct BiDiSnapshot: Sendable {
       + "btn=\((f["buttons"] as? Double).map { Int($0) } ?? -1) "
       + "raw=\((f["raw"] as? Double).map { Int($0) } ?? -1) "
       + "ready=\((f["ready"] as? String) ?? "?")"
+    let origin = (raw["screen"] as? [String: Any]) ?? [:]
+    screenOrigin = CGPoint(
+      x: (origin["x"] as? Double) ?? 0, y: (origin["y"] as? Double) ?? 0)
     let size = (raw["viewport"] as? [String: Any]) ?? [:]
     viewport = CGSize(
       width: (size["w"] as? Double) ?? 0, height: (size["h"] as? Double) ?? 0)
@@ -128,7 +133,13 @@ public actor BiDiSource: ElementSource {
         // deterministic filter drops it, rather than offering a candidate that
         // would silently click the overlay instead.
         inViewport: !action.occluded,
-        bounds: action.bounds
+        // Offset into screen space, so `bounds` means the same thing here as it
+        // does for the accessibility tier — which is what the overlay converts
+        // from. The executor is untouched: it recomputes its click point from
+        // the element's own rect at act time, in the page coordinates
+        // `input.performActions` expects.
+        bounds: action.bounds.offsetBy(
+          dx: snapshot.screenOrigin.x, dy: snapshot.screenOrigin.y)
       )
     }
   }

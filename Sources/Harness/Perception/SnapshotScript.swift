@@ -305,6 +305,25 @@ enum SnapshotScript {
           ready: document.readyState,
         },
         viewport: { w: vw, h: vh },
+        // Where the content area sits on screen, in CSS pixels.
+        //
+        // **`getBoundingClientRect()` is viewport-relative, and `Element.bounds`
+        // means screen coordinates everywhere else in this system.** The
+        // accessibility tier reports screen space, the overlay converts from
+        // screen space, and the browser tier was handing over page space in the
+        // same field — so the target box was drawn near the corner of the
+        // display while the control sat inside the browser window.
+        //
+        // `mozInnerScreenX/Y` is exact on Gecko, which is what this drives. The
+        // fallback splits the window chrome the usual way for anything else.
+        screen: {
+          x: (window.mozInnerScreenX !== undefined)
+            ? window.mozInnerScreenX
+            : window.screenX + (window.outerWidth - vw) / 2,
+          y: (window.mozInnerScreenY !== undefined)
+            ? window.mozInnerScreenY
+            : window.screenY + (window.outerHeight - vh),
+        },
         scroll: { y: window.scrollY, height: document.documentElement.scrollHeight },
         text: text.slice(0, TEXT_LIMIT),
         actions: actions,

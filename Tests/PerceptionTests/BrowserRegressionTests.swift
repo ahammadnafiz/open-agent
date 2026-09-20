@@ -97,6 +97,67 @@ struct AgentTabRegressionTests {
   }
 }
 
+@Suite("DOM bounds are screen bounds — regression")
+struct DOMBoundsRegressionTests {
+
+  private func snapshot(originX: Double, originY: Double) -> BiDiSnapshot {
+    BiDiSnapshot([
+      "url": "https://example.com/",
+      "viewport": ["w": 1470.0, "h": 881.0],
+      "screen": ["x": originX, "y": originY],
+      "funnel": ["all": 900.0, "ready": "complete"],
+      "actions": [
+        [
+          "id": "e0", "role": "button", "label": "Send",
+          "x": 72.0, "y": 538.0, "w": 90.0, "h": 32.0,
+        ]
+      ],
+    ])
+  }
+
+  /// **`getBoundingClientRect()` is viewport-relative; `Element.bounds` is
+  /// screen space.** The accessibility tier reports screen coordinates and the
+  /// overlay converts from them, so the browser tier handing over page
+  /// coordinates in the same field drew the target box near the corner of the
+  /// display while the control sat inside the browser window.
+  ///
+  /// One field cannot mean two things. This is the conversion that makes it
+  /// mean one.
+  @Test("a page rect is offset into screen space")
+  func pageRectBecomesScreenRect() {
+    let snap = snapshot(originX: 310, originY: 194)
+    #expect(snap.screenOrigin == CGPoint(x: 310, y: 194))
+    let action = try! #require(snap.actions.first)
+    let onScreen = action.bounds.offsetBy(dx: snap.screenOrigin.x, dy: snap.screenOrigin.y)
+    #expect(onScreen.origin == CGPoint(x: 382, y: 732))
+    #expect(onScreen.size == CGSize(width: 90, height: 32))
+  }
+
+  /// A browser at the top-left of the display is the case where the bug is
+  /// invisible, which is why it survived: the offset is zero and page
+  /// coordinates happen to be screen coordinates.
+  @Test("a window at the origin is the case that hid the bug")
+  func windowAtOriginLooksCorrectEitherWay() {
+    let snap = snapshot(originX: 0, originY: 0)
+    let action = try! #require(snap.actions.first)
+    let onScreen = action.bounds.offsetBy(dx: snap.screenOrigin.x, dy: snap.screenOrigin.y)
+    #expect(onScreen == action.bounds)
+  }
+
+  /// A hand does not cross 800 points in a third of a second. Fitts's law puts
+  /// that reach at roughly 0.7s, so the average speed has to be near 1,100
+  /// points per second, not 2,600.
+  @Test("the pointer moves at a speed a hand could produce")
+  func pointerSpeedIsHuman() {
+    let reach = 800.0
+    let seconds = min(
+      max(reach / Constants.HUD.pixelsPerSecond, Constants.HUD.minMoveSeconds),
+      Constants.HUD.maxMoveSeconds)
+    #expect(seconds > 0.5, "a long reach should not read as a jump")
+    #expect(seconds < 1.2, "nor as a crawl — this still has a task to finish")
+  }
+}
+
 @Suite("Executor routing — regression")
 struct ExecutorRoutingRegressionTests {
 

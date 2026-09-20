@@ -592,12 +592,17 @@ public enum Constants {
     /// Pointer speed. Chosen to read as deliberate rather than instant —
     /// an instantaneous jump conveys no direction, and direction is the
     /// information the overlay exists to carry. Not measured; tune by eye.
-    public static let pixelsPerSecond: Double = 2_600
+    /// **A hand does not move at 2,600 px/s.** Pointing obeys Fitts's law —
+    /// roughly `0.2 + 0.15·log₂(D/W + 1)` seconds — which puts a 800px reach to
+    /// a 100px target at about 0.7s, or an average near 1,100 px/s including
+    /// the acceleration and settle at each end. The old value crossed that same
+    /// distance in 0.31s, which reads as a jump rather than a movement.
+    public static let pixelsPerSecond: Double = 1_100
 
     /// Floor and ceiling on travel time, so a short hop still reads as
     /// movement and a corner-to-corner sweep does not stall the step.
-    public static let minMoveSeconds: Double = 0.26
-    public static let maxMoveSeconds: Double = 0.62
+    public static let minMoveSeconds: Double = 0.28
+    public static let maxMoveSeconds: Double = 1.0
 
     /// How long the target ring is visible before the cursor sets off.
     ///
