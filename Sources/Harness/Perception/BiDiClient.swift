@@ -397,6 +397,7 @@ public actor BiDiClient {
     // automation lands and where nobody is signed in to anything.
     let jars = Set(theirs.compactMap { $0.userContext }.filter { $0 != "default" })
 
+
     // 1. The tab already showing this site. This is the one the user means by
     //    "I already have Instagram open".
     //
@@ -450,12 +451,35 @@ public actor BiDiClient {
     //
     // Their tab, never the agent's: ours may be parked in `default`, and a tab
     // opened from it inherits that empty jar.
-    if let here = await visible(among: theirs)
+    let opener =
+      await visible(among: theirs)
       ?? theirs.first(where: { ($0.userContext ?? "default") != "default" })
       ?? theirs.first
+
+    // **Nothing loaded can say where the user browses.** This is the state the
+    // agent leaves behind every time it relaunches the browser to get the debug
+    // port: tabs restored but not *loaded*, so `getTree` is nearly empty.
+    // Opening from what is left puts the tab in `default` and shows the user a
+    // login page for an account they are signed in to.
+    //
+    // Remembering the container from a previous run was tried and cannot work:
+    // these ids are per-session. The same four containers came back as
+    // `8c0e920f…, aabd5dbe…, e804e1bf…, 693a46d5…` before a restart and
+    // `1ef8908b…, 590015db…, 8018f1f3…, 92fe77e0…` after it.
+    //
+    // The cookies are the evidence, and they do survive. A jar that already
+    // holds this site's cookies is the jar the user is signed in to, and no tab
+    // has to be loaded to ask.
+    if let jar = await jarHoldingCookies(for: url),
+      jar != (opener?.userContext ?? "default")
     {
-      contextID = here.id
-      userContextID = here.userContext
+      Log.info("opening a tab in the container that holds this site's cookies")
+      return try await createTab(inContainer: jar)
+    }
+
+    if let opener {
+      contextID = opener.id
+      userContextID = opener.userContext
     }
 
     // **A named window.** `window.open(url, name)` returns the existing tab
@@ -504,23 +528,81 @@ public actor BiDiClient {
     return id
   }
 
+  /// Every cookie jar this browser has.
+  private func containers() async -> Set<String> {
+    guard let jars = try? await send("browser.getUserContexts", [:]),
+      let list = jars["userContexts"] as? [[String: Any]]
+    else { return [] }
+    return Set(list.compactMap { $0["userContext"] as? String })
+  }
+
+  /// The container that already holds this site's cookies.
+  ///
+  /// Containers are separate cookie jars, so "where is the user signed in to
+  /// this site" has a direct answer that needs no tab loaded, no guess, and
+  /// nothing remembered between runs: ask each jar what it holds for that
+  /// domain. The one with cookies is the one with the session.
+  private func jarHoldingCookies(for url: String?) async -> String? {
+    guard let host = Self.host(of: url) else { return nil }
+    var best: (jar: String, count: Int)?
+    for jar in await containers().sorted() where jar != "default" {
+      guard
+        let result = try? await send(
+          "storage.getCookies",
+          [
+            "filter": ["domain": host],
+            "partition": ["type": "storageKey", "userContext": jar],
+          ]),
+        let cookies = result["cookies"] as? [[String: Any]], !cookies.isEmpty
+      else { continue }
+      if cookies.count > (best?.count ?? 0) { best = (jar, cookies.count) }
+    }
+    return best?.jar
+  }
+
+  /// A new tab in a named container.
+  ///
+  /// `window.open` cannot choose a container — it inherits its opener's — so
+  /// this is the only way to put a tab in a jar when no tab of the user's is
+  /// loaded to open it from.
+  private func createTab(inContainer container: String) async throws -> String {
+    let result = try await send(
+      "browsingContext.create", ["type": "tab", "userContext": container])
+    guard let id = result["context"] as? String else { throw BiDiError.noBrowsingContext }
+    agentTabID = id
+    contextID = id
+    userContextID = container
+    // Named here rather than by `window.open`, so a later run still recognises
+    // it as the agent's own.
+    _ = try? await send(
+      "script.evaluate",
+      [
+        "expression": "window.name = '\(Self.tabName)'",
+        "target": ["context": id],
+        "awaitPromise": false,
+        "resultOwnership": "none",
+      ])
+    _ = try? await send("browsingContext.activate", ["context": id])
+    return id
+  }
+
   /// Every tab, with the three things that decide which one the agent works
   /// in: the container it lives in, whether the agent opened it, and whether
   /// it is the one on screen.
   ///
   /// Three separate bugs in this file were all "which tab, and why", and each
   /// took a screenshot and a guess to find. This answers it in one call.
-  public func inventory() async throws -> [String] {
+  public func inventory(cookiesFor url: String? = nil) async throws -> [String] {
     var rows: [String] = []
     // Which cookie jars exist at all. A browser with one container cannot be
     // signed in "somewhere else", and that is worth knowing before blaming
     // containers for a login page.
-    if let jars = try? await send("browser.getUserContexts", [:]),
-      let contexts = jars["userContexts"] as? [[String: Any]]
-    {
-      rows.append("containers: " + contexts.compactMap { $0["userContext"] as? String }
-        .joined(separator: ", "))
+    rows.append("containers: " + (await containers()).sorted().joined(separator: ", "))
+    if let url {
+      let jar = await jarHoldingCookies(for: url)
+      rows.append("cookies for \(Self.host(of: url) ?? url): \(jar ?? "nowhere but default")")
     }
+
     for context in try await topLevelContexts() {
       let owner = await name(of: context.id) == Self.tabName ? "agent" : "user "
       let onScreen = await string("document.visibilityState", in: context.id) == "visible"

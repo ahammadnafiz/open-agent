@@ -62,10 +62,11 @@ struct AgentTabRegressionTests {
       ok(3, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
       ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name — not ours
       ok(5, #"{"result":{"type":"string","value":"visible"}}"#),  // where they are
+      ok(6, #"{"userContexts":[{"userContext":"default"}]}"#),  // one jar, so no cookie question to ask
       // window.open, answering with the WindowProxy for the named tab
-      ok(6, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(7),  // browsingContext.activate
-      ok(8),  // browsingContext.navigate
+      ok(7, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(8),  // browsingContext.activate
+      ok(9),  // browsingContext.navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
@@ -202,9 +203,10 @@ struct AgentTabRegressionTests {
       ok(5, #"{"result":{"type":"string","value":""}}"#),
       ok(6, #"{"result":{"type":"string","value":"hidden"}}"#),  // background
       ok(7, #"{"result":{"type":"string","value":"visible"}}"#),  // onscreen
-      ok(8, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(9),  // activate
-      ok(10),  // navigate
+      ok(8, #"{"userContexts":[{"userContext":"default"}]}"#),
+      ok(9, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(10),  // activate
+      ok(11),  // navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
@@ -234,9 +236,10 @@ struct AgentTabRegressionTests {
       ok(5, #"{"result":{"type":"string","value":""}}"#),  // theirs
       ok(6),  // browsingContext.close
       ok(7, #"{"result":{"type":"string","value":"visible"}}"#),  // where they are
-      ok(8, #"{"result":{"type":"window","value":{"context":"fresh"}}}"#),
-      ok(9),  // activate
-      ok(10),  // navigate
+      ok(8, #"{"userContexts":[{"userContext":"default"}]}"#),
+      ok(9, #"{"result":{"type":"window","value":{"context":"fresh"}}}"#),
+      ok(10),  // activate
+      ok(11),  // navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
@@ -247,6 +250,41 @@ struct AgentTabRegressionTests {
     #expect(closed?.contains("stranded") == true, "the stranded tab was closed")
     let opener = sent.first { $0.contains("window.open") }
     #expect(opener?.contains("theirs") == true, "the new tab was opened in their container")
+    #expect(try await client.context() == "fresh")
+  }
+
+  /// **The cookies are the evidence, and they survive a restart.**
+  ///
+  /// Remembering which container the user browses in was tried and cannot
+  /// work: the ids are per session. The same four containers came back as
+  /// `8c0e920f…, aabd5dbe…, e804e1bf…, 693a46d5…` before a restart and
+  /// `1ef8908b…, 590015db…, 8018f1f3…, 92fe77e0…` after it.
+  ///
+  /// A jar that already holds the site's cookies is the jar with the session
+  /// in it, and asking costs no tab, no guess and nothing remembered.
+  @Test("a tab is created in the container that holds the site's cookies")
+  func newTabGoesWhereTheCookiesAre() async throws {
+    let tree = #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),
+      ok(2, tree),
+      ok(3, tree),  // tab(for:) — nothing on x.com
+      ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name
+      ok(5, #"{"result":{"type":"string","value":"visible"}}"#),  // in `default`
+      ok(6, #"{"userContexts":[{"userContext":"default"},{"userContext":"aaa"},{"userContext":"bbb"}]}"#),
+      ok(7, #"{"cookies":[]}"#),  // signed out here
+      ok(8, #"{"cookies":[{"name":"auth_token"},{"name":"ct0"}]}"#),  // and in here
+      ok(9, #"{"context":"fresh"}"#),  // browsingContext.create
+      ok(10),  // window.name
+      ok(11),  // activate
+      ok(12),  // navigate
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    try await client.navigate(to: "https://x.com/home")
+
+    let created = await transport.sent.first { $0.contains("browsingContext.create") }
+    #expect(created?.contains("bbb") == true, "created in the jar holding the session")
     #expect(try await client.context() == "fresh")
   }
 
@@ -283,13 +321,14 @@ struct AgentTabRegressionTests {
       ok(3, oneContext),  // tab(for:) — one blank tab, no host to match
       ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name
       ok(5, #"{"result":{"type":"string","value":"visible"}}"#),  // where they are
-      ok(6, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(7),  // activate
-      ok(8),  // first navigate
-      ok(9, after),  // tab(for:) — the tab it made is in the tree now
-      ok(10),  // second navigate
-      ok(11, after),
-      ok(12),  // third navigate
+      ok(6, #"{"userContexts":[{"userContext":"default"}]}"#),
+      ok(7, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(8),  // activate
+      ok(9),  // first navigate
+      ok(10, after),  // tab(for:) — the tab it made is in the tree now
+      ok(11),  // second navigate
+      ok(12, after),
+      ok(13),  // third navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
