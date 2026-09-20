@@ -69,8 +69,8 @@ enum SnapshotScript {
   /// Returns a single JSON object. Every field the harness reads is documented
   /// in `BiDiSnapshot`.
   static let source = #"""
-    \#(guardFunction)
     (() => {
+      \#(guardFunction)
       const MAX_ACTIONS = 250;      // their cap; ours is Constants.Jev.maxCandidates = 255
       const TEXT_LIMIT  = 6000;
 
