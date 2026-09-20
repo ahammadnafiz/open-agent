@@ -1,0 +1,10 @@
+.env
+.build/
+.swiftpm/
+*.xcuserdatad
+.DS_Store
+
+# Never commit captured screens or fixtures that may carry session tokens
+# until they have been scrubbed — SPEC.md § Boundaries.
+Tests/Fixtures/**/*.png
+Tests/Fixtures/**/*.jpg
