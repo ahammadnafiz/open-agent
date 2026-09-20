@@ -362,14 +362,33 @@ public enum Constants {
     public static let settleTimeout: Duration = .seconds(10)
     public static let settlePollInterval: Duration = .milliseconds(150)
 
-    /// How many identical observations in a row count as settled.
+    /// How many identical observations in a row count as settled, **after the
+    /// screen has been seen to change.**
     ///
-    /// **Two was not enough for a real application.** Instagram's inbox holds
-    /// at 526 nodes and `readyState: complete` for a beat, then fills in its
-    /// conversations — so a step judged after 300ms of quiet sees a navigation
-    /// rail and calls it the page. Ten polls is 1.5s of genuine stillness,
-    /// which is the difference between a pause and an ending.
-    public static let settleStableChecks = 10
+    /// Ten polls — 1.5s of stillness — was the price of not using the change
+    /// itself as a signal. Waiting for the screen to move is far stronger
+    /// evidence that the action landed than waiting for it to hold still, and
+    /// once it has moved, three quiet polls is a pause long enough to trust.
+    ///
+    /// The whole wait cost about 4.7s of every 7s step. This is the number
+    /// that made a five-step task take half a minute.
+    public static let settleStableChecks = 3
+
+    /// The same, after a navigation.
+    ///
+    /// A page that has just been replaced gets the old benefit of the doubt.
+    /// Instagram's inbox holds at 526 nodes and `readyState: complete` for a
+    /// beat, then fills in its conversations — so a step judged after 450ms of
+    /// quiet sees a navigation rail and calls it the page.
+    public static let navigationStableChecks = 8
+
+    /// How long to wait for the screen to change at all before giving up on it.
+    ///
+    /// **A step that changed nothing is a real outcome, not a reason to
+    /// wait.** Jev is what names it — `unchanged` is one of the five
+    /// verification questions — and standing still for the full ceiling only
+    /// delays that answer by ten seconds.
+    public static let noChangeTimeout: Duration = .milliseconds(1_200)
   }
 
   // MARK: - Recovery
@@ -460,9 +479,9 @@ public enum Constants {
     /// once reads as pasted by a machine rather than typed by someone. The
     /// person watching is the reason this number exists, so it is set where a
     /// sentence takes about a second.
-    public static let webKeystrokeMilliseconds = 45
+    public static let webKeystrokeMilliseconds = 30
     /// How long a key is held down in the browser, in milliseconds.
-    public static let webKeyHoldMilliseconds = 25
+    public static let webKeyHoldMilliseconds = 15
 
     /// How long to wait for an application to accept focus.
     ///
@@ -609,12 +628,12 @@ public enum Constants {
     /// a 100px target at about 0.7s, or an average near 1,100 px/s including
     /// the acceleration and settle at each end. The old value crossed that same
     /// distance in 0.31s, which reads as a jump rather than a movement.
-    public static let pixelsPerSecond: Double = 1_100
+    public static let pixelsPerSecond: Double = 1_500
 
     /// Floor and ceiling on travel time, so a short hop still reads as
     /// movement and a corner-to-corner sweep does not stall the step.
-    public static let minMoveSeconds: Double = 0.28
-    public static let maxMoveSeconds: Double = 1.0
+    public static let minMoveSeconds: Double = 0.22
+    public static let maxMoveSeconds: Double = 0.7
 
     /// How long the target ring is visible before the cursor sets off.
     ///
@@ -626,8 +645,8 @@ public enum Constants {
 
     /// Press-and-release, then a beat before the ring clears. Below ~0.1 s
     /// the click reads as a flicker rather than as an action.
-    public static let pressSeconds: Double = 0.13
-    public static let settleSeconds: Double = 0.10
+    public static let pressSeconds: Double = 0.10
+    public static let settleSeconds: Double = 0.08
 
     /// Worst case added per step: anticipation + maxMove + press + settle
     /// = 0.99 s. Typical: ~0.6 s. Over a 10-step task that is 6 s against a

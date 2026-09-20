@@ -91,7 +91,7 @@ struct AgentTabRegressionTests {
       ok(1),  // session.new
       ok(2, open),  // resolveContext
       ok(3, open),  // tab(for:)
-      ok(4),  // window.name claimed, so a later run finds it again
+      ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name — theirs
       ok(5),  // browsingContext.activate
       ok(6),  // browsingContext.navigate
     ])
@@ -113,6 +113,36 @@ struct AgentTabRegressionTests {
   func tabIsNamed() {
     #expect(BiDiClient.tabName.contains("open_agent"))
     #expect(BiDiClient.tabName.count > 8, "a name a page might also use would be a collision")
+  }
+
+  /// **Containers are separate cookie jars.** A tab the agent opens inherits
+  /// the container of whatever it was opened from, so the agent's own x.com tab
+  /// — opened from an Instagram tab in another workspace — was served the login
+  /// page while the user's X tab, two tabs away, was signed in. The run
+  /// reported `blocked` against an account that was logged in the whole time.
+  ///
+  /// Both tabs are on the host. The one the agent did not create is the one
+  /// with the session in it.
+  @Test("the user's tab on that host wins over the agent's own")
+  func theirTabBeatsOurs() async throws {
+    let tree = #"""
+      {"contexts":[{"context":"ours","url":"https://x.com/"},
+                   {"context":"theirs","url":"https://x.com/home"}]}
+      """#
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),
+      ok(2, tree),
+      ok(3, tree),  // tab(for:)
+      ok(4, #"{"result":{"type":"string","value":"__open_agent_tab"}}"#),  // ours
+      ok(5, #"{"result":{"type":"string","value":""}}"#),  // theirs
+      ok(6),  // activate
+      ok(7),  // navigate
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    try await client.navigate(to: "https://x.com/home")
+
+    #expect(try await client.context() == "theirs")
   }
 
   /// **`window.open(url, name)` only finds tabs the opener is familiar with.**

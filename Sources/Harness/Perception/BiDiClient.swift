@@ -385,11 +385,29 @@ public actor BiDiClient {
 
     // 1. The tab already showing this site. This is the one the user means by
     //    "I already have Instagram open".
-    if let host = Self.host(of: url),
-      let existing = contexts.first(where: { Self.host(of: $0.url) == host })
-    {
-      Log.info("using the tab already on \(host)")
-      return await adopt(existing, naming: true)
+    //
+    //    **Theirs, not ours, when there is a choice.** Containers — Zen calls
+    //    them workspaces — are separate cookie jars, and a tab the agent opens
+    //    inherits the container of whatever it was opened from. Measured: the
+    //    user's X tab sat signed in while the agent's own x.com tab, opened
+    //    from an Instagram tab in a different container, was served the login
+    //    page — and the run reported `blocked` against an account that was
+    //    logged in the whole time, two tabs away.
+    //
+    //    So a tab the agent did not create wins: the session lives in theirs.
+    if let host = Self.host(of: url) {
+      let onHost = contexts.filter { Self.host(of: $0.url) == host }
+      var theirs: TabContext?
+      for context in onHost {
+        if await name(of: context.id) != Self.tabName {
+          theirs = context
+          break
+        }
+      }
+      if let existing = theirs ?? onHost.first {
+        Log.info("using the tab already on \(host)")
+        return await adopt(existing)
+      }
     }
 
     // 2. A tab this agent opened before, found by window name rather than by
@@ -403,7 +421,7 @@ public actor BiDiClient {
     for context in contexts {
       guard await name(of: context.id) == Self.tabName else { continue }
       Log.info("re-using the agent tab from an earlier run")
-      return await adopt(context, naming: false)
+      return await adopt(context)
     }
 
     // 3. Nothing to reuse. Open one — but only when a navigation is about to
@@ -488,11 +506,15 @@ public actor BiDiClient {
   }
 
   /// Makes this tab the one the run works in, and brings it to the front.
-  private func adopt(_ context: TabContext, naming: Bool) async -> String {
+  ///
+  /// An adopted tab is deliberately **not** renamed. `window.name` is how the
+  /// agent recognises a tab it opened itself, and stamping it on the user's tab
+  /// would make the next run mistake theirs for its own — which is the thing
+  /// that has to stay distinguishable, because only one of the two is signed in.
+  private func adopt(_ context: TabContext) async -> String {
     agentTabID = context.id
     contextID = context.id
     userContextID = context.userContext
-    if naming { await claimName(of: context.id) }
     _ = try? await send("browsingContext.activate", ["context": context.id])
     Log.debug("working in tab \(context.id) in container \(userContextID ?? "default")")
     return context.id
@@ -512,22 +534,6 @@ public actor BiDiClient {
       let value = result["result"] as? [String: Any]
     else { return "" }
     return (value["value"] as? String) ?? ""
-  }
-
-  /// Names an adopted tab so the next process recognises it.
-  ///
-  /// Only when the page has not named its own window. `window.name` belongs to
-  /// the page and some sites keep state in it; a tab that will not take the
-  /// name still works for this run, it just has to be found by host next time.
-  private func claimName(of context: String) async {
-    _ = try? await send(
-      "script.evaluate",
-      [
-        "expression": "if (!window.name) { window.name = '\(Self.tabName)'; }",
-        "target": ["context": context],
-        "awaitPromise": false,
-        "resultOwnership": "none",
-      ])
   }
 
   /// The window name the agent's tab answers to.

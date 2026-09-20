@@ -351,7 +351,7 @@ public actor AgentLoop {
       // iteration reads the screen and judges whether it did. `screenNow` is
       // the screen as it was *before* this action, which is exactly what the
       // next observation has to differ from.
-      if executionResult.dispatched { await settle(from: screenNow) }
+      if executionResult.dispatched { await settle(from: screenNow, after: action.kind) }
 
       // ── RECORD ───────────────────────────────────────────────────
       // Verification of THIS step arrives in the NEXT iteration's batch, so the
@@ -413,7 +413,7 @@ public actor AgentLoop {
     // two that were judged immediately, before anything had arrived. Instagram
     // was read at 157 nodes with no links and `readyState: loading`, and the
     // next step escalated with "no candidates to choose from".
-    if executionResult.dispatched { await settle(from: screenBefore) }
+    if executionResult.dispatched { await settle(from: screenBefore, after: action.kind) }
 
     record(
       action: action, result: executionResult, sourceKind: source.kind,
@@ -437,10 +437,45 @@ public actor AgentLoop {
   /// *after* the action rather than the screen before it.
   ///
   /// See `Constants.Execution.settleTimeout` for what this cost buys.
-  private func settle(from before: String) async {
-    let deadline = ContinuousClock.now.advanced(by: settleTimeout)
+  /// Waits for the screen to change, and then to stop changing.
+  ///
+  /// **An application is not finished when the call returns.** A click
+  /// dispatches in microseconds; the redraw it causes happens on the app's own
+  /// run loop. Reading the tree before that gives back the screen as it was —
+  /// so Jev compares two identical descriptions, reports `unchanged`, and the
+  /// ladder retries a step that had already worked. On a control that toggles,
+  /// the retry undoes it. Measured on WhatsApp: clicking Search opened the
+  /// panel on every run, and every run then read `unchanged ≈ 0.91`.
+  ///
+  /// The change is the signal. This waited for stillness instead — ten
+  /// identical polls, 1.5s minimum, whether or not anything had happened —
+  /// because `before` was taken as a parameter and then never read. Comparing
+  /// against it is what the comment here claimed for three commits and the
+  /// code never did, and it is worth about 4.7s of every 7s step.
+  ///
+  /// Three rules, in order of how much they are trusted:
+  ///   * A page that says it is still loading is never settled.
+  ///   * Nothing has changed after `noChangeTimeout` — stop waiting and let
+  ///     the verification questions call it what it is.
+  ///   * It changed, and has now held still. Done.
+  private func settle(from before: String, after kind: ActionKind) async {
+    let required =
+      (kind == .navigate || kind == .openApp)
+      ? Constants.Execution.navigationStableChecks
+      : Constants.Execution.settleStableChecks
+    let started = ContinuousClock.now
+    let deadline = started.advanced(by: settleTimeout)
+    let quietDeadline = started.advanced(by: Constants.Execution.noChangeTimeout)
     var previous: String?
     var stable = 0
+    // **Nothing to compare against is not evidence that nothing happened.** On
+    // the first step there is no previous screen, so the change gate has no
+    // signal — and treating "same as nothing" as "unchanged" made a navigation
+    // give up 1.2s in, on X's splash logo, and report a page with no
+    // candidates on it. With no `before`, only the stability rule applies, and
+    // an empty screen never satisfies it.
+    var changed = before.isEmpty
+
     while ContinuousClock.now < deadline {
       try? await Task.sleep(for: Constants.Execution.settlePollInterval)
       // **A failed observation here means "not yet", not "give up".** During a
@@ -456,37 +491,35 @@ public actor AgentLoop {
       // a navigation rail on it is stable at twelve elements while the content
       // the step needs is still being built — see `ElementSource.readiness()`.
       let readiness = await source.readiness()
-      // A page that reports itself unfinished is never settled, no matter how
-      // long it has looked the same. Bounded by the ceiling either way.
       if readiness == "loading" {
         previous = nil
+        stable = 0
         continue
       }
       let now = described + "\u{1F}" + readiness
-      // **Changed is not the same as finished.** Returning on the first
-      // difference was enough for a click, and wrong for a navigation: a
-      // single-page application paints its chrome, which is a change, and then
-      // fills in the content the step actually needs. Instagram reported
-      // `readyState: loading` with a navigation bar and no page — a step judged
-      // there sees somewhere that exists and has nothing on it.
-      //
-      // So: wait for it to change, then wait for it to stop changing. Two
-      // consecutive identical observations is the cheapest definition of
-      // "settled" that does not require knowing what the page is.
-      // **A screen with nothing on it is never "settled".** The rule used to be
-      // "changed, then stable", and a page still painting its skeleton is
-      // stable at empty — Instagram reported 157 nodes, zero links, zero
-      // buttons and `readyState: loading`, twice in a row, and that counted as
-      // settled. The next step then escalated with "no candidates to choose
-      // from" against a page that was still arriving.
-      //
-      // Waiting for two identical NON-EMPTY observations is both simpler and
-      // stricter. A step that genuinely changes nothing still returns in two
-      // polls; a page that has not finished is waited out to the ceiling, which
-      // is the outcome worth paying for.
-      if !now.isEmpty, now == previous {
+
+      if !changed {
+        if described != before {
+          changed = true
+        } else if ContinuousClock.now >= quietDeadline {
+          return
+        }
+      }
+
+      // **A screen with nothing on it is never "settled".** A page still
+      // painting its skeleton is stable at empty — Instagram reported 157
+      // nodes, zero links, zero buttons, twice in a row, and that counted as
+      // settled. The next step escalated with "no candidates to choose from"
+      // against a page that was still arriving.
+      // `now` carries the readiness marker and the node count, so it is never
+      // empty and this asked nothing at all. X's home timeline shows its logo
+      // on a black page for several seconds with `readyState: complete` and no
+      // actionable element on it; three identical polls of that counted as
+      // settled, and the step that followed escalated with "no candidates to
+      // choose from" against a page that had not started yet.
+      if !described.isEmpty, now == previous {
         stable += 1
-        if stable >= Constants.Execution.settleStableChecks { return }
+        if changed, stable >= required { return }
       } else {
         stable = 0
       }

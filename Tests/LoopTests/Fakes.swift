@@ -17,6 +17,25 @@ struct FakeSource: ElementSource {
   }
 }
 
+/// Answers with one screen first and another after — the shape of a page that
+/// is replaced by the thing a step did.
+actor ChangingSource: ElementSource {
+  nonisolated let kind: SourceKind = .ax
+  private let first: [Element]
+  private let then: [Element]
+  private var seen = 0
+
+  init(first: [Element], then: [Element]) {
+    self.first = first
+    self.then = then
+  }
+
+  func observe() async throws -> [Element] {
+    seen += 1
+    return seen <= 1 ? first : then
+  }
+}
+
 struct FailingSource: ElementSource {
   let kind: SourceKind = .ax
   let error: any Error
@@ -140,6 +159,8 @@ enum Make {
     taskContext: String = "",
     focusedLabel: String? = nil,
     budget: Budget = Budget(),
+    settleTimeout: Duration = .zero,
+    source: (any ElementSource)? = nil,
     // Defaults to ON so that every test written about the gate keeps testing
     // the gate. `Constants.Safety.askBeforeIrreversible` is what ships, and
     // exactly one test asserts that value — see "the sheet is off by default".
@@ -148,14 +169,14 @@ enum Make {
     AgentLoop(
       task: "test task", taskContext: taskContext, plan: plan,
       sessionID: "s_test", pid: 0,
-      source: FakeSource(elements: elements, focusedLabel: focusedLabel),
+      source: source ?? FakeSource(elements: elements, focusedLabel: focusedLabel),
       jev: judge, executors: executor, hud: hud,
       budget: budget,
       asksBeforeIrreversible: asksBeforeIrreversible,
       // The fake screen never changes, so a real settle would be paid in full
       // on every dispatched step. That is 1.2s each, against a suite that
       // otherwise runs in milliseconds.
-      settleTimeout: .zero
+      settleTimeout: settleTimeout
     )
   }
 }

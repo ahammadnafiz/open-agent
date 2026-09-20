@@ -557,4 +557,55 @@ struct RegressionTests {
     #expect(await executor.executed.isEmpty)
     #expect(result.status == .needsEyes)
   }
+
+  // MARK: - The wait that was never told what it was waiting for
+
+  /// **`settle(from:)` took the previous screen as a parameter and never read
+  /// it.** So instead of waiting for the screen to change it waited for the
+  /// screen to hold still — ten identical polls, 1.5s minimum, whether or not
+  /// anything had happened, and the full ten-second ceiling whenever a page
+  /// had something moving on it. It was about 4.7s of every 7s step.
+  ///
+  /// A screen that never changes is a real outcome. `unchanged` is one of the
+  /// five verification questions and Jev answers it in a second; waiting ten
+  /// for the same information is the definition of a slow agent.
+  @Test("a screen that never changes is not waited out to the ceiling")
+  func settleGivesUpWhenNothingHappens() async {
+    let judge = ScriptedJudge([Make.verdict()])
+    let started = ContinuousClock.now
+
+    _ = await Make.loop(
+      plan: Make.plan([.click]), judge: judge, settleTimeout: .seconds(5)
+    ).run()
+
+    let elapsed = started.duration(to: ContinuousClock.now)
+    #expect(elapsed < .seconds(3), "it was waiting for stillness, not for change")
+    // And it did wait: giving up instantly would be the other bug.
+    #expect(elapsed >= Constants.Execution.noChangeTimeout)
+  }
+
+  /// **A screen with nothing on it is never settled — and the check for that
+  /// asked nothing.** The guard compared the whole observation string, which
+  /// carries a readiness marker and a node count and is therefore never empty.
+  ///
+  /// X's home timeline shows its logo on a black page for several seconds,
+  /// with `readyState: complete` and not one actionable element. Three
+  /// identical polls of that counted as settled, the next step escalated with
+  /// "no candidates to choose from", and the recovery ladder spent 55 seconds
+  /// re-asking a page that had not started yet.
+  @Test("a page that goes empty is waited out, not settled on")
+  func settleWillNotSettleOnAnEmptyScreen() async {
+    let judge = ScriptedJudge([Make.verdict()])
+    let started = ContinuousClock.now
+
+    _ = await Make.loop(
+      plan: Make.plan([.click]),
+      judge: judge,
+      settleTimeout: .seconds(2),
+      source: ChangingSource(first: [Make.element()], then: [])
+    ).run()
+
+    let elapsed = started.duration(to: ContinuousClock.now)
+    #expect(elapsed >= .seconds(2), "an empty page is not a finished page")
+  }
 }
