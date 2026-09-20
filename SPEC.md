@@ -619,17 +619,33 @@ Which window the agent operates on when an app has several, and what happens whe
 the target is on another Space, is entirely unspecified. Native scope makes this
 real; browser-only scope would have avoided it.
 
-**Q7 — The captured tier is entirely unmeasured. — NEW, and it is the largest
-unknown in the system.**
-[ADR 0007](./docs/adr/0007-captured-targets-execute-by-synthesized-event.md) makes
-tiers 3 and 4 executable, and unlike every other decision here it rests on reading
-the types rather than on numbers from this machine. Three things need measuring
-before any of it is trusted: the end-to-end hit rate of a captured click on a real
-GPU-rendered surface; how often tier 4 returns a label the denylist can use; and
-how often `confirmUnnamedCaptured` actually fires, since if it is frequent the
-real defect is tier 4's label output rather than the flag. Needs a
-`Probe captured-eval` subcommand with a labelled fixture set, the same shape as
-`battery-eval`.
+**Q7 — The captured tier. PARTLY MEASURED 2026-09-20; two thirds still open.**
+
+`Probe captured-eval` against Ghostty, which is the floor — GPU-rendered, live
+focused on-screen window, and tier 2 sees almost nothing:
+
+| app | tier 2 | tier 3 | capture | OCR |
+|---|---|---|---|---|
+| Ghostty | **1** | **112** | 63 ms | 461 ms |
+
+**112 text lines where accessibility found 1.** That settles whether tiers 3–4
+earn their place. It also reproduced the merge problem live — one observation
+came back as `"• deepdiv.. • deepdi…"`, several distinct items in a single box —
+which is why `tier3FeedsMarksOnly` stays true and why `CapturedExecutor` refuses
+every `.ocrLine` ref. `CapturedTierTests` pins that refusal.
+
+Total tier-3 cost is ~524 ms, against 473 ms for tier 2 and 4.8 s for tier 4.
+
+**Still open, and a probe cannot close them:**
+
+1. *End-to-end hit rate of a captured click.* Needs a hand-labelled ground-truth
+   target per surface. That is labelling work, not automation.
+2. *How often tier 4 returns a label the denylist can use.* Tier 4 **is** the
+   host agent answering a `needs_eyes` callback — there is no model here to ask.
+3. *How often `confirmUnnamedCaptured` fires.* Structurally zero for tier 3:
+   `.ocrLine` always carries text. It is reachable only from `.detectorBox`
+   (tier 3b, not built) and `.visionMark`. The question becomes answerable when
+   one of those lands, not before.
 
 **Q8 — `pressKey(.enter)` on native targets has no submission target. — NEW.**
 [ADR 0008](./docs/adr/0008-keystrokes-are-an-action-kind.md) classifies `enter`

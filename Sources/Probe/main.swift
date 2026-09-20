@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Harness
 
@@ -27,6 +28,9 @@ case "bidi-dom":
 case "browser-login": Probe.browserLogin()
 case "battery-eval": await Probe.batteryEval()
 case "capture-fixtures": await Probe.captureFixtures()
+case "captured-eval":
+  await Probe.capturedEval(
+    apps: arguments.count > 2 ? Array(arguments[2...]) : ["Ghostty", "Zen", "Finder"])
 case "--help", "-h": print(Probe.help)
 default:
   FileHandle.standardError.write(Data("unknown probe '\(arguments[1])'\n\n".utf8))
@@ -48,8 +52,7 @@ enum Probe {
       swift run Probe battery-eval         every question x 5 repeats, straddle gate
       swift run Probe capture-fixtures     record real DOM + AX element lists
 
-    Not yet implemented:
-      captured-eval      tier 3/4 hit rate — Open Question Q7
+      swift run Probe captured-eval [apps] what tier 3 sees where tier 2 sees nothing
     """
 
   // MARK: - jev-latency
@@ -365,6 +368,85 @@ enum Probe {
   private static func scrub(_ text: String) -> String {
     guard let range = text.range(of: "?") ?? text.range(of: "#") else { return text }
     return String(text[text.startIndex..<range.lowerBound])
+  }
+
+  // MARK: - captured-eval
+
+  /// Open Question Q7 — *"the captured tier is entirely unmeasured, and it is
+  /// the largest unknown in the system."*
+  ///
+  /// **What this measures:** what tier 3 yields on real surfaces, and
+  /// specifically what it yields where tier 2 yields nothing. Ghostty is the
+  /// documented floor — 12 AX nodes, zero pressable, with a live focused
+  /// on-screen window — so it is the case that decides whether tiers 3–4 are
+  /// worth having at all.
+  ///
+  /// **What this cannot measure, stated rather than implied.** Q7 asks three
+  /// things and a probe can only answer one of them:
+  ///
+  ///   1. end-to-end hit rate of a captured click — needs a ground-truth
+  ///      target per surface, which is hand-labelling, not automation;
+  ///   2. how often tier 4 returns a label the denylist can use — tier 4 *is*
+  ///      the host agent answering a `needs_eyes` callback, so there is no
+  ///      model here to ask;
+  ///   3. how often `confirmUnnamedCaptured` fires — by construction it cannot
+  ///      fire on `.ocrLine`, which always carries text. It is reachable only
+  ///      from `.detectorBox` (tier 3b, not built) and `.visionMark` (tier 4).
+  ///
+  /// So this closes the first and largest piece and leaves the rest open,
+  /// honestly, rather than reporting a number that looks like an answer.
+  static func capturedEval(apps: [String]) async {
+    guard CGPreflightScreenCaptureAccess() else {
+      print("Screen Recording is not granted to this binary.")
+      print("System Settings > Privacy & Security > Screen Recording")
+      print("The grant is per-binary, so a rebuilt executable needs it again.")
+      exit(2)
+    }
+
+    print("app          tier2  tier3  capture  ocr    merged-line examples")
+    print("───────────  ─────  ─────  ───────  ─────  ─────────────────────")
+
+    for app in apps {
+      var tier2 = "-"
+      do {
+        let source = try AXSource(appName: app)
+        let candidates = try CandidateFilter.reduce(try await source.observe())
+        tier2 = "\(candidates.count)"
+      } catch {
+        tier2 = "0"
+      }
+
+      do {
+        let reading = try await OCRSource(appName: app).read()
+        // A line carrying several words separated by wide gaps is the merged
+        // case ADR 0005 measured as unsplittable. Counting them is the closest
+        // thing to a merge rate available without ground truth.
+        let multiWord = reading.elements.filter {
+          $0.label.split(separator: " ").count >= 3
+        }
+        let example = multiWord.first?.label.prefix(34) ?? ""
+        print(
+          pad(app, 13) + pad(tier2, 7) + pad("\(reading.elements.count)", 7)
+            + pad("\(reading.captureMilliseconds)ms", 9)
+            + pad("\(reading.recognizeMilliseconds)ms", 7)
+            + (example.isEmpty ? "-" : "\"\(example)…\"")
+        )
+      } catch {
+        print(pad(app, 13) + pad(tier2, 7) + "skipped: \(error)")
+      }
+    }
+
+    print("")
+    print("tier2 = labelled+actionable AX elements after the filter")
+    print("tier3 = Vision text LINE observations — not controls. Adjacent")
+    print("        controls merge into one box, and splitting by gap was")
+    print("        measured impossible (2/2 px at DPR 1, 6/5 px at DPR 3).")
+    print("        That is why tier3FeedsMarksOnly is true and why every")
+    print("        .ocrLine ref is refused by CapturedExecutor.")
+    print("")
+    print("Still open in Q7: captured-click hit rate, tier 4 label quality, and")
+    print("confirmUnnamedCaptured frequency. All three need either hand-labelled")
+    print("ground truth or a host model in the loop.")
   }
 
   // MARK: - ax-tree
