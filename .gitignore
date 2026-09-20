@@ -8,3 +8,6 @@
 # until they have been scrubbed — SPEC.md § Boundaries.
 Tests/Fixtures/**/*.png
 Tests/Fixtures/**/*.jpg
+
+# direnv state. The .envrc itself is checked in.
+.direnv/
