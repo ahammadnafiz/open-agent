@@ -160,9 +160,29 @@ public actor BiDiSource: ElementSource {
     // loading` for seconds — stable, and nowhere near finished. Reporting the
     // state rather than a count lets the caller refuse to settle on it.
     guard let latest else { return "" }
-    // A page with a spinner in it is not finished, whatever the document says.
-    guard latest.readyState == "complete", latest.busy == 0 else { return "loading" }
-    return "\(latest.nodeCount)"
+    return Self.readiness(
+      readyState: latest.readyState, busy: latest.busy, nodeCount: latest.nodeCount)
+  }
+
+  /// The rule itself, separated from the snapshot so it can be asserted
+  /// without a browser attached.
+  static func readiness(readyState: String, busy: Int, nodeCount: Int) -> String {
+    // **"Still loading" and "has a spinner on it" are not the same claim, and
+    // treating them as one cost a second and a half on every step.** A
+    // document that has not finished is unarguable. A busy marker is not: X
+    // keeps one visible progressbar on a fully loaded, idle home timeline —
+    // measured `ready=complete busy=1` with nothing happening — so reporting
+    // that as `loading` meant the page was never once settled. Every settle
+    // poll hit the caller's reset branch, stability could never accumulate,
+    // and every step paid its ceiling in full.
+    //
+    // So they are reported apart, and the caller decides how much each one is
+    // worth. `loading` still stops everything. `busy` carries the node count
+    // with it, because a caller that has waited long enough for a spinner
+    // that is never going to clear still needs the page's size to judge it.
+    guard readyState == "complete" else { return "loading" }
+    guard busy == 0 else { return "busy:\(nodeCount)" }
+    return "\(nodeCount)"
   }
 
   /// The candidate holding keyboard focus, when the page reports one.

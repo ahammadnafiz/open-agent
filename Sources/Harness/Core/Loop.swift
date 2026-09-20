@@ -497,20 +497,38 @@ public actor AgentLoop {
     // A site just navigated to gets the load budget. A page the agent has
     // already been working in gets a fraction of it: it is loaded, and what
     // is spinning on it is a widget.
-    let arriving = lastAction.map { $0.kind == .navigate || $0.kind == .openApp } ?? true
+    // **A resume is not an arrival.** `lastAction` lives only in memory, so
+    // every resumed run starts with it nil and claimed the full page-load
+    // budget for a page that had been loaded for minutes. On any site with a
+    // permanent spinner — X always has one — that is the whole 4s, every
+    // resume, measured as ready=4041ms. `history` *is* restored, so it is the
+    // honest test of whether anything has happened yet: no last action and no
+    // history is a genuinely cold start, no last action with history is a
+    // resume in the middle of a task.
+    let arriving = lastAction.map { $0.kind == .navigate || $0.kind == .openApp }
+      ?? history.isEmpty
     let deadline = ContinuousClock.now.advanced(
       by: min(
         settleTimeout,
         arriving
           ? Constants.Execution.readyTimeout : Constants.Execution.readyTimeoutMidTask))
+    // A spinner on an otherwise finished document is worth this much and no
+    // more — see `Constants.Execution.busyGrace`.
+    let busyDeadline = ContinuousClock.now.advanced(by: Constants.Execution.busyGrace)
     _ = try? await source.observe()
     while ContinuousClock.now < deadline {
-      if await source.readiness() != "loading" { return }
+      let readiness = await source.readiness()
+      let spinning = readiness.hasPrefix(Self.busyMarker)
+      if readiness != "loading", !spinning || ContinuousClock.now >= busyDeadline { return }
       try? await Task.sleep(for: Constants.Execution.settlePollInterval)
       _ = try? await source.observe()
     }
     Log.debug("the page still reports itself unfinished; going ahead anyway")
   }
+
+  /// How `ElementSource.readiness()` prefixes a count when the document is
+  /// finished but the page still has a busy marker on it.
+  private static let busyMarker = "busy:"
 
   private func settle(from before: String, after kind: ActionKind) async {
     let arriving = (kind == .navigate || kind == .openApp)
@@ -524,6 +542,9 @@ public actor AgentLoop {
         ? settleTimeout : min(settleTimeout, Constants.Execution.actionSettleTimeout))
     let quietDeadline = started.advanced(by: Constants.Execution.noChangeTimeout)
     var previous: String?
+    /// The node count from the previous poll, kept apart from the element
+    /// fingerprint so the two can be judged on their own terms.
+    var previousNodes: Int?
     var stable = 0
     // **Nothing to compare against is not evidence that nothing happened.** On
     // the first step there is no previous screen, so the change gate has no
@@ -550,10 +571,18 @@ public actor AgentLoop {
       let readiness = await source.readiness()
       if readiness == "loading" {
         previous = nil
+        previousNodes = nil
         stable = 0
         continue
       }
-      let now = described + "\u{1F}" + readiness
+      // **A spinner does not reset stability.** It used to, and on a page that
+      // always has one — X keeps a visible progressbar on an idle timeline —
+      // that meant no poll was ever stable and every step ran to its ceiling.
+      // The document is complete; what is left is the page's own opinion of
+      // itself, and the element list is the better witness.
+      let measured =
+        readiness.hasPrefix(Self.busyMarker)
+        ? String(readiness.dropFirst(Self.busyMarker.count)) : readiness
 
       if !changed {
         if described != before {
@@ -574,13 +603,25 @@ public actor AgentLoop {
       // actionable element on it; three identical polls of that counted as
       // settled, and the step that followed escalated with "no candidates to
       // choose from" against a page that had not started yet.
-      if !described.isEmpty, now == previous {
+      // **Still building, as distinct from merely alive.** Requiring the node
+      // count to repeat exactly meant a page that streams could never be
+      // still, so every step on a feed ran to the full timeout. Growth is the
+      // question worth asking instead — see
+      // `Constants.Execution.settleGrowthFactor`.
+      let nodes = Int(measured)
+      var growing = false
+      if let nodes, let previousNodes {
+        growing = Double(nodes) > Double(previousNodes) * Constants.Execution.settleGrowthFactor
+      }
+
+      if !described.isEmpty, described == previous, !growing {
         stable += 1
         if changed, stable >= required { return }
       } else {
         stable = 0
       }
-      previous = now
+      previous = described
+      previousNodes = nodes
     }
   }
 

@@ -374,6 +374,39 @@ public enum Constants {
     /// that made a five-step task take half a minute.
     public static let settleStableChecks = 2
 
+    /// How much the DOM may grow between two polls and still count as still.
+    ///
+    /// **Stillness was defined as an exactly repeated node count, and a page
+    /// that streams can never repeat one.** Settle fingerprinted the candidate
+    /// list *and* `readiness()`, which is the DOM node count — so every feed
+    /// appended a few nodes between polls, the fingerprint never matched
+    /// twice, and the step burned the whole `actionSettleTimeout` even though
+    /// the thing it was waiting for had landed in the first 200 ms. Measured
+    /// on X: settle=1582 ms and settle=1662 ms against a 1500 ms cap.
+    ///
+    /// A ratio separates the two cases that matter, because they differ by
+    /// orders of magnitude rather than by a little. A shell becoming a page is
+    /// enormous — Instagram's inbox goes 157 nodes to roughly 3000, about 19x
+    /// — and must still block. A feed appending one item to an already-built
+    /// page is a couple of percent, and must not. Anything under a fifth of
+    /// growth is treated as a page that has arrived and is merely alive.
+    public static let settleGrowthFactor = 1.2
+
+    /// How long a spinner on an otherwise finished document is believed.
+    ///
+    /// **A marker that never clears is scenery, not progress.** `readyState`
+    /// is a fact; `aria-busy` and `role="progressbar"` are a page's opinion,
+    /// and X holds one visible progressbar on an idle, fully loaded timeline
+    /// for as long as you care to watch. Waiting the whole page-load budget
+    /// for it to clear is waiting for something that is not going to happen —
+    /// measured as ready=4041ms on a resume and a settle that could never
+    /// accumulate a single stable poll.
+    ///
+    /// A genuine spinner on a complete document — a panel fetching its
+    /// contents — resolves in well under this. So it is long enough to catch
+    /// the real thing and short enough that the fake one costs little.
+    public static let busyGrace: Duration = .milliseconds(600)
+
     /// The same, after a navigation.
     ///
     /// A page that has just been replaced gets the old benefit of the doubt.
@@ -512,6 +545,27 @@ public enum Constants {
     /// person watching is the reason this number exists, so it is set where a
     /// sentence takes about a second.
     public static let webKeystrokeMilliseconds = 25
+
+    /// How many characters share one pause.
+    ///
+    /// **A `pause` tick costs far more than the pause it asks for.** Measured
+    /// against a live Firefox on a plain text input, typing the same 27
+    /// characters three ways:
+    ///
+    ///   * 54 ticks, no pauses at all — 10–19 ms. Per-tick overhead is nil.
+    ///   * 81 ticks, a 25 ms pause per character — 1800–2151 ms, for 675 ms
+    ///     of pause actually asked for.
+    ///   * 60 ticks, a 100 ms pause every fourth character — 1009–1028 ms,
+    ///     for the same 700 ms asked.
+    ///
+    /// So the cost is not per tick, it is roughly `asked + 45 ms` per *pause*
+    /// tick. Both shapes fit that model to within 5% (predicted 1890 ms and
+    /// 1015 ms). Asking for the same total cadence in a quarter as many
+    /// pauses therefore buys back about a second on a sentence, and what the
+    /// person watches is unchanged in aggregate: the text still arrives over
+    /// the same interval, in small bursts rather than one character at a time,
+    /// which is what a hand on a keyboard actually produces.
+    public static let webKeystrokeGroup = 4
 
     /// How long to wait for an application to accept focus.
     ///

@@ -750,3 +750,41 @@ struct BrowserLaunchRegressionTests {
     #expect(journal.all.isEmpty)
   }
 }
+
+/// What typing costs, and why it is shaped the way it is.
+@Suite("Typing cadence — regression")
+struct TypingCadenceTests {
+
+  /// **The pause is the expensive part, not the keystroke.** Measured against
+  /// a live Firefox on a plain text input: 54 key ticks with no pauses cost
+  /// 10–19ms, while the same 27 characters with a pause each cost 1800–2151ms
+  /// for 675ms of pause asked for. A `pause` tick costs roughly what it asks
+  /// plus 45ms of its own, so the cadence is bought in bursts.
+  @Test("one pause carries a whole burst")
+  func onePausePerBurst() throws {
+    let group = Constants.Typing.webKeystrokeGroup
+    let sequence = BiDiExecutor.keySequence(String(repeating: "a", count: group * 2))
+    let actions = try #require(sequence["actions"] as? [[String: Any]])
+
+    let pauses = actions.filter { $0["type"] as? String == "pause" }
+    #expect(pauses.count == 2, "a pause per character is what made a sentence cost two seconds")
+    #expect(actions.filter { $0["type"] as? String == "keyDown" }.count == group * 2)
+    for pause in pauses {
+      #expect(
+        pause["duration"] as? Int == Constants.Typing.webKeystrokeMilliseconds * group,
+        "the burst has to carry the cadence it replaced, or typing just got faster")
+    }
+  }
+
+  /// Nothing follows the last character, so a trailing pause buys no cadence
+  /// and costs another tick's overhead.
+  @Test("a part-filled last burst ends without a pause")
+  func noTrailingPause() throws {
+    let group = Constants.Typing.webKeystrokeGroup
+    let sequence = BiDiExecutor.keySequence(String(repeating: "a", count: group + 1))
+    let actions = try #require(sequence["actions"] as? [[String: Any]])
+
+    #expect(actions.filter { $0["type"] as? String == "pause" }.count == 1)
+    #expect(actions.last?["type"] as? String == "keyUp")
+  }
+}

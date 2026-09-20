@@ -655,3 +655,101 @@ struct RegressionTests {
     #expect(started.duration(to: ContinuousClock.now) < .seconds(2))
   }
 }
+
+/// Two ways the loop used to spend seconds waiting for something that was
+/// never going to happen.
+@Suite("Waiting for what has already happened")
+struct SettleAndResumeRegressionTests {
+
+  /// **A page that streams can never repeat a node count.** Settle
+  /// fingerprinted the candidate list together with `readiness()`, and
+  /// `readiness()` is the DOM node count — so on any feed the fingerprint
+  /// differed every poll, two consecutive identical polls never happened, and
+  /// the step ran to the full `actionSettleTimeout` after the thing it was
+  /// waiting for had already landed. Measured on X: settle=1582ms and
+  /// settle=1662ms against a 1500ms ceiling.
+  @Test("a page that keeps growing slowly still settles")
+  func aStreamingPageSettles() async {
+    let judge = ScriptedJudge([Make.verdict()])
+    let started = ContinuousClock.now
+
+    let source = StreamingSource(
+      before: [Make.element()],
+      after: [Make.element(), Make.element(label: "Home", path: [1])])
+    _ = await Make.loop(
+      plan: Make.plan([.click]),
+      judge: judge,
+      executor: RecordingExecutor(onExecute: { await source.landed() }),
+      settleTimeout: .seconds(5),
+      source: source
+    ).run()
+
+    let elapsed = started.duration(to: ContinuousClock.now)
+    #expect(
+      elapsed < .seconds(1),
+      "settle waited out its ceiling on a page whose elements had held still")
+  }
+
+  /// **A resume is not an arrival.** `lastAction` is in-memory only, so every
+  /// resumed run began with it nil and took the full page-load budget for a
+  /// page that had been loaded for minutes. On a site with a permanent
+  /// spinner that is the whole 4s, every resume — measured as ready=4041ms.
+  @Test("a resume mid-task does not pay the page-load budget")
+  func aResumeIsNotAnArrival() async {
+    let judge = ScriptedJudge([Make.verdict()])
+    let started = ContinuousClock.now
+
+    let loop = AgentLoop(
+      task: "test task", taskContext: "", plan: Make.plan([.click, .click]),
+      sessionID: "s_test", pid: 0,
+      // Never finishes loading, so the budget is the only thing that ends the
+      // wait — which makes the size of that budget the whole measurement.
+      source: LoadingSource(elements: [Make.element()], loadingForObservations: .max),
+      jev: judge, executors: RecordingExecutor(), hud: HeadlessHUD(),
+      resumeFrom: AgentLoop.LoopState(
+        history: ["click Home"], planIndex: 1, stepIndex: 1,
+        screenBefore: "<button> Home", totalCost: 0),
+      asksBeforeIrreversible: false,
+      settleTimeout: .seconds(5)
+    )
+    _ = await loop.run()
+
+    let elapsed = started.duration(to: ContinuousClock.now)
+    #expect(
+      elapsed < .seconds(3.5),
+      "a resume in the middle of a task waited as though the page were arriving")
+  }
+}
+
+/// **A spinner that never clears is scenery.** X keeps one visible
+/// progressbar on an idle, fully loaded home timeline — measured
+/// `ready=complete busy=1` with nothing happening. Reporting that as
+/// `loading` made every settle poll reset, so stability could never
+/// accumulate and every step paid its full ceiling; `waitUntilReady` paid its
+/// full budget for the same reason.
+@Suite("A spinner is not a loading page")
+struct BusyMarkerRegressionTests {
+
+  @Test("a page that is always busy still settles")
+  func anAlwaysBusyPageSettles() async {
+    let judge = ScriptedJudge([Make.verdict()])
+    let started = ContinuousClock.now
+
+    let source = SpinningSource(
+      before: [Make.element()],
+      after: [Make.element(), Make.element(label: "Home", path: [1])])
+    _ = await Make.loop(
+      plan: Make.plan([.click]),
+      judge: judge,
+      executor: RecordingExecutor(onExecute: { await source.landed() }),
+      settleTimeout: .seconds(5),
+      source: source
+    ).run()
+
+    let elapsed = started.duration(to: ContinuousClock.now)
+    #expect(
+      elapsed < .seconds(1.6),
+      "a permanent spinner held the step at its ceiling in both phases")
+    #expect(await judge.callCount == 1, "and it still judged the page once")
+  }
+}

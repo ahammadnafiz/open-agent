@@ -167,3 +167,30 @@ struct SnapshotScriptTests {
     #expect(250 <= Constants.Jev.maxCandidates)
   }
 }
+
+
+/// **A document that has not finished and a page with a spinner on it are two
+/// different claims.** Collapsing them cost a second and a half on every step
+/// against any site that keeps a progressbar on screen — X holds one on an
+/// idle, fully loaded home timeline, measured `ready=complete busy=1`.
+@Suite("Loading is not the same as busy")
+struct ReadinessRuleTests {
+
+  @Test("an unfinished document is loading, whatever else is true")
+  func unfinishedDocument() {
+    #expect(BiDiSource.readiness(readyState: "loading", busy: 0, nodeCount: 900) == "loading")
+    #expect(BiDiSource.readiness(readyState: "interactive", busy: 4, nodeCount: 900) == "loading")
+  }
+
+  @Test("a finished document with a spinner reports busy, and its size with it")
+  func finishedButBusy() {
+    // The count travels with it: a caller that has waited out a spinner which
+    // was never going to clear still has to judge whether the page is growing.
+    #expect(BiDiSource.readiness(readyState: "complete", busy: 1, nodeCount: 2573) == "busy:2573")
+  }
+
+  @Test("a finished, quiet document reports only its size")
+  func finishedAndQuiet() {
+    #expect(BiDiSource.readiness(readyState: "complete", busy: 0, nodeCount: 2573) == "2573")
+  }
+}

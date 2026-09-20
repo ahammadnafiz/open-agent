@@ -44,8 +44,30 @@ struct AppHUD: HUDBridge {
     // `press()` runs on every step, captured or not. It is what clears the
     // target ring, and the ripple is truthful either way — a real click does
     // land there. Skipping it left the ring on screen permanently.
-    await CursorOverlay.shared.press()
-    return try await body()
+    //
+    // **It runs alongside the executor, not in front of it.** `press()` is
+    // documented as purely visual, and awaiting it first meant the real event
+    // was dispatched 180 ms after the on-screen press had already finished —
+    // a press ripple that was over before anything was pressed. Every step
+    // paid it: 0.10s holding the ripple, 0.08s clearing the ring.
+    //
+    // Overlapping is also the truer rendering. A press should register on the
+    // way down rather than on release, so the ripple and the dispatch being
+    // the same moment is what the animation was claiming all along. The ring
+    // still lands first and the anticipation window before it is untouched —
+    // that pause is the user's time to object, and it is not a delay to win
+    // back.
+    async let ripple: Void = CursorOverlay.shared.press()
+    do {
+      let outcome = try await body()
+      await ripple
+      return outcome
+    } catch {
+      // The ring has to be cleared even when the step failed, or it stays on
+      // screen pointing at an element nothing happened to.
+      await ripple
+      throw error
+    }
   }
 
   func confirm(_ request: ConfirmationRequest) async -> Bool {

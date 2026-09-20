@@ -85,6 +85,13 @@ actor ScriptedJudge: StepJudge {
 actor RecordingExecutor: Executor, ExecutorProviding {
   private(set) var executed: [Action] = []
   var shouldFail = false
+  /// Run when a step actually dispatches. A fake screen that changes on a
+  /// counted observation is guessing how many times the loop reads the page
+  /// before it acts — and that count moves whenever the readiness rules do.
+  /// This lets the change be caused by the action, which is what it models.
+  private let onExecute: (@Sendable () async -> Void)?
+
+  init(onExecute: (@Sendable () async -> Void)? = nil) { self.onExecute = onExecute }
 
   nonisolated func executor(for ref: ElementRef?, kind: ActionKind) throws -> any Executor {
     self
@@ -92,6 +99,7 @@ actor RecordingExecutor: Executor, ExecutorProviding {
 
   func execute(_ action: Action) async throws -> ExecutionResult {
     executed.append(action)
+    await onExecute?()
     if shouldFail { throw ExecutionError.axFailed(code: -1) }
     return ExecutionResult(dispatched: true, via: .ax)
   }
@@ -202,4 +210,57 @@ enum Make {
       settleTimeout: settleTimeout
     )
   }
+}
+
+/// A page that finishes arriving and then keeps growing slowly, the way a feed
+/// does. The element list changes exactly once and then holds still, while the
+/// node count creeps up a few percent on every observation.
+actor StreamingSource: ElementSource {
+  nonisolated let kind: SourceKind = .bidi
+  nonisolated var reportsReadiness: Bool { true }
+  private let before: [Element]
+  private let after: [Element]
+  private var nodes = 3_000
+  private var acted = false
+
+  init(before: [Element], after: [Element]) {
+    self.before = before
+    self.after = after
+  }
+
+  /// The step dispatched; the screen may now reflect it.
+  func landed() { acted = true }
+
+  func observe() async throws -> [Element] {
+    // Three percent a poll — one more item in a timeline, never twice the same
+    // number, and nowhere near a shell turning into a page.
+    nodes += nodes / 32
+    return acted ? after : before
+  }
+
+  func readiness() async -> String { "\(nodes)" }
+}
+
+/// A finished page that never stops claiming to be busy — X's home timeline,
+/// which holds one visible progressbar on an idle, fully loaded screen. The
+/// document is complete and the elements hold still; only the spinner argues.
+actor SpinningSource: ElementSource {
+  nonisolated let kind: SourceKind = .bidi
+  nonisolated var reportsReadiness: Bool { true }
+  private let before: [Element]
+  private let after: [Element]
+  private var acted = false
+
+  init(before: [Element], after: [Element]) {
+    self.before = before
+    self.after = after
+  }
+
+  /// The step dispatched; the screen may now reflect it.
+  func landed() { acted = true }
+
+  func observe() async throws -> [Element] { acted ? after : before }
+
+  /// Complete, and busy, forever.
+  func readiness() async -> String { "busy:2573" }
 }

@@ -200,22 +200,36 @@ public struct BiDiExecutor: Executor {
     ]
   }
 
-  private static func keySequence(_ text: String) -> [String: Any] {
+  static func keySequence(_ text: String) -> [String: Any] {
     var actions: [[String: Any]] = []
+    // The pause is what makes typing look typed — `performActions` would
+    // otherwise deliver a whole sentence in one frame. It is also, measured,
+    // the only expensive thing in the sequence: the keystrokes themselves cost
+    // nothing, and each `pause` tick costs roughly what it asks for plus 45 ms
+    // of its own. See `Constants.Typing.webKeystrokeGroup`.
+    //
+    // So the cadence is bought in bursts. Every `group` characters, one pause
+    // carries that whole group's worth of delay. The text arrives over the
+    // same total interval it always did, in small bursts rather than evenly —
+    // which is what hands actually do — for a quarter of the overhead.
+    let group = max(1, Constants.Typing.webKeystrokeGroup)
+    var sincePause = 0
     for character in text {
       let value = String(character)
-      // A gap between characters. `performActions` runs the whole sequence as
-      // fast as it can otherwise, and a sentence that appears in one frame is
-      // the tell that nobody typed it.
-      //
-      // The gap is the only pause. A separate hold between down and up doubled
-      // the tick count, and WebDriver charges overhead per tick rather than
-      // per keystroke — 27 characters took 5.3s to type, against 1.2s of
-      // pauses actually asked for.
       actions.append(["type": "keyDown", "value": value])
       actions.append(["type": "keyUp", "value": value])
-      actions.append(["type": "pause", "duration": Constants.Typing.webKeystrokeMilliseconds])
+      sincePause += 1
+      if sincePause == group {
+        actions.append([
+          "type": "pause",
+          "duration": Constants.Typing.webKeystrokeMilliseconds * group,
+        ])
+        sincePause = 0
+      }
     }
+    // No trailing pause. Nothing follows the last character, so a final wait
+    // buys no cadence and costs another tick's overhead; `settle` is what
+    // gives the page time to react.
     return ["type": "key", "id": "openAgentKeyboard", "actions": actions]
   }
 
