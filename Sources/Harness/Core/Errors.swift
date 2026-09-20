@@ -53,6 +53,14 @@ public enum ExecutionError: Error, Equatable, Sendable {
   case actionUnavailable(role: String, wanted: String)
   /// The AX API rejected the call.
   case axFailed(code: Int)
+  /// Focus was set and the application never accepted it.
+  ///
+  /// Refused rather than typed anyway. Keys posted at an element that does not
+  /// have focus go wherever focus actually is — measured on WhatsApp, into the
+  /// chat list, where the text acted as type-select and dismissed the panel the
+  /// next step needed. A clean failure the ladder can escalate beats a
+  /// successful-looking step that changed the wrong thing.
+  case focusNotAccepted
   /// An action arrived with no target where one is required.
   case missingTarget(kind: ActionKind)
   /// An action arrived with no payload where one is required.

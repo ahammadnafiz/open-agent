@@ -454,6 +454,9 @@ enum Commands {
       return "Could not resolve a window for \(name) after \(Constants.AX.windowRetries) attempts."
     case CandidateError.tooManyCandidates(let count):
       return "\(count) candidates exceeds the \(Constants.Jev.maxCandidates) ceiling."
+    case ExecutionError.focusNotAccepted:
+      return "The application never accepted focus on that element, so nothing was typed. "
+        + "Typing anyway would have sent the keys wherever focus actually is."
     case CandidateError.noCandidates:
       return "Nothing labelled and actionable is on screen."
     case JevError.missingAPIKey:

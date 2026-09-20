@@ -386,6 +386,30 @@ public enum Constants {
 
   // MARK: - Accessibility
 
+  /// Pacing for synthesized keyboard input.
+  ///
+  /// **These are not cosmetic.** Keystrokes posted with no gap at all arrive
+  /// faster than an application's event loop drains them, and the ones that do
+  /// not fit are simply lost — a step that reports `dispatched=true` into a
+  /// field that stays empty.
+  public enum Typing {
+    /// Gap between characters. Measured need, not a human-speed imitation:
+    /// fast enough that a sentence is under a second, slow enough that each
+    /// event is a separate trip through the app's run loop.
+    public static let keystrokeIntervalMicroseconds: UInt32 = 12_000
+    /// Gap between a key going down and coming back up. A zero-length press is
+    /// not what any real keyboard produces, and some controls key off duration.
+    public static let keyHoldMicroseconds: UInt32 = 8_000
+
+    /// How long to wait for an application to accept focus.
+    ///
+    /// `AXUIElementSetAttributeValue(kAXFocused…)` returns immediately and the
+    /// application acts on it later, on its own run loop. Posting keys in the
+    /// same breath races that, and they land wherever focus still *is*.
+    public static let focusTimeoutSeconds: Double = 0.6
+    public static let focusPollMicroseconds: UInt32 = 20_000
+  }
+
   public enum AX {
     /// Zen's menu tree alone is 10,804 nodes and takes 3.76 s to traverse.
     /// Without a deadline a pathological tree consumes the step budget by
@@ -412,8 +436,14 @@ public enum Constants {
     /// drawn anything. A cold start of a large app is seconds; a warm one is
     /// instant. Polling spans both, where a fixed sleep would either stall
     /// every warm launch or fail every cold one.
-    public static let launchTimeout: Duration = .seconds(20)
-    public static let launchPollInterval: Duration = .milliseconds(250)
+    /// Seconds and microseconds are the source values because the two callers
+    /// need different shapes: the executable waits across `await`, and the
+    /// executor waits synchronously because an `AXUIElement` must not cross a
+    /// suspension point.
+    public static let launchTimeoutSeconds: Double = 20
+    public static let launchPollMicroseconds: UInt32 = 250_000
+    public static var launchTimeout: Duration { .seconds(launchTimeoutSeconds) }
+    public static var launchPollInterval: Duration { .microseconds(launchPollMicroseconds) }
   }
 
   // MARK: - Screen capture and OCR (tier 3)

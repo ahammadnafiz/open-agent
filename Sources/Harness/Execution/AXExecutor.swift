@@ -27,9 +27,12 @@ public struct AXExecutor: Executor {
         throw ExecutionError.unknownKey(action.payload ?? "<nil>")
       }
       if let element = try resolveIfTargeted(action) {
-        // There is no AX action for a keystroke, so the element is
-        // focused first and the event is synthesized at the HID layer.
-        AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        // There is no AX action for a keystroke, so the element is focused
+        // first and the event is synthesized at the HID layer. The wait is the
+        // whole point — see `settleFocus`.
+        guard Self.settleFocus(element, pid: source.pid) else {
+          throw ExecutionError.focusNotAccepted
+        }
       }
       try KeySynthesis.press(key)
       return ExecutionResult(dispatched: true, via: .ax)
@@ -48,7 +51,9 @@ public struct AXExecutor: Executor {
       if set != .success
         || Self.writeWasIgnored(text, before: before, after: Self.stringValue(of: element))
       {
-        AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        guard Self.settleFocus(element, pid: source.pid) else {
+          throw ExecutionError.focusNotAccepted
+        }
         try KeySynthesis.type(text)
       }
       return ExecutionResult(dispatched: true, via: .ax)
@@ -68,6 +73,20 @@ public struct AXExecutor: Executor {
         throw ExecutionError.missingPayload(kind: action.kind)
       }
       try Self.launch(app: name)
+      // **`open -a` returns when the app has been asked to come forward, not
+      // when it has.** Activation often crosses a Space, and a Space transition
+      // animates — during it the window server does not report the window as
+      // on-screen. The next perception then failed with `windowNotOnScreen`
+      // about an app that was opening exactly as instructed, one step after
+      // `openApp` reported success.
+      //
+      // So the step is not done until there is something to look at. That is
+      // also what makes `dispatched` mean what the rest of the system reads it
+      // as meaning.
+      guard Self.waitForWindow(app: name) else {
+        throw ExecutionError.actionUnavailable(
+          role: "openApp", wanted: "\(name) to put a window on screen")
+      }
       return ExecutionResult(dispatched: true, via: .ax)
 
     case .navigate:
@@ -84,6 +103,67 @@ public struct AXExecutor: Executor {
       try perform(preferredActions: Self.pressLike, on: element)
       return ExecutionResult(dispatched: true, via: .ax)
     }
+  }
+
+  /// Waits until an application has a window this process can actually see.
+  ///
+  /// A pid is not enough. An app that has launched, or been raised onto another
+  /// Space, exists long before it has drawn anything here — and an empty
+  /// observation reads as "that screen has nothing on it" rather than "it is
+  /// still coming up", which is the distinction Q6 exists for.
+  static func waitForWindow(app name: String) -> Bool {
+    let deadline = Date().addingTimeInterval(Constants.AX.launchTimeoutSeconds)
+    repeat {
+      if let pid = try? WindowGuard.pid(forApp: name), WindowGuard.hasVisibleWindow(pid: pid) {
+        return true
+      }
+      usleep(Constants.AX.launchPollMicroseconds)
+    } while Date() < deadline
+    return false
+  }
+
+  /// Focuses an element and waits until the application agrees that it has it.
+  ///
+  /// **`AXUIElementSetAttributeValue(kAXFocused…)` returns before the focus
+  /// moves.** It posts a request; the application handles it on its own run
+  /// loop, whenever that next turns. Synthesized keys posted in the same breath
+  /// win that race and land wherever focus still is.
+  ///
+  /// Measured on WhatsApp: "Zisan" went to the chat list rather than the search
+  /// field, where it behaved as type-select and dismissed the search panel the
+  /// next step depended on. The step reported `dispatched=true`, the field was
+  /// empty, and the failure surfaced two steps later as a route that no longer
+  /// matched the screen.
+  ///
+  /// Two signals are accepted, because one of them is unreliable on its own:
+  /// the application naming this element as its focused one, or the element
+  /// reporting itself focused. Some toolkits maintain only the second.
+  ///
+  /// Synchronous on purpose. `AXUIElement` is not `Sendable` and must not cross
+  /// a suspension point — the same reason `AXSource.attemptObservation` is kept
+  /// whole — and the wait is bounded at `Constants.Typing.focusTimeoutSeconds`.
+  static func settleFocus(_ element: AXUIElement, pid: pid_t) -> Bool {
+    AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+
+    let app = AXUIElementCreateApplication(pid)
+    let deadline = Date().addingTimeInterval(Constants.Typing.focusTimeoutSeconds)
+    repeat {
+      var focused: CFTypeRef?
+      if AXUIElementCopyAttributeValue(
+        app, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+        let current = focused, CFEqual(current, element)
+      {
+        return true
+      }
+      var own: CFTypeRef?
+      if AXUIElementCopyAttributeValue(element, kAXFocusedAttribute as CFString, &own) == .success,
+        let flag = own as? Bool, flag
+      {
+        return true
+      }
+      usleep(Constants.Typing.focusPollMicroseconds)
+    } while Date() < deadline
+    return false
   }
 
   /// The element's `AXValue`, when it is a string.
@@ -211,6 +291,7 @@ enum KeySynthesis {
     }
     CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true)?
       .post(tap: .cghidEventTap)
+    usleep(Constants.Typing.keyHoldMicroseconds)
     CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false)?
       .post(tap: .cghidEventTap)
   }
@@ -220,6 +301,12 @@ enum KeySynthesis {
   /// Synthetic `value` assignment does not fire the listeners modern
   /// applications depend on, so this is the fallback whenever setting
   /// `kAXValueAttribute` fails.
+  ///
+  /// **Paced.** Posted back to back with no gap, characters arrive faster than
+  /// an application drains its event queue and the surplus is dropped — a field
+  /// that ends up holding a few of the letters, or none, after a step that
+  /// reported success. The caller must have confirmed focus first; these events
+  /// go to whatever holds it, not to any element.
   static func type(_ text: String) throws {
     guard let source = CGEventSource(stateID: .hidSystemState) else {
       throw ExecutionError.graphicsFailed(stage: "CGEventSource")
@@ -232,7 +319,9 @@ enum KeySynthesis {
       down.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
       up.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
       down.post(tap: .cghidEventTap)
+      usleep(Constants.Typing.keyHoldMicroseconds)
       up.post(tap: .cghidEventTap)
+      usleep(Constants.Typing.keystrokeIntervalMicroseconds)
     }
   }
 }

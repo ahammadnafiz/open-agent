@@ -11,6 +11,40 @@ import Testing
 @Suite("Review regressions")
 struct RegressionTests {
 
+  // MARK: - Keystrokes outran the application
+
+  /// Characters were posted back to back with no gap at all, and focus was
+  /// requested in the same breath as the first one.
+  ///
+  /// Both are races an application loses quietly: keys arriving faster than it
+  /// drains its event queue are dropped, and keys posted before it has acted on
+  /// the focus request go wherever focus still is. Measured on WhatsApp, that
+  /// was the chat list, where "Zisan" behaved as type-select and dismissed the
+  /// search panel the next step needed.
+  ///
+  /// Asserted rather than merely commented, because every one of these reads
+  /// like a value someone could tidy to zero while making typing "faster" —
+  /// and the symptom would be a step that still reports `dispatched=true`.
+  @Test("synthesized input is paced, and focus is given time to land")
+  func typingIsPaced() {
+    #expect(Constants.Typing.keystrokeIntervalMicroseconds > 0)
+    #expect(Constants.Typing.keyHoldMicroseconds > 0)
+    #expect(Constants.Typing.focusTimeoutSeconds > 0)
+    #expect(Constants.Typing.focusPollMicroseconds > 0)
+
+    // A sentence must still be under a second: this is a pace, not an
+    // imitation of human typing, and a task budget is 90 seconds of machine
+    // time for the whole route.
+    let perCharacter =
+      Double(Constants.Typing.keystrokeIntervalMicroseconds + Constants.Typing.keyHoldMicroseconds)
+      / 1_000_000
+    #expect(perCharacter * 40 < 1.0)
+
+    // And the focus wait must be short enough that several steps can each pay
+    // it without the task's own ceiling becoming the thing that fails.
+    #expect(Constants.Typing.focusTimeoutSeconds < 1.0)
+  }
+
   // MARK: - Typing reported success and typed nothing
 
   /// `AXUIElementSetAttributeValue` returning `.success` does not mean the
