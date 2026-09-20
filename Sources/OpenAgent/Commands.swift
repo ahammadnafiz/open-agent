@@ -22,7 +22,7 @@ enum Commands {
     guard let planPath = options.planPath else {
       let session = Session(
         id: Session.newID(), task: task, taskContext: options.taskContext,
-        plan: Plan(steps: []), appName: options.app ?? "",
+        plan: Plan(steps: []), appName: options.app ?? "", browser: options.browser,
         state: .init(history: [], planIndex: 0, stepIndex: 0, screenBefore: "", totalCost: 0),
         waitingFor: .needsPlan, candidates: nil
       )
@@ -48,7 +48,7 @@ enum Commands {
     let appName = options.app ?? frontmostAppName()
     var session = Session(
       id: Session.newID(), task: task, taskContext: options.taskContext,
-      plan: plan, appName: appName,
+      plan: plan, appName: appName, browser: options.browser,
       state: .init(history: [], planIndex: 0, stepIndex: 0, screenBefore: "", totalCost: 0),
       waitingFor: nil, candidates: nil
     )
@@ -120,6 +120,10 @@ enum Commands {
   }
 
   static func observe(_ options: CLI.Options) async {
+    if options.browser {
+      await observeBrowser()
+      return
+    }
     let appName = options.app ?? frontmostAppName()
     do {
       let source = try AXSource(appName: appName)
@@ -130,6 +134,24 @@ enum Commands {
           elapsedMilliseconds: 0, costUSD: 0,
           candidates: candidates.criteria,
           reason: "observed \(candidates.count) candidates in \(appName)"
+        )
+      )
+    } catch {
+      fail(describe(error))
+    }
+  }
+
+  static func observeBrowser() async {
+    do {
+      let (client, source) = try await browserSession()
+      let candidates = try CandidateFilter.reduce(try await source.observe())
+      await client.close()
+      emit(
+        HostResponse(
+          session: "-", status: .completed, step: 0,
+          elapsedMilliseconds: 0, costUSD: 0,
+          candidates: candidates.criteria,
+          reason: "observed \(candidates.count) candidates in the browser"
         )
       )
     } catch {
@@ -197,28 +219,53 @@ enum Commands {
       fail(Credentials.missingKeyGuidance)
     }
 
-    let source: AXSource
-    do {
-      source = try AXSource(appName: session.appName)
-    } catch {
-      fail(describe(error))
+    // The target world is a property of the step, not of the task — a task can
+    // cross the boundary. `--browser` decides which source the loop starts on.
+    let source: any ElementSource
+    let pid: pid_t
+    var bidiClient: BiDiClient?
+    var bidiExecutor: BiDiExecutor?
+    let axSource: AXSource
+
+    if session.browser {
+      do {
+        let (client, browserSource) = try await browserSession()
+        bidiClient = client
+        source = browserSource
+        // The AX executor still exists: `openApp` and native fallbacks are
+        // reachable from a browser task.
+        axSource = try AXSource(appName: "Zen")
+        pid = axSource.pid
+        bidiExecutor = BiDiExecutor(client: client, source: browserSource)
+      } catch {
+        fail(describe(error))
+      }
+    } else {
+      do {
+        axSource = try AXSource(appName: session.appName)
+      } catch {
+        fail(describe(error))
+      }
+      source = axSource
+      pid = axSource.pid
     }
 
     let executors = ExecutorRegistry(
-      ax: AXExecutor(source: source),
+      ax: AXExecutor(source: axSource),
       captured: CapturedExecutor(
-        pid: source.pid, appName: session.appName,
+        pid: pid, appName: session.appName,
         // Tier 3/4 is not wired to a live capture yet, so there is no
         // frame to hash — and `CapturedExecutor` refuses to act without
         // one rather than guessing. ADR 0007 makes that a precondition,
         // not a nicety.
         frameHash: { nil }
-      )
+      ),
+      bidi: bidiExecutor
     )
 
     let loop = AgentLoop(
       task: session.task, taskContext: session.taskContext, plan: session.plan,
-      sessionID: session.id, pid: source.pid, source: source, jev: jev,
+      sessionID: session.id, pid: pid, source: source, jev: jev,
       executors: executors, hud: AppHUD(),
       capture: ScreenCapture(), artifactsDirectory: Session.directory,
       resumeFrom: resumeState,
@@ -226,6 +273,7 @@ enum Commands {
     )
 
     let result = await loop.run()
+    await bidiClient?.close()
     session.state = await loop.state()
     session.waitingFor = result.status
     session.candidates = result.candidates
@@ -244,6 +292,26 @@ enum Commands {
         reason: result.reason
       )
     )
+  }
+
+  // MARK: - Browser session
+
+  /// Launches the agent's browser and connects BiDi.
+  ///
+  /// Idempotent in the way that matters: if something is already listening on
+  /// the port, `connect()` succeeds and no second browser is started. A launch
+  /// that raced would leave an orphan process holding the profile lock.
+  static func browserSession() async throws -> (BiDiClient, BiDiSource) {
+    // `allowRestart: true` — the agent may quit a running browser to free its
+    // profile. That is only acceptable because the quit is graceful, so the
+    // session is saved and the tabs come back. ADR 0011.
+    let handle = try await BrowserLauncher.ensureDrivable(allowRestart: true)
+    if handle.restartedExistingBrowser {
+      Log.info("restarted the browser to attach to profile \(handle.profile)")
+    }
+    let client = BiDiClient(port: handle.port)
+    try await client.connect()
+    return (client, BiDiSource(client: client))
   }
 
   // MARK: - Output

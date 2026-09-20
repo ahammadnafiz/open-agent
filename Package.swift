@@ -25,5 +25,6 @@ let package = Package(
         .testTarget(name: "CandidateFilterTests", dependencies: ["Harness"]),
         .testTarget(name: "JudgmentTests", dependencies: ["Harness"]),
         .testTarget(name: "LoopTests", dependencies: ["Harness"]),
+    .testTarget(name: "PerceptionTests", dependencies: ["Harness"]),
     ]
 )

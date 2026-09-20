@@ -14,6 +14,9 @@ struct Session: Codable, Sendable {
   let taskContext: String
   var plan: Plan
   var appName: String
+  /// Whether this task drives the browser. Carried so `resume` reconnects to
+  /// the same world the task started in.
+  var browser = false
   var state: AgentLoop.LoopState
   /// What the last invocation was waiting for, so `resume` can refuse a
   /// session that is not waiting for anything.

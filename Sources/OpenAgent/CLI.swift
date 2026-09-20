@@ -34,6 +34,10 @@ enum CLI {
     var labelWasProvided = false
     var taskContext: String = ""
     var verbose = false
+    /// Drive a browser instead of a native app. The agent launches its own on
+    /// its own profile — it cannot attach to one you already have open, because
+    /// the debug port is set at process start. ADR 0002.
+    var browser = false
 
     // overlay-only
     var loop = false
@@ -115,6 +119,7 @@ enum CLI {
         options.taskContext = next() ?? ""
         index += 1
       case "--verbose": options.verbose = true
+      case "--browser": options.browser = true
       case "--loop": options.loop = true
       case "--speed":
         if let value = next().flatMap(Double.init) { options.speed = max(0.1, min(value, 5)) }
@@ -154,11 +159,12 @@ enum CLI {
   static let help = """
     open-agent — a computer-use agent driven by the coding agent you already run
 
-      open-agent run "<task>" [--plan plan.json] [--context "<instance>"]
+      open-agent run "<task>" [--plan plan.json] [--app <name> | --browser]
+                              [--context "<instance>"]
       open-agent resume <session> --eyes <n> --label "the send icon"
       open-agent resume <session> --eyes none
       open-agent resume <session> --plan plan.json
-      open-agent observe --app <name>
+      open-agent observe --app <name> | --browser
       open-agent act --session <s> --kind <kind> --target e17 [--payload "text"]
 
       open-agent overlay                         scripted walkthrough, once

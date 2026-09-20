@@ -21,6 +21,10 @@ case "jev-latency": await Probe.jevLatency()
 case "jev-budget": await Probe.jevBudget(app: arguments.count > 2 ? arguments[2] : "Finder")
 case "ax-tree": await Probe.axTree(app: arguments.count > 2 ? arguments[2] : "Finder")
 case "windows": Probe.windows()
+case "bidi-dom":
+  await Probe.bidiDOM(
+    url: arguments.count > 2 ? arguments[2] : "https://en.wikipedia.org/wiki/Accessibility")
+case "browser-login": Probe.browserLogin()
 case "--help", "-h": print(Probe.help)
 default:
   FileHandle.standardError.write(Data("unknown probe '\(arguments[1])'\n\n".utf8))
@@ -35,6 +39,8 @@ enum Probe {
       swift run Probe jev-latency          warm vs cold round trip
       swift run Probe jev-budget [app]     token cost of a real candidate set
       swift run Probe ax-tree [app]        what tier 2 actually sees
+      swift run Probe bidi-dom [url]       what tier 1 sees, in one browser call
+      swift run Probe browser-login        log the agent profile into a site, once
       swift run Probe windows              what the window server reports
 
     Not yet implemented (needs a labelled fixture set first):
@@ -147,6 +153,84 @@ enum Probe {
         print("  \(pad("e\(index)", 5))\(pad(element.role, 20))\(element.label)")
       }
       if candidates.count > 40 { print("  … \(candidates.count - 40) more") }
+    } catch {
+      fail(error)
+    }
+  }
+
+  // MARK: - bidi-dom
+
+  /// What tier 1 actually sees, and how long one atomic snapshot takes.
+  ///
+  /// ADR 0010's whole claim is that reading the page in **one** browser call is
+  /// what makes a DOM agent fast — `browser-use/jev-ultrafast` measured protocol
+  /// calls dropping from 1,092 to 101 on the same task. This prints the one call.
+  static func bidiDOM(url: String) async {
+    let client = BiDiClient()
+    do {
+      let connectStarted = ContinuousClock.now
+      let handle = try await BrowserLauncher.ensureDrivable(allowRestart: true)
+      if handle.restartedExistingBrowser {
+        print("restarted your browser so its profile could be driven; tabs are restored")
+      }
+      try await client.connect()
+      let connectMs = (ContinuousClock.now - connectStarted).inSeconds * 1000
+      print("profile              \(handle.profile)")
+
+      try await client.navigate(to: url)
+
+      // Diagnostic: what does the page think its own geometry is? A window the
+      // compositor has not sized yet reports innerHeight 0, and every element
+      // then fails the viewport test.
+      let probeData = try await client.evaluate(
+        """
+        ({ w: window.innerWidth, h: window.innerHeight,
+           anchors: document.querySelectorAll('a[href]').length,
+           ready: document.readyState, title: document.title })
+        """
+      )
+      if let d = try? JSONSerialization.jsonObject(with: probeData) as? [String: Any] {
+        print("viewport             \(d["w"] ?? "?") x \(d["h"] ?? "?")")
+        print("a[href] in document  \(d["anchors"] ?? "?")")
+        print("readyState           \(d["ready"] ?? "?")")
+      }
+
+      let source = BiDiSource(client: client)
+      let snapshotStarted = ContinuousClock.now
+      let elements = try await source.observe()
+      let snapshotMs = (ContinuousClock.now - snapshotStarted).inSeconds * 1000
+      let candidates = try CandidateFilter.reduce(elements)
+
+      print("")
+      print("url                  \(url)")
+      print("connect              \(fmt(connectMs, 0)) ms")
+      print("snapshot             \(fmt(snapshotMs, 0)) ms   (one script.evaluate)")
+      print("actions              \(elements.count)")
+      print("survived the filter  \(candidates.count)")
+      print("")
+      for (index, element) in candidates.elements.prefix(30).enumerated() {
+        let submit = element.submitLabel.map { " ->\($0)" } ?? ""
+        print(
+          "  \(pad("e\(index)", 6))\(pad(element.role, 12))\(element.label.prefix(60))\(submit)")
+      }
+      if candidates.count > 30 { print("  … \(candidates.count - 30) more") }
+
+      await client.close()
+    } catch {
+      await client.close()
+      fail(error)
+    }
+  }
+
+  /// The one-time setup per site. The agent profile starts logged into nothing,
+  /// so the first task touching a new site returns `blocked` and stops — correct
+  /// behaviour that looks like a bug the first time.
+  static func browserLogin() {
+    do {
+      print("opening the profile at \(BrowserProfile.active())")
+      print("log in by hand, complete any 2FA, then quit the browser.")
+      try BrowserLauncher.loginSession()
+      print("done — the session cookie now lives in the agent's profile")
     } catch {
       fail(error)
     }

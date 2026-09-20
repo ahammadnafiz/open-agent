@@ -25,10 +25,15 @@ public protocol ExecutorProviding: Sendable {
 public struct ExecutorRegistry: ExecutorProviding {
   private let ax: AXExecutor
   private let captured: CapturedExecutor
+  /// `nil` when the task never entered a browser. A task can cross the boundary
+  /// mid-run — open Finder, drag a file into a page — so this is decided per
+  /// step, not per task.
+  private let bidi: BiDiExecutor?
 
-  public init(ax: AXExecutor, captured: CapturedExecutor) {
+  public init(ax: AXExecutor, captured: CapturedExecutor, bidi: BiDiExecutor? = nil) {
     self.ax = ax
     self.captured = captured
+    self.bidi = bidi
   }
 
   public func executor(for ref: ElementRef?) throws -> any Executor {
@@ -43,12 +48,14 @@ public struct ExecutorRegistry: ExecutorProviding {
     case .captured:
       return captured
     case .dom:
-      // Tier 1 is deferred off the v1 critical path by ADR 0006
-      // (native-first sequencing). The case is enumerated rather than
-      // defaulted so that adding BiDi is a compile error here, not a
-      // silent fallthrough to the wrong executor.
-      throw ExecutionError.actionUnavailable(
-        role: "dom", wanted: "BiDiExecutor (ADR 0006: deferred)")
+      // Tier 1, landed by ADR 0010. Still enumerated rather than defaulted: a
+      // ref the harness can produce but not act on is the defect ADR 0007 was
+      // written to close.
+      guard let bidi else {
+        throw ExecutionError.actionUnavailable(
+          role: "dom", wanted: "a browser session — run with --browser")
+      }
+      return bidi
     }
   }
 }

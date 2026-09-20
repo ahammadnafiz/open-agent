@@ -133,23 +133,26 @@ Three things that are easy to assume away:
 
 ### The browser the agent drives is its own, and this surprises people
 
-**The agent cannot use a browser you already have open.** The BiDi debug port can
-only be set at process start, so the agent launches its own Zen against its own
-profile at `~/Library/Application Support/open-agent/zen-profile`. A browser
-you opened has no port and cannot be attached to, at any tier.
+**The agent cannot attach to a browser that is already running.** The BiDi debug
+port can only be set at process start — Gecko exposes no runtime equivalent — so
+a browser you opened has no port and cannot be attached to, at any tier.
 
-This is a safety decision, not a limitation to engineer away — see § Boundaries,
-*never run against a profile holding accounts the user did not explicitly assign
-to it.* The cost is a **one-time manual setup per site**: the agent profile
-starts logged into nothing, so the first task touching a new site returns
-`blocked ≈ 0.95` and stops. That is correct behaviour and it looks like a bug the
-first time, so it is written down here.
+What it *can* do is relaunch it. Since
+[ADR 0011](./docs/adr/0011-the-agent-drives-the-browser-you-actually-use.md) the
+agent drives your **default profile**, read from `profiles.ini`: it asks the
+running browser to quit, so Gecko saves the session and your tabs come back,
+then relaunches it on the same profile with the port open. Measured on this
+machine: quit, relaunch and connect in **2.2 s**, against **21.7 s** for a cold
+dedicated profile doing first-run setup.
 
-The setup, once per site:
+You stay logged into everything, which is the point — the dedicated empty
+profile turned every real task into a login wall. It is still available and is
+no longer the default. `Probe browser-login` exists for that mode.
 
-1. `swift run Probe browser-login` launches Zen on the agent profile.
-2. Log in by hand. Complete any 2FA.
-3. Quit. The session cookie now lives in the agent's profile.
+**What this costs is stated in ADR 0011 and is not small:** the agent can reach
+every account that browser is signed into. The boundary that protects you is the
+deterministic gate — `publish`, `send`, `delete` and `purchase` show a window
+with the exact payload and wait for a human — not the profile.
 
 Native targets have the equivalent prerequisite and it is cheaper: Accessibility
 permission is granted **per binary**, so the shipped `.app` and the `Probe`

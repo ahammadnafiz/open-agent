@@ -114,6 +114,29 @@ So: say what the final `status` was. If it is `completed`, say what was done. If
 it is anything else, say what stopped and where. Do not write "I've sent the
 email" because a command exited 0.
 
+## Browser tasks
+
+Pass `--browser` instead of `--app`:
+
+```bash
+open-agent run "post this to my feed" --plan plan.json --browser
+```
+
+Three things to know, because they surprise people:
+
+1. **The agent restarts the browser, once.** The debug port is a startup flag
+   with no runtime equivalent, so a browser that is already running cannot be
+   told to start listening. The agent asks it to quit — the session is saved and
+   the tabs come back — and relaunches it on the same profile. About 2 seconds.
+2. **It drives the default profile**, so the user stays logged into everything.
+   That also means the agent can reach every account in that browser. The
+   confirmation window is what protects them, not the profile.
+3. **`navigate` is a browser step.** On a native app it is refused, and
+   `openApp` is refused in the browser — the agent launches its own.
+
+Tell the user before the first browser task that their browser will restart.
+Finding out by watching it close is not the same as being told.
+
 ## Approval is not part of this interface
 
 An action that cannot be undone shows a window on the user's screen carrying the

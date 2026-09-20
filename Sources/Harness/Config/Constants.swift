@@ -323,12 +323,37 @@ public enum Constants {
   public enum Browser {
     public static let bidiPort = 9333
 
-    /// The debug port can only be enabled at process start, so the agent
-    /// cannot attach to a browser the user opened. It owns this profile;
-    /// the user's daily profile is never touched, never quit, never exposed.
-    public static let agentProfilePath =
+    /// Where Zen keeps its profiles and its `profiles.ini`.
+    public static let profilesRoot =
+      NSString(string: "~/Library/Application Support/zen").expandingTildeInPath
+
+    /// A dedicated, empty profile.
+    ///
+    /// Safest, and useless until each site is logged into by hand once
+    /// (`Probe browser-login`). This was the original default, and the reason
+    /// is still in `SPEC.md` § Boundaries: *never run the agent against a
+    /// browser profile holding accounts the user did not explicitly assign to
+    /// it.*
+    public static let dedicatedProfilePath =
       NSString(string: "~/Library/Application Support/open-agent/zen-profile")
       .expandingTildeInPath
+
+    /// Drive the browser the user actually uses, with every account they are
+    /// logged into, rather than an empty profile.
+    ///
+    /// **This deliberately widens the boundary above — ADR 0011.** It is the
+    /// default because a profile logged into nothing cannot do the tasks people
+    /// actually ask for, and the one-time-login-per-site workaround is friction
+    /// people abandon.
+    ///
+    /// Two constraints make this cost a browser restart, and neither has a way
+    /// around it: `--remote-debugging-port` is a *startup* flag with no runtime
+    /// equivalent, and a profile takes one process at a time.
+    public static let useDefaultProfile = true
+
+    /// How long to wait for a browser to release its profile lock after being
+    /// asked to quit.
+    public static let quitTimeout: Duration = .seconds(8)
 
     public static let zenBinary = "/Applications/Zen.app/Contents/MacOS/zen"
 
