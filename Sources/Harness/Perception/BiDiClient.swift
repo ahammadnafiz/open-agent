@@ -6,6 +6,22 @@ public enum BiDiError: Error, Equatable, Sendable {
   /// this is a connect-retry ceiling rather than a sleep — a fixed sleep either
   /// wastes time or races.
   case notListening(port: Int)
+  /// The browser is listening, but its one WebDriver session belongs to a
+  /// connection that no longer exists.
+  ///
+  /// **A BiDi session is owned by the socket that created it.** Firefox allows
+  /// one at a time, so a process that exits without `session.end` leaves the
+  /// browser running, listening, and undrivable — `session.new` is refused with
+  /// *"Maximum number of active sessions"* while every command on the new
+  /// connection is refused with *"WebDriver session does not exist, or is not
+  /// active"*. Observed directly: the listening socket sat in `CLOSE_WAIT` with
+  /// no client process left alive.
+  ///
+  /// Distinct from `notListening` because the remedy is the opposite. Waiting
+  /// longer cannot help — nothing is starting — and reporting it as "not
+  /// listening" sent a whole debugging session after a port that was answering
+  /// perfectly well.
+  case sessionHeldElsewhere(port: Int)
   case handshakeFailed(String)
   /// The browser answered, but with an error for this command.
   case command(method: String, message: String)
@@ -112,20 +128,35 @@ public actor BiDiClient {
       do {
         try await openSocket()
 
-        // `session.new` fails when a session already exists — which is the
-        // normal case for a browser this agent started earlier and left
-        // running. That is not a connection failure, so it is not treated as
-        // one: what actually decides whether we can drive the browser is
-        // whether `browsingContext.getTree` answers.
+        // **A refused `session.new` is not something to work around.** The
+        // previous code logged "reusing the existing session" and carried on,
+        // which cannot work: a BiDi session belongs to the socket that created
+        // it, so a session held by a dead connection can never be adopted by
+        // this one. Every command that followed was refused with "WebDriver
+        // session does not exist", and the retry loop tried twenty-three times
+        // before reporting the port as not listening — which it was.
+        //
+        // Retrying cannot change it either. Nothing is starting up; a browser
+        // is holding a session for a client that is gone, and it will hold it
+        // until something ends it. So this leaves the loop immediately and
+        // names the condition, and the caller restarts the browser.
         do {
           _ = try await send("session.new", ["capabilities": [:] as [String: Sendable]])
         } catch let error as BiDiError {
-          Log.debug("bidi session.new declined (\(error)); reusing the existing session")
+          guard case .command(_, let message) = error, message.contains("Maximum number") else {
+            throw error
+          }
+          socket?.cancel()
+          socket = nil
+          throw BiDiError.sessionHeldElsewhere(port: port)
         }
 
         contextID = try await resolveContext()
         Log.debug("bidi connected on port \(port), context \(contextID ?? "-")")
         return
+      } catch BiDiError.sessionHeldElsewhere(let port) {
+        // Not a startup race. Waiting longer is waiting for nothing.
+        throw BiDiError.sessionHeldElsewhere(port: port)
       } catch {
         lastError = error
         // A half-open socket left behind here is what leaks the session, so the
@@ -163,15 +194,38 @@ public actor BiDiClient {
   }
 
   /// The top-level browsing context — the tab the agent drives.
+  ///
+  /// **Prefers a tab with a page in it.** `getTree` returns contexts in no
+  /// order anyone should rely on, and taking the first one meant the agent
+  /// could attach to a blank tab while the page the user actually had open sat
+  /// beside it — which looks exactly like "it opened a new empty window" and
+  /// produces a step with no candidates at all.
+  ///
+  /// A blank context is still returned when it is all there is, because a
+  /// browser with one empty tab is a browser the agent can navigate.
   private func resolveContext() async throws -> String {
     let tree = try await send("browsingContext.getTree", [:])
-    guard let contexts = tree["contexts"] as? [[String: Any]],
-      let first = contexts.first,
-      let id = first["context"] as? String
-    else {
+    guard let contexts = tree["contexts"] as? [[String: Any]], !contexts.isEmpty else {
+      throw BiDiError.noBrowsingContext
+    }
+    let loaded = contexts.first { context in
+      guard let url = context["url"] as? String else { return false }
+      return !Self.isBlank(url)
+    }
+    guard let id = (loaded ?? contexts.first)?["context"] as? String else {
       throw BiDiError.noBrowsingContext
     }
     return id
+  }
+
+  /// Whether a URL means "nothing is open here".
+  ///
+  /// `about:blank` is what a freshly created context reports; `about:newtab`
+  /// and Zen's own start page are what a browser with no restored session
+  /// shows. None of them carry anything to act on.
+  static func isBlank(_ url: String) -> Bool {
+    url.isEmpty || url == "about:blank" || url.hasPrefix("about:newtab")
+      || url.hasPrefix("about:home") || url.hasPrefix("chrome://")
   }
 
   public func context() throws -> String {

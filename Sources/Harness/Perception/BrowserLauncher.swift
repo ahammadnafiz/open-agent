@@ -140,6 +140,12 @@ public enum BrowserLauncher {
     profileOverride: String? = nil,
     port: Int = Constants.Browser.bidiPort,
     allowRestart: Bool,
+    /// Restart even when the port is already answering.
+    ///
+    /// For the one case where a listening port is not enough: the browser holds
+    /// a WebDriver session for a connection that no longer exists, and only its
+    /// own exit will release it. See `BiDiError.sessionHeldElsewhere`.
+    forceRestart: Bool = false,
     probes: Probes = .live
   ) async throws -> Handle {
     guard probes.binaryExists(binary) else {
@@ -153,7 +159,7 @@ public enum BrowserLauncher {
     // its own retry loop, and when launching lived inside that loop every
     // failed attempt started another browser — each one grabbing a profile,
     // none of them reachable.
-    if probes.isListening(port) {
+    if probes.isListening(port), !forceRestart {
       Log.info("attaching to the browser already listening on port \(port)")
       return Handle(
         processIdentifier: probes.runningBrowsers(binary).first ?? 0,

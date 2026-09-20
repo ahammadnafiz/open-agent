@@ -69,6 +69,98 @@ struct BiDiSessionRegressionTests {
     #expect(methods.last == "session.end", "the session must be ended, not just dropped")
   }
 
+  /// **The other half of the leak, and the one that actually bit.** `close()`
+  /// ends the session on the way out, but a process that dies before reaching
+  /// it cannot. The browser is then left running, listening, and undrivable:
+  /// `session.new` is refused with *"Maximum number of active sessions"* while
+  /// every command on the new connection is refused with *"WebDriver session
+  /// does not exist, or is not active"*.
+  ///
+  /// Observed on a real machine — the listening socket sat in `CLOSE_WAIT` with
+  /// no client process alive.
+  ///
+  /// The old code logged "reusing the existing session" and carried on, which
+  /// can never work: a BiDi session belongs to the socket that created it.
+  @Test("a session held by a dead connection is named, not worked around")
+  func orphanedSessionIsNamed() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      err(1, "Maximum number of active sessions")
+    ])
+    let client = BiDiClient(
+      port: 9333, connectTimeout: .milliseconds(200), retryDelay: .milliseconds(10),
+      makeTransport: { _ in transport }
+    )
+    await #expect(throws: BiDiError.sessionHeldElsewhere(port: 9333)) {
+      try await client.connect()
+    }
+  }
+
+  /// It must not be reported as `notListening`. The port was answering
+  /// perfectly well, and calling it dead sent a whole debugging session after
+  /// Chrome DevTools endpoints that Firefox has never served.
+  ///
+  /// And it must not be retried. Nothing is starting up — a browser is holding
+  /// a session for a client that is gone, and it will hold it until something
+  /// ends it, so twenty-three attempts cost twenty-three times as long to reach
+  /// the same answer.
+  @Test("an orphaned session is not retried and not called a dead port")
+  func orphanedSessionIsNotRetried() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      err(1, "Maximum number of active sessions"),
+      err(2, "Maximum number of active sessions"),
+      err(3, "Maximum number of active sessions"),
+    ])
+    let client = BiDiClient(
+      port: 9333, connectTimeout: .seconds(5), retryDelay: .milliseconds(10),
+      makeTransport: { _ in transport }
+    )
+    let started = ContinuousClock.now
+    await #expect(throws: BiDiError.sessionHeldElsewhere(port: 9333)) {
+      try await client.connect()
+    }
+    #expect(ContinuousClock.now - started < .seconds(1), "it must give up at once")
+    #expect(await transport.methods() == ["session.new"], "exactly one attempt")
+  }
+
+  /// The agent drives the tab the user has open, not whichever context the
+  /// browser happened to list first.
+  ///
+  /// Taking `contexts.first` meant it could attach to a blank tab sitting
+  /// beside the real page — which looks exactly like "it opened a new empty
+  /// window", and produces a step with no candidates at all.
+  @Test("a loaded tab is preferred over a blank one")
+  func loadedTabWins() async throws {
+    let tree =
+      #"{"contexts":[{"context":"blank","url":"about:blank"},"#
+      + #"{"context":"real","url":"https://instagram.com/"}]}"#
+    let transport = FakeBiDiTransport(replies: [ok(1), ok(2, tree)])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    #expect(try await client.context() == "real")
+  }
+
+  /// A browser showing only an empty tab is still a browser the agent can
+  /// navigate, so a blank context is returned when it is all there is.
+  @Test("a blank tab is still used when there is nothing else")
+  func blankTabIsUsedAlone() async throws {
+    let transport = FakeBiDiTransport(replies: [ok(1), ok(2, oneContext)])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    #expect(try await client.context() == "ctx-1")
+  }
+
+  @Test(
+    "the pages that mean nothing is open",
+    arguments: ["", "about:blank", "about:newtab", "about:home", "chrome://browser/content/x"])
+  func blankURLs(url: String) {
+    #expect(BiDiClient.isBlank(url))
+  }
+
+  @Test("a real page is not blank", arguments: ["https://instagram.com/", "file:///tmp/x.html"])
+  func realURLs(url: String) {
+    #expect(!BiDiClient.isBlank(url))
+  }
+
   /// Closing twice, or closing something that never connected, must not throw —
   /// `close()` runs on the failure path too, and an error there would mask the
   /// failure that actually mattered.
@@ -107,18 +199,33 @@ struct BiDiSessionRegressionTests {
     #expect(endCount >= newCount - 1, "every attempt but the last must clean up after itself")
   }
 
-  /// A session created by an earlier process is not ours to reuse, but it is
-  /// also not a connection failure. What decides whether the browser is
-  /// drivable is whether `browsingContext.getTree` answers.
-  @Test("session.new being refused is not fatal on its own")
-  func sessionNewRefusalIsTolerated() async throws {
+  /// **This test used to assert the opposite, and it passed — because the fake
+  /// agreed with it.**
+  ///
+  /// It scripted `session.new` being refused and `browsingContext.getTree`
+  /// answering anyway, then concluded that a refused session is survivable. No
+  /// real browser behaves that way: a BiDi session belongs to the socket that
+  /// created it, so the connection that could not create one cannot use one.
+  /// The live server returns *"WebDriver session does not exist, or is not
+  /// active"*, which is what an actual run finally showed.
+  ///
+  /// Kept as a reminder that a fake written from an assumption will confirm the
+  /// assumption. What it scripts now is what the browser actually sends.
+  @Test("a refused session means every later command is refused too")
+  func refusedSessionMeansRefusedCommands() async throws {
     let transport = FakeBiDiTransport(replies: [
       err(1, "Maximum number of active sessions"),
-      ok(2, oneContext),
+      err(2, "WebDriver session does not exist, or is not active"),
     ])
-    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
-    try await client.connect()
-    #expect(try await client.context() == "ctx-1")
+    let client = BiDiClient(
+      port: 9333, connectTimeout: .milliseconds(200), retryDelay: .milliseconds(10),
+      makeTransport: { _ in transport }
+    )
+    await #expect(throws: BiDiError.sessionHeldElsewhere(port: 9333)) {
+      try await client.connect()
+    }
+    // And it never got as far as asking, because asking was pointless.
+    #expect(await transport.methods() == ["session.new"])
   }
 }
 

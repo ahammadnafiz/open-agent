@@ -403,10 +403,27 @@ enum Commands {
   /// the port, `connect()` succeeds and no second browser is started. A launch
   /// that raced would leave an orphan process holding the profile lock.
   static func browserSession() async throws -> (BiDiClient, BiDiSource) {
+    do {
+      return try await attachBrowser(forceRestart: false)
+    } catch BiDiError.sessionHeldElsewhere {
+      // The browser is up and listening, and holding its one WebDriver session
+      // for a client that has since exited. Nothing on this side can adopt that
+      // session or end it, and waiting is waiting for nothing — the session
+      // dies with the process, so the process has to go.
+      //
+      // Restarting is the same graceful quit ADR 0011 already does: the tabs
+      // come back. It happens once, and only on this specific diagnosis.
+      Log.info("the browser holds a session for a client that is gone — restarting it once")
+      return try await attachBrowser(forceRestart: true)
+    }
+  }
+
+  private static func attachBrowser(forceRestart: Bool) async throws -> (BiDiClient, BiDiSource) {
     // `allowRestart: true` — the agent may quit a running browser to free its
     // profile. That is only acceptable because the quit is graceful, so the
     // session is saved and the tabs come back. ADR 0011.
-    let handle = try await BrowserLauncher.ensureDrivable(allowRestart: true)
+    let handle = try await BrowserLauncher.ensureDrivable(
+      allowRestart: true, forceRestart: forceRestart)
     if handle.restartedExistingBrowser {
       Log.info("restarted the browser to attach to profile \(handle.profile)")
     }
