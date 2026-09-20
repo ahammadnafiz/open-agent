@@ -178,13 +178,25 @@ public enum Constants {
 
     /// Characters per token, for the preflight estimate only.
     ///
-    /// **A heuristic, not a measurement.** The vendor publishes no tokenizer.
-    /// Four is the common English approximation and it is deliberately
-    /// conservative here: over-estimating trips the preflight early, which
-    /// costs one avoidable escalation, while under-estimating ships a request
-    /// that fails at the API. `Probe jev-budget` replaces this with a real
-    /// number — see docs/open-agent-plan.md §7.1.
-    public static let charactersPerTokenEstimate = 4
+    /// **MEASURED 2026-09-20, and the previous value was wrong in the dangerous
+    /// direction.** It was 4 — the common English approximation — with a
+    /// comment claiming that was conservative. It is not. `Probe jev-budget
+    /// --browser` on a real GitHub page: 60 candidates, 4,320 bytes of state,
+    /// **3,608 actual input tokens**. Four characters per token estimated
+    /// 1,080, understating the real count by **3.34x**.
+    ///
+    /// Understating is the failure that matters: a state genuinely over the 32k
+    /// ceiling would have been estimated at under 10k, sailed through the
+    /// preflight, and failed at the API as a `422` whose message need not
+    /// mention length — which is the exact failure the preflight exists to
+    /// prevent.
+    ///
+    /// The state is JSON with short labels and heavy punctuation, and every
+    /// candidate appears twice (once in `screen_now`, once in `candidates`), so
+    /// it tokenises far worse than prose. Measured ratio is 1.197; this rounds
+    /// down to 1 so the estimate errs high, which costs at worst one avoidable
+    /// escalation.
+    public static let charactersPerTokenEstimate = 1
   }
 
   // MARK: - Non-determinism

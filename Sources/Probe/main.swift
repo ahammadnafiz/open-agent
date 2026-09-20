@@ -100,8 +100,21 @@ enum Probe {
   static func jevBudget(app: String) async {
     guard let client = makeClient() else { return }
     do {
-      let source = try AXSource(appName: app)
-      let candidates = try CandidateFilter.reduce(try await source.observe())
+      // `--browser` measures a real page, which is the case that matters: a
+      // native window offers tens of controls, a web page offers hundreds, and
+      // the 32k state ceiling is only ever in danger on the second.
+      let candidates: CandidateSet
+      if app == "--browser" || app == "browser" {
+        let handle = try await BrowserLauncher.ensureDrivable(allowRestart: true)
+        let bidi = BiDiClient(port: handle.port)
+        try await bidi.connect()
+        let source = BiDiSource(client: bidi)
+        candidates = try CandidateFilter.reduce(try await source.observe())
+        await bidi.close()
+      } else {
+        let source = try AXSource(appName: app)
+        candidates = try CandidateFilter.reduce(try await source.observe())
+      }
       let context = sampleContext(candidates: candidates.criteria)
 
       let estimated =
@@ -110,7 +123,7 @@ enum Probe {
         } ?? 0
 
       let verdict = try await client.step(context)
-      print("app                \(app)")
+      print("source             \(app)")
       print("candidates         \(candidates.count)")
       print(
         "estimated tokens   \(estimated)  (heuristic: \(Constants.Jev.charactersPerTokenEstimate) chars/token)"

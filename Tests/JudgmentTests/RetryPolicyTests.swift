@@ -182,3 +182,35 @@ struct CredentialsTests {
     #expect(Credentials.missingKeyGuidance.contains("console.typesafe.ai"))
   }
 }
+
+@Suite("State preflight")
+struct StatePreflightTests {
+
+  /// **The estimate must never come in under the real token count.**
+  ///
+  /// Measured 2026-09-20 with `Probe jev-budget --browser` on a real GitHub
+  /// page: 60 candidates, 4,320 bytes of state, 3,608 actual input tokens. The
+  /// original 4-characters-per-token guess estimated 1,080 — understating by
+  /// 3.34x, which would have let a genuinely oversized state through the
+  /// preflight to fail at the API instead.
+  @Test("the estimate errs high against the measured ratio")
+  func estimateErrsHigh() {
+    let measuredBytes = 4_320
+    let measuredTokens = 3_608
+    let estimated = measuredBytes / Constants.Jev.charactersPerTokenEstimate
+    #expect(
+      estimated >= measuredTokens,
+      "estimate \(estimated) is under the measured \(measuredTokens) — the preflight would fail open"
+    )
+  }
+
+  /// 255 candidates at the measured rate is roughly 15k tokens against a 32k
+  /// ceiling, so `maxCandidates` is reachable rather than aspirational. This is
+  /// open question 7.1, answered.
+  @Test("a full candidate set fits inside the state ceiling")
+  func fullCandidateSetFits() {
+    let tokensPerCandidate = 60.1  // measured: 3,608 tokens / 60 candidates
+    let atCapacity = Int(tokensPerCandidate * Double(Constants.Jev.maxCandidates))
+    #expect(atCapacity < Constants.Jev.stateTokenLimit)
+  }
+}

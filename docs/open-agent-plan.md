@@ -733,12 +733,30 @@ fix is measuring real per-step cost once the loop exists.
 
 ## 7. Open questions
 
-**7.1 — What does a 255-candidate `state` actually cost in tokens?** `[UNMEASURED]`
-The cap is 32k for `state` plus the longest question. A rough estimate (255 elements
-× ~15 tokens ≈ 3,800) says fine, but element labels vary wildly and nobody has
-measured it. `Probe jev-budget` answers this in one run. **This gates whether
-`Constants.Jev.maxCandidates = 255` is actually reachable or whether the real ceiling
-is lower.**
+**7.1 — ~~What does a 255-candidate `state` cost in tokens?~~ MEASURED 2026-09-20.**
+
+`Probe jev-budget --browser`, real GitHub page, live Jev call:
+
+| | |
+|---|---|
+| candidates | 60 |
+| state bytes | 4,320 |
+| **actual input tokens** | **3,608** |
+| per candidate | **60.1 tokens** |
+| extrapolated to 255 | **~15,300** |
+| ceiling | 32,000 |
+
+**`maxCandidates = 255` is reachable, with roughly 2x headroom.** The per-candidate
+cost is high because every candidate appears twice in the state — once in
+`screen_now`, once in `candidates` — and short labels with heavy JSON punctuation
+tokenise far worse than prose.
+
+**It also found a bug.** The preflight's 4-characters-per-token heuristic estimated
+1,080 tokens where the truth was 3,608 — understating by **3.34x**, in the one
+direction that matters. A state genuinely over 32k would have been estimated under
+10k, passed the preflight, and failed at the API as a `422` that need not mention
+length. Corrected to 1 character per token, which errs high. `StatePreflightTests`
+pins it to the measurement.
 
 **7.2 — What is the exact variable name in `.env`?** Permission-blocked three times.
 Needs a human. See §0.1.
@@ -761,11 +779,26 @@ integer candidate IDs would put three distinct namespaces in one integer space.
 **7.7 — ~~Doc defect timing~~ RESOLVED (D3).** MCA claim fixed now; F2–F6 batched in
 Lane B.
 
-**7.8 — Unverifiable `[M]` claims.** Latency (383/435/900ms), ~270-token fixed
-overhead, ~31 input + ~18 output tokens/question, the 8-run determinism spread
-(0.59–0.69), the prompt-injection table including the Docker-reframing suppression
-to 0.42, the 120k-OK/260k-fails probe. None are contradicted; none are checkable
-without a live key. `Probe jev-latency` re-establishes the first few.
+**7.8 — ~~Unverifiable `[M]` claims.~~ Latency CONFIRMED 2026-09-20.**
+
+`Probe jev-latency`, five live calls:
+
+```
+cold 1119 ms · warm mean 408 ms
+  1119 / 397 / 413 / 394 / 430
+```
+
+The claim was 383 ms warm and ~900 ms cold. **Warm lands within 7%**, so the
+per-step latency budget in `Constants` holds on this network. Cold is 24% slower
+than documented, which is location-dependent and only matters for the first call
+after a resume — `docs/host-contract.md` §6 already says to budget for it.
+
+`response.model` echoed `jev-1.13.0` on all five, so the pin holds and no alias
+has drifted.
+
+Still unverified: the ~270-token fixed overhead, the 8-run determinism spread, the
+prompt-injection table, and the 120k/260k character probe. These need a fixture set,
+not a key.
 
 ---
 
