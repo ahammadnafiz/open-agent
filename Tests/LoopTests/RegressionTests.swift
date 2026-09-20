@@ -608,4 +608,47 @@ struct RegressionTests {
     let elapsed = started.duration(to: ContinuousClock.now)
     #expect(elapsed >= .seconds(2), "an empty page is not a finished page")
   }
+
+  // MARK: - It acted on a page that had not finished arriving
+
+  /// **`settle` covers the gap after an action; nothing covered the first
+  /// step.** A run starting on a page that was still building was judged
+  /// against a half-built screen, and the pointer set off toward an element
+  /// whose neighbours had not rendered — which is what the user saw:
+  /// *"without waiting for the whole loading of the site, the cursor moved."*
+  @Test("a screen that says it is still arriving is not judged yet")
+  func waitsForTheScreenToArrive() async {
+    let judge = ScriptedJudge([Make.verdict()])
+    let started = ContinuousClock.now
+
+    _ = await Make.loop(
+      plan: Make.plan([.click]),
+      judge: judge,
+      settleTimeout: .seconds(2),
+      // Never finishes. The ceiling is what stops this, and it must stop it:
+      // a page with a permanent spinner is still a page with a task on it.
+      source: LoadingSource(elements: [Make.element()], loadingForObservations: .max)
+    ).run()
+
+    let elapsed = started.duration(to: ContinuousClock.now)
+    #expect(elapsed >= .seconds(2), "it judged a page that said it was loading")
+    #expect(await judge.callCount >= 1, "and it did eventually go ahead")
+  }
+
+  /// A page that is ready costs one observation, not a wait. The gate is for
+  /// screens that are arriving, not a tax on screens that have arrived.
+  @Test("a screen that has arrived is not waited on")
+  func readyScreensAreNotDelayed() async {
+    let judge = ScriptedJudge([Make.verdict()])
+    let started = ContinuousClock.now
+
+    _ = await Make.loop(
+      plan: Make.plan([.click]),
+      judge: judge,
+      settleTimeout: .seconds(5),
+      source: LoadingSource(elements: [Make.element()], loadingForObservations: 0)
+    ).run()
+
+    #expect(started.duration(to: ContinuousClock.now) < .seconds(2))
+  }
 }

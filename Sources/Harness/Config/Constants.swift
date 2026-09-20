@@ -382,6 +382,15 @@ public enum Constants {
     /// quiet sees a navigation rail and calls it the page.
     public static let navigationStableChecks = 8
 
+    /// How long to wait for a screen to finish arriving before judging it
+    /// anyway.
+    ///
+    /// Shorter than the settle ceiling on purpose. Waiting for a page to load
+    /// is worth a few seconds; a page that still says it is loading after four
+    /// is a page that says that about itself permanently, and no amount of
+    /// further waiting changes what is on it.
+    public static let readyTimeout: Duration = .seconds(4)
+
     /// How long to wait for the screen to change at all before giving up on it.
     ///
     /// **A step that changed nothing is a real outcome, not a reason to

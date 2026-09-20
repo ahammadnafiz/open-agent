@@ -338,6 +338,30 @@ enum SnapshotScript {
           buttons: document.querySelectorAll('button,[role="button"]').length,
           raw: raw.length,
           ready: document.readyState,
+          // **`complete` is what the document says, not what the page is
+          // doing.** X reports `readyState: complete` while its timeline is
+          // still a spinner, and a step judged there acts on a page the user
+          // can see is still arriving — the pointer sets off before the
+          // content lands.
+          //
+          // A busy region is the page saying so in its own accessible markup,
+          // which is the same thing a screen reader is told and the same thing
+          // a person sees. Counted, so a page with a permanent progress bar
+          // costs the settle ceiling rather than the whole task.
+          //
+          // **On screen, or it is not what anyone means by loading.** X keeps
+          // progress bars in the document permanently — the infinite scroll's
+          // next-page spinner lives below the fold from the moment the page
+          // exists — so counting them all made every page eternally unfinished
+          // and cost the settle ceiling twice a step: 44s for two steps.
+          busy: Array.prototype.filter.call(
+            document.querySelectorAll('[aria-busy="true"],[role="progressbar"]'),
+            (el) => {
+              const r = el.getBoundingClientRect();
+              return r.width > 0 && r.height > 0
+                && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw
+                && visible(el);
+            }).length,
         },
         viewport: { w: vw, h: vh },
         // Where the content area sits on screen, in CSS pixels.

@@ -53,6 +53,8 @@ struct BiDiSnapshot: Sendable {
   let nodeCount: Int
   /// What the document says about itself: `loading`, `interactive`, `complete`.
   let readyState: String
+  /// Regions the page itself marks as still filling in.
+  let busy: Int
   /// The content area's origin on screen, in CSS pixels.
   let screenOrigin: CGPoint
   /// The element holding keyboard focus, as an action id. Empty when focus is
@@ -68,12 +70,14 @@ struct BiDiSnapshot: Sendable {
     let f = (raw["funnel"] as? [String: Any]) ?? [:]
     nodeCount = (f["all"] as? Double).map { Int($0) } ?? 0
     readyState = (f["ready"] as? String) ?? "complete"
+    busy = (f["busy"] as? Double).map { Int($0) } ?? 0
     funnel =
       "all=\((f["all"] as? Double).map { Int($0) } ?? -1) "
       + "a=\((f["anchors"] as? Double).map { Int($0) } ?? -1) "
       + "btn=\((f["buttons"] as? Double).map { Int($0) } ?? -1) "
       + "raw=\((f["raw"] as? Double).map { Int($0) } ?? -1) "
-      + "ready=\((f["ready"] as? String) ?? "?")"
+      + "ready=\((f["ready"] as? String) ?? "?") "
+      + "busy=\((f["busy"] as? Double).map { Int($0) } ?? -1)"
     let origin = (raw["screen"] as? [String: Any]) ?? [:]
     screenOrigin = CGPoint(
       x: (origin["x"] as? Double) ?? 0, y: (origin["y"] as? Double) ?? 0)
@@ -148,13 +152,17 @@ public actor BiDiSource: ElementSource {
     }
   }
 
+  public nonisolated var reportsReadiness: Bool { true }
+
   public func readiness() async -> String {
     // **A document that says it is still loading is not settled, however still
     // it looks.** Instagram's inbox parks at ~507 nodes with `readyState:
     // loading` for seconds — stable, and nowhere near finished. Reporting the
     // state rather than a count lets the caller refuse to settle on it.
     guard let latest else { return "" }
-    return latest.readyState == "complete" ? "\(latest.nodeCount)" : "loading"
+    // A page with a spinner in it is not finished, whatever the document says.
+    guard latest.readyState == "complete", latest.busy == 0 else { return "loading" }
+    return "\(latest.nodeCount)"
   }
 
   /// The candidate holding keyboard focus, when the page reports one.

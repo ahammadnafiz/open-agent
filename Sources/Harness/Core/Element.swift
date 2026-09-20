@@ -73,6 +73,23 @@ public protocol ElementSource: Sendable {
   /// it, and the loop asking `source as? AXSource` is what left the browser
   /// tier guessing where `Enter` should go.
   func focused(among elements: [Element]) async -> Element?
+
+  /// How finished this screen looks — see the `readiness` notes below.
+  ///
+  /// **A requirement, not an extension member.** It lived only in an extension,
+  /// and the loop holds its source as `any ElementSource` — so every call from
+  /// the loop dispatched statically to the default `""`, and the browser tier's
+  /// answer was never heard. `readyState: loading`, the busy count, and the
+  /// node count were all being computed, reported, and thrown away.
+  func readiness() async -> String
+
+  /// Whether asking is worth an observation.
+  ///
+  /// A source that cannot tell a half-built screen from a finished one should
+  /// not be observed twice to find that out — the accessibility tier's walk is
+  /// measured in hundreds of milliseconds, and it would be paid every step to
+  /// be told nothing.
+  var reportsReadiness: Bool { get }
 }
 
 extension ElementSource {
@@ -94,6 +111,7 @@ extension ElementSource {
 /// their element list alone, exactly as before.
 extension ElementSource {
   public func readiness() async -> String { "" }
+  public var reportsReadiness: Bool { false }
 }
 
 extension ElementSource {

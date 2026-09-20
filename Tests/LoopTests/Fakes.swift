@@ -36,6 +36,29 @@ actor ChangingSource: ElementSource {
   }
 }
 
+/// A screen that says it is still arriving, for as long as the test wants.
+actor LoadingSource: ElementSource {
+  nonisolated let kind: SourceKind = .bidi
+  nonisolated var reportsReadiness: Bool { true }
+  private let elements: [Element]
+  private let loadingForObservations: Int
+  private var seen = 0
+
+  init(elements: [Element], loadingForObservations: Int) {
+    self.elements = elements
+    self.loadingForObservations = loadingForObservations
+  }
+
+  func observe() async throws -> [Element] {
+    seen += 1
+    return elements
+  }
+
+  func readiness() async -> String {
+    seen <= loadingForObservations ? "loading" : "\(elements.count)"
+  }
+}
+
 struct FailingSource: ElementSource {
   let kind: SourceKind = .ax
   let error: any Error

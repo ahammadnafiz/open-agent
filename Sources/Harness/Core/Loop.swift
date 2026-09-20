@@ -184,6 +184,18 @@ public actor AgentLoop {
       let planStep = plan.steps[planIndex]
       let stepStarted = ContinuousClock.now
 
+      // ── LOOK BEFORE LOOKING ──────────────────────────────────────
+      // Read the room before reading the screen.
+      //
+      // `settle` covers the gap *after* an action, but nothing covered the
+      // first step of a run, or a step whose predecessor dispatched nothing.
+      // So a task starting on a page that was still arriving was judged
+      // against a half-built screen, and the pointer set off toward an element
+      // whose neighbours had not rendered yet. The user watched it happen:
+      // *"without waiting for the whole loading of the site, the cursor moved
+      // — first load, understand, then do things."*
+      await waitUntilReady()
+
       // ── OBSERVE ──────────────────────────────────────────────────
       let candidates: CandidateSet
       do {
@@ -458,6 +470,25 @@ public actor AgentLoop {
   ///   * Nothing has changed after `noChangeTimeout` — stop waiting and let
   ///     the verification questions call it what it is.
   ///   * It changed, and has now held still. Done.
+  /// Waits while the screen says it is still arriving.
+  ///
+  /// Only readiness — not stability. Nothing has been done yet, so there is no
+  /// change to wait for; the only question is whether what is on screen is
+  /// finished. A source that cannot answer is not asked, so the accessibility
+  /// tier pays nothing for this.
+  private func waitUntilReady() async {
+    guard source.reportsReadiness else { return }
+    let deadline = ContinuousClock.now.advanced(
+      by: min(settleTimeout, Constants.Execution.readyTimeout))
+    _ = try? await source.observe()
+    while ContinuousClock.now < deadline {
+      if await source.readiness() != "loading" { return }
+      try? await Task.sleep(for: Constants.Execution.settlePollInterval)
+      _ = try? await source.observe()
+    }
+    Log.debug("the page still reports itself unfinished; going ahead anyway")
+  }
+
   private func settle(from before: String, after kind: ActionKind) async {
     let required =
       (kind == .navigate || kind == .openApp)
