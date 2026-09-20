@@ -616,13 +616,24 @@ public actor BiDiClient {
   /// nothing remembered between runs: ask each jar what it holds, and match
   /// the host against it here rather than trusting the protocol's filter.
   ///
-  /// The count is the signal. A jar the user merely browsed holds a handful of
-  /// tracking cookies; a jar they signed in to holds those plus a session.
-  /// Facebook, measured: four in the jar that shows a login page
-  /// (`datr`, `fr`, `sb`, `wd`) against ten in the one that shows the feed.
+  /// **Counting cookies picks the jar with the most analytics in it.**
+  /// Measured on Slack, where two containers are signed in to different
+  /// workspaces: 21 cookies against 16, and the extra five were `_ga`,
+  /// `_cs_c`, `_cs_id`, `cjConsent` and `PageCount`. Ranking on that is
+  /// ranking on how much a site tracked you.
+  ///
+  /// `httpOnly` is the better half of the same idea and costs nothing extra: a
+  /// session cookie is set by the server and hidden from scripts, while the
+  /// analytics that inflate the count are written by scripts and cannot be.
+  /// Measured across this profile — Facebook's signed-out jar holds 3 of them
+  /// against 7 where the session is, X holds 2 against 7, and the jar with
+  /// `auth_token` and `xs` in it wins both times.
+  ///
+  /// Total count still breaks ties, because it is the older signal and is
+  /// right more often than a coin.
   private func jarHoldingCookies(for url: String?) async -> String? {
     guard let host = Self.host(of: url) else { return nil }
-    var best: (jar: String, count: Int)?
+    var scored: [(jar: String, session: Int, total: Int)] = []
     // **`default` is a jar like any other.** Excluding it meant a site the user
     // signed in to without opening a container could never be found, and the
     // one jar most people use most was the one jar never looked in.
@@ -638,13 +649,29 @@ public actor BiDiClient {
         return Self.cookieReaches(host: host, domain: domain)
       }
       guard !mine.isEmpty else { continue }
-      Log.debug("\(jar) holds \(mine.count) cookies for \(host)")
-      if mine.count > (best?.count ?? 0) { best = (jar, mine.count) }
+      let session = mine.filter { ($0["httpOnly"] as? Bool) == true }.count
+      Log.debug("\(jar) holds \(mine.count) cookies for \(host), \(session) of them httpOnly")
+      scored.append((jar, session, mine.count))
     }
-    if let best {
-      Log.info("\(host) is signed in where \(best.count) of its cookies are")
+
+    guard
+      let best = scored.max(by: { ($0.session, $0.total) < ($1.session, $1.total) })
+    else { return nil }
+
+    // **More than one signed-in container is a question, not a ranking.** Two
+    // Slack workspaces both hold `d`, `d-s` and `ui`, so nothing in the jars
+    // says which account the task meant. Something has to be chosen or no tab
+    // can be opened at all, but choosing quietly is how a task succeeds in the
+    // wrong account — so it is said out loud instead.
+    let rivals = scored.filter { $0.jar != best.jar && $0.session == best.session }
+    if !rivals.isEmpty {
+      Log.warn(
+        "signed in to \(host) in \(rivals.count + 1) containers; "
+          + "using \(best.jar) — if this is the wrong account, that is why")
+    } else {
+      Log.info("\(host) is signed in where \(best.session) of its session cookies are")
     }
-    return best?.jar
+    return best.jar
   }
 
   /// A new tab in a named container.

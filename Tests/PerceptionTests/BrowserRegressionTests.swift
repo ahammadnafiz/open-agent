@@ -951,3 +951,53 @@ struct TypeIsIdempotentTests {
     }
   }
 }
+
+
+/// **Counting cookies ranks jars by how much a site tracked you.** Measured on
+/// Slack, where two containers are signed in to different workspaces: 21
+/// cookies against 16, and the five extra were `_ga`, `_cs_c`, `_cs_id`,
+/// `cjConsent` and `PageCount`.
+@Suite("The jar with the session, not the jar with the analytics")
+struct SessionCookieRankingTests {
+
+  @Test("a jar with fewer cookies but real session cookies wins")
+  func sessionCookiesOutrankVolume() async throws {
+    let tree = #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),
+      ok(2, tree),
+      ok(3, tree),  // tab(for:) — nothing on x.com
+      ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name
+      ok(5, #"{"result":{"type":"string","value":"visible"}}"#),
+      ok(6, #"{"userContexts":[{"userContext":"default"},{"userContext":"aaa"},{"userContext":"bbb"}]}"#),
+      // aaa: browsed a lot, signed in to nothing. Five cookies, every one of
+      // them set by a script, which is what analytics can be and a session
+      // cookie cannot.
+      ok(7, #"""
+        {"cookies":[
+          {"name":"_ga","domain":".x.com","httpOnly":false},
+          {"name":"_cs_c","domain":".x.com","httpOnly":false},
+          {"name":"_cs_id","domain":".x.com","httpOnly":false},
+          {"name":"cjConsent","domain":".x.com","httpOnly":false},
+          {"name":"PageCount","domain":".x.com","httpOnly":false}]}
+        """#),
+      // bbb: fewer cookies, and the ones that matter.
+      ok(8, #"""
+        {"cookies":[
+          {"name":"auth_token","domain":".x.com","httpOnly":true},
+          {"name":"kdt","domain":".x.com","httpOnly":true}]}
+        """#),
+      ok(9, #"{"cookies":[]}"#),  // default
+      ok(10, #"{"context":"fresh"}"#),
+      ok(11), ok(12), ok(13),
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    try await client.navigate(to: "https://x.com/home")
+
+    let created = await transport.sent.first { $0.contains("browsingContext.create") }
+    #expect(
+      created?.contains("bbb") == true,
+      "it followed the cookie count into the jar that had only been tracked")
+  }
+}
