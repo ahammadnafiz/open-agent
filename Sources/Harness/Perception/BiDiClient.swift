@@ -276,7 +276,7 @@ public actor BiDiClient {
     // person is looking at.
     let loaded = contexts.filter { context in
       guard let url = context["url"] as? String else { return false }
-      return !Self.isBlank(url)
+      return !Self.isBlank(url) && !Self.isPrivileged(url)
     }
     let chosen =
       loaded.first(where: { ($0["userContext"] as? String).map { $0 != "default" } ?? false })
@@ -303,6 +303,27 @@ public actor BiDiClient {
   static func isBlank(_ url: String) -> Bool {
     url.isEmpty || url == "about:blank" || url.hasPrefix("about:newtab")
       || url.hasPrefix("about:home") || url.hasPrefix("chrome://")
+  }
+
+  /// Whether the agent can run script in a context showing this URL.
+  ///
+  /// **An extension page is a privileged context, and every `script.evaluate`
+  /// against one fails.** Observed: a tab suspender had parked a real page
+  /// behind `moz-extension://…/suspended.html`, that tab sat in a named
+  /// container, and the container preference in `resolveContext` therefore
+  /// chose it over everything else. The run died on its first observation with
+  /// *"System access is required. Start Zen with -remote-allow-system-access"*
+  /// — a message about a launch flag, for a problem that was a choice of tab.
+  ///
+  /// `about:blank` is not in here on purpose. It is an ordinary content
+  /// context that scripts run in perfectly well, and it is a valid tab to open
+  /// from — a new tab inherits its container, which is how the agent lands in
+  /// the jar the user is signed in to. What cannot be scripted is the
+  /// browser's own surfaces and an add-on's.
+  static func isPrivileged(_ url: String) -> Bool {
+    url.hasPrefix("moz-extension:") || url.hasPrefix("chrome:")
+      || url.hasPrefix("resource:") || url.hasPrefix("view-source:")
+      || (url.hasPrefix("about:") && url != "about:blank")
   }
 
   public func context() throws -> String {
@@ -495,10 +516,13 @@ public actor BiDiClient {
     //
     // Their tab, never the agent's: ours may be parked in `default`, and a tab
     // opened from it inherits that empty jar.
+    // Not an add-on's page. Opening from one inherits its privileged context,
+    // so the new tab is as unscriptable as the one it came from.
+    let openable = theirs.filter { !Self.isPrivileged($0.url) }
     let opener =
-      await visible(among: theirs)
-      ?? theirs.first(where: { ($0.userContext ?? "default") != "default" })
-      ?? theirs.first
+      await visible(among: openable)
+      ?? openable.first(where: { ($0.userContext ?? "default") != "default" })
+      ?? openable.first
 
     // **Nothing loaded can say where the user browses.** This is the state the
     // agent leaves behind every time it relaunches the browser to get the debug

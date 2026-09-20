@@ -1001,3 +1001,44 @@ struct SessionCookieRankingTests {
       "it followed the cookie count into the jar that had only been tracked")
   }
 }
+
+
+/// **An add-on's page is a privileged context and nothing can be scripted in
+/// it.** A tab suspender had parked a real page behind
+/// `moz-extension://…/suspended.html`; that tab was in a named container, and
+/// the container preference chose it over an ordinary page in `default`. The
+/// run died on its first observation with *"System access is required. Start
+/// Zen with -remote-allow-system-access"* — a message about a launch flag, for
+/// a problem that was a choice of tab.
+@Suite("Never drive the browser's own pages")
+struct PrivilegedContextTests {
+
+  @Test("an extension page is not adopted, even from a named container")
+  func extensionPagesAreSkipped() async throws {
+    let tree = #"""
+      {"contexts":[
+        {"context":"suspended","url":"moz-extension://abc/suspended.html?origUrl=https%3A%2F%2Fgithub.com","userContext":"workspace"},
+        {"context":"real","url":"https://news.example/","userContext":"default"}]}
+      """#
+    let transport = FakeBiDiTransport(replies: [ok(1), ok(2, tree)])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+
+    #expect(
+      try await client.context() == "real",
+      "it adopted the add-on's page because the add-on's page was in a workspace")
+  }
+
+  @Test("the browser's own surfaces are privileged, an empty page is not")
+  func whatCountsAsPrivileged() {
+    #expect(BiDiClient.isPrivileged("moz-extension://abc/suspended.html"))
+    #expect(BiDiClient.isPrivileged("chrome://browser/content/browser.xhtml"))
+    #expect(BiDiClient.isPrivileged("about:config"))
+    #expect(BiDiClient.isPrivileged("view-source:https://example.com"))
+    // `about:blank` is an ordinary content context that scripts run in, and a
+    // valid tab to open from — a new tab inherits its container, which is how
+    // the agent lands in the jar the user is signed in to.
+    #expect(!BiDiClient.isPrivileged("about:blank"))
+    #expect(!BiDiClient.isPrivileged("https://example.com"))
+  }
+}
