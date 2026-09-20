@@ -23,6 +23,7 @@ public final class CursorOverlay {
 
   private let state = OverlayState()
   private var panel: NSPanel?
+  private let motion = CursorMotion()
 
   /// Multiplies pointer velocity. 1.0 is `Constants.HUD.pixelsPerSecond`.
   ///
@@ -58,6 +59,15 @@ public final class CursorOverlay {
   private init() {}
 
   // MARK: - Lifecycle
+
+  /// Follow factor for the trailing dot, applied per frame.
+  ///
+  /// Per-frame rather than a second spring, because two springs racing the same
+  /// destination drift out of phase and the gap stops being a function of speed.
+  /// This is the classic smooth-follow: each frame the dot closes a fixed
+  /// fraction of the distance, so the gap is exactly proportional to how fast
+  /// the pointer is moving and closes to nothing the moment it stops.
+  private static let companionFollow: CGFloat = 0.16
 
   public func show() {
     if panel == nil { build() }
@@ -100,8 +110,25 @@ public final class CursorOverlay {
       .ignoresCycle,  // never appear in Cmd-` rotation
     ]
 
-    p.contentView = NSHostingView(rootView: CursorOverlayView(state: state))
+    let host = NSHostingView(rootView: CursorOverlayView(state: state))
+    p.contentView = host
     panel = p
+
+    // One function owns where the pointer is at time t. Everything the pointer
+    // does — travel, arc, drift, the dot's lag — is computed here, on the
+    // display's own clock, so nothing can drift out of phase with anything else
+    // and no frame is ever drawn from a stale value.
+    motion.attach(to: host) { [weak self] point, _ in
+      guard let self else { return }
+      state.cursor = point
+      // Smooth-follow, per frame. The gap is exactly proportional to speed and
+      // closes to nothing the moment the pointer stops.
+      let anchor = CGPoint(x: point.x + 7, y: point.y + 13)
+      state.companion = CGPoint(
+        x: state.companion.x + (anchor.x - state.companion.x) * Self.companionFollow,
+        y: state.companion.y + (anchor.y - state.companion.y) * Self.companionFollow
+      )
+    }
 
     NotificationCenter.default.addObserver(
       forName: NSApplication.didChangeScreenParametersNotification,
@@ -194,8 +221,6 @@ public final class CursorOverlay {
 
     // The ring lands first. Anticipation is the whole point of the overlay:
     // the user sees WHERE before they see WHAT.
-    // The ring lands first. Anticipation is the whole point of the overlay:
-    // the user sees WHERE before they see WHAT.
     //
     // Enter and exit run the same curve in reverse, so the ring leaves the way
     // it arrived. A shape that grows in and fades out reads as two unrelated
@@ -222,33 +247,22 @@ public final class CursorOverlay {
     let horizontal = destination.x - state.cursor.x
     let lean = max(-Self.maxLeanDegrees, min(Self.maxLeanDegrees, horizontal / 40))
 
+    // The lean is still an animation, because it is a property of the glyph
+    // rather than of where the glyph is. Position is not: it is driven.
+    withAnimation(.spring(duration: 0.3, bounce: 0.2)) { state.lean = lean }
+
     // The drawn cursor still travels when it is hidden: the chip and the ripple
     // are positioned from `state.cursor`, so leaving it behind would strand the
     // narration at the previous target.
-    //
-    // Position is critically damped. Overshooting the element you are about to
-    // click reads as imprecision, and this pointer is about to act on whatever
-    // it lands on. The scale settle in `AgentCursor` is where the life goes:
-    // accuracy in position, life in scale.
-    withAnimation(.spring(duration: travel, bounce: 0)) {
-      state.cursor = destination
-      state.lean = lean
+    await withCheckedContinuation { continuation in
+      motion.fly(to: destination, duration: travel) {
+        continuation.resume()
+      }
     }
-    // The dot runs the same distance on a longer, softer spring. It is behind
-    // the arrow for the whole journey and catches up after it stops, which is
-    // what makes the pair read as one thing moving rather than two things
-    // moving together.
-    // 1.28, not 1.55. At the wider ratio the gap mid-sweep grew big enough that
-    // the dot stopped reading as a follower and started reading as an unrelated
-    // mark on screen — the lag has to be visible and tethered, not just visible.
-    withAnimation(.spring(duration: travel * 1.28, bounce: 0.22)) {
-      state.companion = CGPoint(x: destination.x + 7, y: destination.y + 13)
-    }
-    try? await Task.sleep(for: .seconds(travel))
 
     // Level off on arrival, so the pointer reads as settled rather than
     // permanently tilted.
-    withAnimation(.spring(duration: 0.28, bounce: 0.2)) { state.lean = 0 }
+    withAnimation(.spring(duration: 0.3, bounce: 0.2)) { state.lean = 0 }
   }
 
   /// The press animation. Purely visual — the actual event is dispatched by an

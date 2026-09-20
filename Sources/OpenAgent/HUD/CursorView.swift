@@ -167,6 +167,46 @@ private struct CompanionDot: View {
 
 // MARK: - Target highlight
 
+/// Four corner brackets, drawn as one path.
+///
+/// A closed rectangle around a control draws a line through whatever the
+/// control's own edges are doing, and on a dense UI that reads as another box
+/// among boxes. Brackets mark the same four corners with roughly a third of the
+/// ink, so the thing being pointed at stays the most legible thing in the
+/// frame — which is the whole job.
+///
+/// The arm length is a fraction of the shorter side, clamped. Fixed-length
+/// arms look correct at one element size and wrong at every other: on a narrow
+/// control they meet in the middle and become the rectangle they were meant to
+/// replace.
+private struct ReticleBrackets: Shape {
+  var arm: CGFloat = 0
+
+  func path(in rect: CGRect) -> Path {
+    let length = arm > 0 ? arm : min(min(rect.width, rect.height) * 0.28, 14)
+    var p = Path()
+
+    // top-left
+    p.move(to: CGPoint(x: rect.minX, y: rect.minY + length))
+    p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+    p.addLine(to: CGPoint(x: rect.minX + length, y: rect.minY))
+    // top-right
+    p.move(to: CGPoint(x: rect.maxX - length, y: rect.minY))
+    p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+    p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + length))
+    // bottom-right
+    p.move(to: CGPoint(x: rect.maxX, y: rect.maxY - length))
+    p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+    p.addLine(to: CGPoint(x: rect.maxX - length, y: rect.maxY))
+    // bottom-left
+    p.move(to: CGPoint(x: rect.minX + length, y: rect.maxY))
+    p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+    p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - length))
+
+    return p
+  }
+}
+
 /// Drawn on the element **before** the cursor arrives. The anticipation is the
 /// point: it gives the user time to see where this is going and object, which a
 /// confirmation dialog appearing at the last moment does not.
@@ -175,17 +215,17 @@ private struct TargetRing: View {
   let intent: CursorIntent
 
   var body: some View {
-    RoundedRectangle(cornerRadius: 8, style: .continuous)
-      .strokeBorder(intent.tint, lineWidth: 1.5)
-      .background(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(intent.tint.opacity(0.10))
-      )
-      .frame(width: rect.width, height: rect.height)
-      .position(x: rect.midX, y: rect.midY)
-      // Sized to the element, so the glow stays proportional instead of
-      // swamping a small control and vanishing on a large one.
-      .shadow(color: intent.tint.opacity(0.45), radius: min(rect.height * 0.4, 10))
+    ZStack {
+      // A wash rather than an outline, so the element reads as selected without
+      // gaining a second border of its own.
+      RoundedRectangle(cornerRadius: 5, style: .continuous)
+        .fill(intent.tint.opacity(0.10))
+
+      ReticleBrackets()
+        .stroke(intent.tint, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+    }
+    .frame(width: rect.width, height: rect.height)
+    .position(x: rect.midX, y: rect.midY)
   }
 }
 
