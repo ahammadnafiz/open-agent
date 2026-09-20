@@ -91,3 +91,11 @@ public struct RetryPolicy: Sendable, Equatable {
     return delay + requestTimeout <= remaining
   }
 }
+
+extension ContinuousClock.Instant {
+  /// Milliseconds from this instant until now. For the step timing log, where
+  /// the question is always "where did the seconds go".
+  public func milliseconds() -> Int {
+    Int(self.duration(to: ContinuousClock.now).inSeconds * 1000)
+  }
+}

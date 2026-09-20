@@ -372,7 +372,7 @@ public enum Constants {
     ///
     /// The whole wait cost about 4.7s of every 7s step. This is the number
     /// that made a five-step task take half a minute.
-    public static let settleStableChecks = 3
+    public static let settleStableChecks = 2
 
     /// The same, after a navigation.
     ///
@@ -382,6 +382,21 @@ public enum Constants {
     /// quiet sees a navigation rail and calls it the page.
     public static let navigationStableChecks = 8
 
+    /// How long to let an ordinary action's effects land.
+    ///
+    /// **Separate from the navigation ceiling, and much shorter.** A live
+    /// page never holds perfectly still — X's timeline ticks its timestamps,
+    /// counts its replies and animates its spinners — so three identical
+    /// observations is a condition it can simply never meet, and the wait ran
+    /// to the full ten seconds after every click and every keystroke.
+    /// Measured: settle=10055ms after a type, settle=10043ms after a click,
+    /// against judge=544ms for the decision they were waiting for.
+    ///
+    /// The change is the evidence the action landed. Whether the page has
+    /// finished arriving is `waitUntilReady`'s question, asked once, before
+    /// the next judgement — so this does not need to answer it twice.
+    public static let actionSettleTimeout: Duration = .milliseconds(1_500)
+
     /// How long to wait for a screen to finish arriving before judging it
     /// anyway.
     ///
@@ -390,6 +405,14 @@ public enum Constants {
     /// is a page that says that about itself permanently, and no amount of
     /// further waiting changes what is on it.
     public static let readyTimeout: Duration = .seconds(4)
+
+    /// The same, in the middle of a task.
+    ///
+    /// A page that has already been navigated to and acted on is loaded; a
+    /// spinner on it is a widget, not the site arriving. X shows one for
+    /// seconds after a keystroke, and paying the full load budget for it put
+    /// four seconds between typing a post and clicking Post.
+    public static let readyTimeoutMidTask: Duration = .milliseconds(1_200)
 
     /// How long to wait for the screen to change at all before giving up on it.
     ///
@@ -488,9 +511,7 @@ public enum Constants {
     /// once reads as pasted by a machine rather than typed by someone. The
     /// person watching is the reason this number exists, so it is set where a
     /// sentence takes about a second.
-    public static let webKeystrokeMilliseconds = 30
-    /// How long a key is held down in the browser, in milliseconds.
-    public static let webKeyHoldMilliseconds = 15
+    public static let webKeystrokeMilliseconds = 25
 
     /// How long to wait for an application to accept focus.
     ///

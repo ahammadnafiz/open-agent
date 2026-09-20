@@ -606,7 +606,10 @@ struct RegressionTests {
     ).run()
 
     let elapsed = started.duration(to: ContinuousClock.now)
-    #expect(elapsed >= .seconds(2), "an empty page is not a finished page")
+    // The ceiling an ordinary action actually gets, rather than a number
+    // copied out of it — those diverge the first time one is tuned.
+    let ceiling = min(Duration.seconds(2), Constants.Execution.actionSettleTimeout)
+    #expect(elapsed >= ceiling, "an empty page is not a finished page")
   }
 
   // MARK: - It acted on a page that had not finished arriving

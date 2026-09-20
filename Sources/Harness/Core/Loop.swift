@@ -194,9 +194,12 @@ public actor AgentLoop {
       // whose neighbours had not rendered yet. The user watched it happen:
       // *"without waiting for the whole loading of the site, the cursor moved
       // — first load, understand, then do things."*
+      let readyStarted = ContinuousClock.now
       await waitUntilReady()
+      let readyMilliseconds = readyStarted.milliseconds()
 
       // ── OBSERVE ──────────────────────────────────────────────────
+      let observeStarted = ContinuousClock.now
       let candidates: CandidateSet
       do {
         candidates = try CandidateFilter.reduce(try await source.observe())
@@ -211,7 +214,10 @@ public actor AgentLoop {
 
       let screenNow = candidates.describe()
 
+      let observeMilliseconds = observeStarted.milliseconds()
+
       // ── JUDGE ── one batched Jev call: verification + selection + risk
+      let judgeStarted = ContinuousClock.now
       let verdict: StepVerdict
       do {
         verdict = try await jev.step(
@@ -230,6 +236,7 @@ public actor AgentLoop {
       } catch {
         return result(.failed, since: started, reason: "judgment failed: \(error)")
       }
+      let judgeMilliseconds = judgeStarted.milliseconds()
       budget.chargeDollars(verdict.usage.dollars)
       totalCost += verdict.usage.dollars
 
@@ -348,6 +355,7 @@ public actor AgentLoop {
       }
 
       // ── ACT ── narration and execution are one call ───────────────
+      let actStarted = ContinuousClock.now
       let executionResult: ExecutionResult
       do {
         let executor = try executors.executor(for: action.target, kind: action.kind)
@@ -363,7 +371,15 @@ public actor AgentLoop {
       // iteration reads the screen and judges whether it did. `screenNow` is
       // the screen as it was *before* this action, which is exactly what the
       // next observation has to differ from.
+      let actMilliseconds = actStarted.milliseconds()
+      let settleStarted = ContinuousClock.now
       if executionResult.dispatched { await settle(from: screenNow, after: action.kind) }
+      // Where a step's seconds went. Every one of these is a decision someone
+      // made, and the only way to argue about them is to see them.
+      Log.info(
+        "step \(stepIndex) timing: ready=\(readyMilliseconds)ms "
+          + "observe=\(observeMilliseconds)ms judge=\(judgeMilliseconds)ms "
+          + "act=\(actMilliseconds)ms settle=\(settleStarted.milliseconds())ms")
 
       // ── RECORD ───────────────────────────────────────────────────
       // Verification of THIS step arrives in the NEXT iteration's batch, so the
@@ -478,8 +494,15 @@ public actor AgentLoop {
   /// tier pays nothing for this.
   private func waitUntilReady() async {
     guard source.reportsReadiness else { return }
+    // A site just navigated to gets the load budget. A page the agent has
+    // already been working in gets a fraction of it: it is loaded, and what
+    // is spinning on it is a widget.
+    let arriving = lastAction.map { $0.kind == .navigate || $0.kind == .openApp } ?? true
     let deadline = ContinuousClock.now.advanced(
-      by: min(settleTimeout, Constants.Execution.readyTimeout))
+      by: min(
+        settleTimeout,
+        arriving
+          ? Constants.Execution.readyTimeout : Constants.Execution.readyTimeoutMidTask))
     _ = try? await source.observe()
     while ContinuousClock.now < deadline {
       if await source.readiness() != "loading" { return }
@@ -490,12 +513,15 @@ public actor AgentLoop {
   }
 
   private func settle(from before: String, after kind: ActionKind) async {
+    let arriving = (kind == .navigate || kind == .openApp)
     let required =
-      (kind == .navigate || kind == .openApp)
+      arriving
       ? Constants.Execution.navigationStableChecks
       : Constants.Execution.settleStableChecks
     let started = ContinuousClock.now
-    let deadline = started.advanced(by: settleTimeout)
+    let deadline = started.advanced(
+      by: arriving
+        ? settleTimeout : min(settleTimeout, Constants.Execution.actionSettleTimeout))
     let quietDeadline = started.advanced(by: Constants.Execution.noChangeTimeout)
     var previous: String?
     var stable = 0

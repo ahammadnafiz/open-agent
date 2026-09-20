@@ -204,11 +204,15 @@ public struct BiDiExecutor: Executor {
     var actions: [[String: Any]] = []
     for character in text {
       let value = String(character)
-      // Held, then a gap before the next one. `performActions` runs the whole
-      // sequence as fast as it can otherwise, and a sentence that appears in
-      // one frame is the tell that nobody typed it.
+      // A gap between characters. `performActions` runs the whole sequence as
+      // fast as it can otherwise, and a sentence that appears in one frame is
+      // the tell that nobody typed it.
+      //
+      // The gap is the only pause. A separate hold between down and up doubled
+      // the tick count, and WebDriver charges overhead per tick rather than
+      // per keystroke — 27 characters took 5.3s to type, against 1.2s of
+      // pauses actually asked for.
       actions.append(["type": "keyDown", "value": value])
-      actions.append(["type": "pause", "duration": Constants.Typing.webKeyHoldMilliseconds])
       actions.append(["type": "keyUp", "value": value])
       actions.append(["type": "pause", "duration": Constants.Typing.webKeystrokeMilliseconds])
     }
