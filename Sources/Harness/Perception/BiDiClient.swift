@@ -364,25 +364,6 @@ public actor BiDiClient {
   ///
   /// The tab is left open when the run ends. The result of the task is in it,
   /// and closing it would take that away the moment it became useful.
-  public func adoptTab(_ id: String?) async {
-    guard let id else { return }
-    // Only if it is still there. A tab the user closed between invocations is
-    // not an error — it is a reason to open a fresh one.
-    guard let tree = try? await send("browsingContext.getTree", [:]),
-      let contexts = tree["contexts"] as? [[String: Any]]
-    else { return }
-    let ids = contexts.compactMap { $0["context"] as? String }
-    guard ids.contains(id) else {
-      Log.debug("previous tab \(id) is gone; open tabs: \(ids.joined(separator: ", "))")
-      return
-    }
-    agentTabID = id
-    contextID = id
-  }
-
-  /// The id of the tab this run is working in, for the caller to carry forward.
-  public func agentTab() -> String? { agentTabID }
-
   /// Opens the tab this run works in, and makes everything point at it.
   ///
   /// **Called before the first observation, not lazily on the first
@@ -392,23 +373,59 @@ public actor BiDiClient {
   /// before the agent had navigated anywhere or done anything at all.
   public func openAgentTab() async throws -> String {
     if let agentTabID { return agentTabID }
-    // Join the container the user's tab is in, so the agent shares their
-    // session. Without it the agent is a stranger in the same browser.
-    var params: [String: any Sendable] = ["type": "tab"]
-    if let userContextID { params["userContext"] = userContextID }
-    let created = try await send("browsingContext.create", params)
-    guard let id = created["context"] as? String else {
+
+    // **A named window.** `window.open(url, name)` returns the existing tab
+    // with that name if there is one, and opens it if there is not — so every
+    // invocation lands in the same tab without anything having to remember an
+    // id between processes.
+    //
+    // Remembering the id was tried and cannot work: BiDi context ids are not
+    // stable across sessions, so the id written by one run is not the id the
+    // next run sees for the same tab. Measured — the tab count kept climbing
+    // while `getTree` never contained the remembered id.
+    //
+    // Opened by the page rather than `browsingContext.create`, because a tab
+    // from `create` belongs to the session that made it and goes away when that
+    // session ends. This one is an ordinary browser tab, and it inherits the
+    // opener's container, which is the one the user is signed in to.
+    //
+    // `userActivation` is required: a pop-up with no gesture behind it is
+    // blocked, and the block is silent.
+    let result = try await send(
+      "script.evaluate",
+      [
+        "expression": "window.open('about:blank', '\(Self.tabName)')",
+        "target": ["context": try context()],
+        "awaitPromise": false,
+        "resultOwnership": "none",
+        "userActivation": true,
+      ]
+    )
+    if let exception = result["exceptionDetails"] as? [String: Any] {
+      throw BiDiError.scriptFailed("\(exception["text"] ?? exception)")
+    }
+    // A WindowProxy carries the id of the context it refers to, whether that
+    // tab was just opened or was already there under this name.
+    guard let value = result["result"] as? [String: Any],
+      let window = value["value"] as? [String: Any],
+      let id = window["context"] as? String
+    else {
       throw BiDiError.noBrowsingContext
     }
+
     agentTabID = id
     contextID = id
-    // Bring it to the front, so what the agent is doing is what the user sees.
-    // Best effort: a tab that exists but is not focused is still drivable, and
-    // failing here would abandon a navigation that is about to work.
     _ = try? await send("browsingContext.activate", ["context": id])
-    Log.debug("opened the agent's own tab: \(id) in container \(userContextID ?? "default")")
+    Log.debug("agent tab \(id) in container \(userContextID ?? "default")")
     return id
   }
+
+  /// The window name the agent's tab answers to.
+  ///
+  /// The whole mechanism for keeping one tab across separate processes. It is
+  /// distinctive on purpose: `window.open` with a name a page also uses would
+  /// hand the agent that page's popup.
+  static let tabName = "__open_agent_tab"
 
   /// How many nodes the browser itself reports for an accessibility role.
   ///

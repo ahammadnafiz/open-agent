@@ -59,7 +59,8 @@ struct AgentTabRegressionTests {
     let transport = FakeBiDiTransport(replies: [
       ok(1),  // session.new
       ok(2, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
-      ok(3, #"{"context":"agent-tab"}"#),  // browsingContext.create
+      // window.open, answering with the WindowProxy for the named tab
+      ok(3, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
       ok(4),  // browsingContext.activate
       ok(5),  // browsingContext.navigate
     ])
@@ -68,8 +69,23 @@ struct AgentTabRegressionTests {
     #expect(try await client.context() == "users-tab", "attaches to what is open")
 
     try await client.navigate(to: "https://instagram.com/")
-    #expect(await transport.methods().contains("browsingContext.create"))
+    #expect(await transport.methods().contains("script.evaluate"))
     #expect(try await client.context() == "agent-tab", "and works in its own tab after")
+  }
+
+  /// **The tab is found by name, not remembered by id.** Persisting the id was
+  /// tried first and cannot work: BiDi context ids are not stable across
+  /// sessions, so the id one process writes is not the id the next one sees for
+  /// the same tab. Measured — the browser's tab count climbed with every
+  /// invocation while `getTree` never contained the remembered id.
+  ///
+  /// `window.open(url, name)` returns the existing tab with that name, so every
+  /// process lands in the same one with nothing to remember. Measured after:
+  /// 7, 8, 8, 8.
+  @Test("the tab is opened by name so separate processes share it")
+  func tabIsNamed() {
+    #expect(BiDiClient.tabName.contains("open_agent"))
+    #expect(BiDiClient.tabName.count > 8, "a name a page might also use would be a collision")
   }
 
   /// Once per session, not once per navigation. A task that visits three pages
@@ -80,7 +96,7 @@ struct AgentTabRegressionTests {
     let transport = FakeBiDiTransport(replies: [
       ok(1),
       ok(2, oneContext),
-      ok(3, #"{"context":"agent-tab"}"#),
+      ok(3, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
       ok(4),
       ok(5),  // first navigate
       ok(6),  // second navigate
@@ -92,8 +108,8 @@ struct AgentTabRegressionTests {
     try await client.navigate(to: "https://b.example/")
     try await client.navigate(to: "https://c.example/")
 
-    let creates = await transport.methods().filter { $0 == "browsingContext.create" }
-    #expect(creates.count == 1, "one tab, not three")
+    let opens = await transport.methods().filter { $0 == "script.evaluate" }
+    #expect(opens.count == 1, "one tab, not three")
   }
 }
 

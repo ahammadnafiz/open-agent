@@ -24,14 +24,6 @@ struct Session: Codable, Sendable {
   /// Candidate ids as they were when the callback fired. `resume --eyes <n>`
   /// resolves against this, because the screen may have changed since.
   var candidates: [String: String]?
-  /// The browser tab this task works in.
-  ///
-  /// Carried across invocations because a task is one piece of work and a
-  /// `run` plus two `resume`s is three processes. Without it each one opens
-  /// its own tab, and a task that needed two callbacks leaves three tabs
-  /// behind — which is the same mess as taking over the user's tab, arrived at
-  /// from the other direction.
-  var browserContext: String?
 
   static let directory: URL = {
     let base = FileManager.default
