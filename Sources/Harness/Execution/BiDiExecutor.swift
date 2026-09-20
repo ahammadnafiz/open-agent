@@ -61,9 +61,7 @@ public struct BiDiExecutor: Executor {
       }
       let handle = try Self.handle(action)
       try await validate(handle)
-      try await focus(handle)
-      try await client.performActions([Self.clearSequence()])
-      try await client.performActions([Self.keySequence(text)])
+      try await type(text, into: handle)
       return ExecutionResult(dispatched: true, via: .bidi)
 
     case .click, .scroll, .focus, .select, .publish, .send, .delete, .purchase:
@@ -72,6 +70,70 @@ public struct BiDiExecutor: Executor {
       try await client.performActions([Self.clickSequence(at: point)])
       return ExecutionResult(dispatched: true, via: .bidi)
     }
+  }
+
+  /// Types `text`, then confirms the field holds exactly `text`.
+  ///
+  /// **Typing was three assumptions in a row and no check.** Focus was asked
+  /// for and the answer discarded; the field was cleared and nobody looked;
+  /// the keys were sent and nothing read them back. Every one of those can
+  /// fail quietly — a wrapper element that takes focus but cannot hold a
+  /// caret, an editor that swallows select-all, a handle that resolves to the
+  /// label beside the box rather than the box — and the failure they produce
+  /// together is a field holding the message twice:
+  /// `hello world from open-agenthello world from open-agent`.
+  ///
+  /// Checking makes the operation idempotent, which is the property that
+  /// actually matters. However many times anything asks for this text to be
+  /// typed — a ladder retry, a resumed plan, a second run over a composer
+  /// someone left open — the field ends up holding it once or the step fails
+  /// saying so. The cause no longer has to be enumerated to be survived.
+  ///
+  /// Two attempts, then refuse. Continuing on to a `publish` with the wrong
+  /// text in the box is the outcome worth failing to avoid.
+  private func type(_ text: String, into handle: String) async throws {
+    let wanted = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    var found = ""
+
+    for attempt in 1...Self.typeAttempts {
+      try await focus(handle)
+      try await client.performActions([Self.clearSequence()])
+      try await client.performActions([Self.keySequence(text)])
+
+      found = try await fieldText(handle)
+      if found.trimmingCharacters(in: .whitespacesAndNewlines) == wanted { return }
+      Log.warn(
+        "typing attempt \(attempt) left \(found.count) characters where \(text.count) "
+          + "were asked for; clearing and retyping")
+    }
+
+    throw ExecutionError.actionUnavailable(
+      role: handle, wanted: "a field holding exactly the text that was typed")
+  }
+
+  /// How many times to type before giving up. One retry: the common cause is a
+  /// field that was not ready on the first pass, and a field that refuses
+  /// twice is not going to yield to a third.
+  private static let typeAttempts = 2
+
+  /// What the field holds now — `value` for inputs, rendered text for a
+  /// `contenteditable`.
+  private func fieldText(_ handle: String) async throws -> String {
+    let data = try await client.evaluate(
+      """
+      (() => {
+        const el = window.__openAgent?.nodes?.get(\(Self.numeric(handle)));
+        if (!el) return { text: "" };
+        const v = ("value" in el && el.value !== undefined && el.value !== null)
+          ? el.value : el.innerText;
+        return { text: String(v ?? "") };
+      })()
+      """
+    )
+    guard let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let text = raw["text"] as? String
+    else { return "" }
+    return text
   }
 
   // MARK: - Target validation

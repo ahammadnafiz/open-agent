@@ -852,3 +852,102 @@ struct BrowserNamingTests {
     #expect(quitTarget.all == ["Firefox"])
   }
 }
+
+
+/// **Typing was three assumptions in a row and no check**: focus was asked for
+/// and the answer discarded, the field was cleared and nobody looked, the keys
+/// were sent and nothing read them back. What that produces when any of them
+/// quietly fails is a field holding the message twice —
+/// `hello world from open-agenthello world from open-agent`.
+@Suite("Typing leaves exactly what was asked for")
+struct TypeIsIdempotentTests {
+
+  /// `{x, y}` from `validate`, then whatever `focus` returns, then the field
+  /// read back.
+  static func point() -> String {
+    #"""
+    {"result":{"type":"object","value":[
+      [{"type":"string","value":"x"},{"type":"number","value":10.0}],
+      [{"type":"string","value":"y"},{"type":"number","value":20.0}]]}}
+    """#
+  }
+
+  static func field(_ text: String) -> String {
+    #"""
+    {"result":{"type":"object","value":[
+      [{"type":"string","value":"text"},{"type":"string","value":"\#(text)"}]]}}
+    """#
+  }
+
+  static func action(_ text: String) -> Action {
+    Action(
+      kind: .type,
+      target: .dom(handle: "e5", selector: "textbox[Post text]", label: "Post text", submitLabel: ""),
+      payload: text,
+      rationale: "the compose box")
+  }
+
+  static func executor(_ transport: FakeBiDiTransport) async throws -> BiDiExecutor {
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    return BiDiExecutor(client: client, source: BiDiSource(client: client))
+  }
+
+  @Test("a field that takes the text first time is not typed into twice")
+  func oneAttemptWhenItWorks() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),  // session.new
+      ok(2, oneContext),  // resolveContext
+      ok(3, Self.point()),  // validate
+      ok(4, #"{"result":{"type":"object","value":[]}}"#),  // focus
+      ok(5),  // clear
+      ok(6),  // the keys
+      ok(7, Self.field("hello")),  // and the field holds them
+    ])
+    let result = try await Self.executor(transport).execute(Self.action("hello"))
+
+    #expect(result.dispatched)
+    let typed = await transport.sent.filter { $0.contains("performActions") }
+    #expect(typed.count == 2, "one clear and one type, not a second pass")
+  }
+
+  @Test("a field left holding the text twice is cleared and retyped")
+  func retypesWhenTheFieldIsWrong() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      ok(1), ok(2, oneContext),
+      ok(3, Self.point()),  // validate
+      ok(4, #"{"result":{"type":"object","value":[]}}"#),  // focus
+      ok(5), ok(6),  // clear, keys
+      ok(7, Self.field("hellohello")),  // doubled — exactly the reported bug
+      ok(8, #"{"result":{"type":"object","value":[]}}"#),  // focus again
+      ok(9), ok(10),  // clear, keys
+      ok(11, Self.field("hello")),  // and now it is right
+    ])
+    let result = try await Self.executor(transport).execute(Self.action("hello"))
+
+    #expect(result.dispatched)
+    let typed = await transport.sent.filter { $0.contains("performActions") }
+    #expect(typed.count == 4, "it should have cleared and retyped once")
+  }
+
+  /// Carrying on to a `publish` with the wrong text in the box is the outcome
+  /// worth failing to avoid.
+  @Test("a field that refuses twice fails the step rather than publishing it")
+  func refusesAfterTwoAttempts() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      ok(1), ok(2, oneContext),
+      ok(3, Self.point()),
+      ok(4, #"{"result":{"type":"object","value":[]}}"#),
+      ok(5), ok(6),
+      ok(7, Self.field("hellohello")),
+      ok(8, #"{"result":{"type":"object","value":[]}}"#),
+      ok(9), ok(10),
+      ok(11, Self.field("hellohello")),  // still wrong
+    ])
+    let executor = try await Self.executor(transport)
+
+    await #expect(throws: (any Error).self) {
+      _ = try await executor.execute(Self.action("hello"))
+    }
+  }
+}
