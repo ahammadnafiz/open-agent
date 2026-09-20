@@ -34,6 +34,20 @@ public final class CursorOverlay {
   /// `Constants.HUD`.
   public var speedScale: Double = 1.0
 
+  /// Honours System Settings > Accessibility > Display > Reduce motion.
+  ///
+  /// Reduced motion does not mean no feedback — it means a gentler,
+  /// non-vestibular equivalent. The ring, the chip and the press all stay,
+  /// because they are what tells the user what is about to happen; what goes is
+  /// the travel, which is the part that sweeps a large object across the whole
+  /// screen.
+  ///
+  /// This overlay draws over every application the user has open, so a setting
+  /// they turned on for the system applies here more than almost anywhere.
+  var reduceMotion: Bool {
+    NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+  }
+
   private init() {}
 
   // MARK: - Lifecycle
@@ -157,11 +171,15 @@ public final class CursorOverlay {
 
     // Duration scales with distance, the way a real pointer does. A fixed
     // duration makes short hops feel sluggish and long sweeps feel frantic.
-    let travel =
+    var travel =
       min(
         max(distance / Constants.HUD.pixelsPerSecond, Constants.HUD.minMoveSeconds),
         Constants.HUD.maxMoveSeconds
       ) / speedScale
+    // Under reduced motion the cursor crosses the screen almost immediately —
+    // the ring and the chip still land first, so the user still sees WHERE
+    // before WHAT, without a large object sweeping past them to say it.
+    if reduceMotion { travel = 0.05 }
 
     state.intent = intent
     state.verb = verb
@@ -169,15 +187,32 @@ public final class CursorOverlay {
 
     // The ring lands first. Anticipation is the whole point of the overlay:
     // the user sees WHERE before they see WHAT.
-    withAnimation(.easeOut(duration: Constants.HUD.anticipationSeconds)) {
+    // The ring lands first. Anticipation is the whole point of the overlay:
+    // the user sees WHERE before they see WHAT.
+    //
+    // Enter and exit run the same curve in reverse, so the ring leaves the way
+    // it arrived. A shape that grows in and fades out reads as two unrelated
+    // events rather than one thing appearing and going away.
+    withAnimation(
+      reduceMotion
+        ? .easeOut(duration: 0.12)
+        : .spring(duration: Constants.HUD.anticipationSeconds, bounce: 0)
+    ) {
       state.target = local
     }
+    // The anticipation window is NOT shortened under reduced motion. It is the
+    // overlay's entire safety contribution — the time the user has to object —
+    // and it is a pause, not a movement.
     try? await Task.sleep(for: .seconds(Constants.HUD.anticipationSeconds))
 
     // The drawn cursor still travels when it is hidden: the chip and the ripple
     // are positioned from `state.cursor`, so leaving it behind would strand the
     // narration at the previous target.
-    withAnimation(.spring(response: travel, dampingFraction: 0.86)) {
+    // Critically damped. Apple's own guidance is to add bounce only when the
+    // gesture itself carried momentum — a flick, a throw, a drag release.
+    // Nothing threw this cursor: the agent decided where to go. Overshoot here
+    // would read as playfulness on a step that might be about to send an email.
+    withAnimation(.spring(duration: travel, bounce: 0)) {
       state.cursor = destination
     }
     try? await Task.sleep(for: .seconds(travel))
@@ -192,7 +227,9 @@ public final class CursorOverlay {
     try? await Task.sleep(for: .seconds(Constants.HUD.pressSeconds))
     state.isPressing = false
     try? await Task.sleep(for: .seconds(Constants.HUD.settleSeconds))
-    withAnimation(.easeOut(duration: 0.25)) { state.target = nil }
+    withAnimation(.spring(duration: Constants.HUD.anticipationSeconds, bounce: 0)) {
+      state.target = nil
+    }
   }
 
   /// Narration with no movement — for steps that have no on-screen target,
@@ -204,6 +241,8 @@ public final class CursorOverlay {
     state.intent = .routine
     state.verb = verb
     state.label = label
-    withAnimation(.easeOut(duration: 0.2)) { state.target = nil }
+    withAnimation(.spring(duration: Constants.HUD.anticipationSeconds, bounce: 0)) {
+      state.target = nil
+    }
   }
 }

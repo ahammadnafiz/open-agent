@@ -73,15 +73,17 @@ private struct AgentCursor: View {
   let intent: CursorIntent
   let isPressing: Bool
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
   var body: some View {
     ZStack(alignment: .topLeading) {
       // A tinted halo is what separates the agent's pointer from the
       // user's own. The arrow stays white so it still reads as a cursor.
       Circle()
-        .fill(intent.tint.opacity(0.28))
-        .frame(width: 34, height: 34)
-        .blur(radius: 7)
-        .offset(x: -11, y: -10)
+        .fill(intent.tint.opacity(0.22))
+        .frame(width: 30, height: 30)
+        .blur(radius: 8)
+        .offset(x: -9, y: -8)
 
       ArrowGlyph()
         .fill(.white)
@@ -89,8 +91,16 @@ private struct AgentCursor: View {
         .frame(width: 19, height: 29)
         .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
     }
-    .scaleEffect(isPressing ? 0.86 : 1.0, anchor: .topLeading)
-    .animation(.spring(response: 0.18, dampingFraction: 0.55), value: isPressing)
+    .scaleEffect(isPressing ? 0.88 : 1.0, anchor: .topLeading)
+    // The press keeps a little bounce even under the house style, because a
+    // press IS a momentum interaction — something physically went down and came
+    // back up. Under reduced motion it becomes a plain scale with no overshoot.
+    .animation(
+      reduceMotion
+        ? .easeOut(duration: 0.1)
+        : .spring(duration: 0.18, bounce: 0.3),
+      value: isPressing
+    )
   }
 }
 
@@ -104,15 +114,17 @@ private struct TargetRing: View {
   let intent: CursorIntent
 
   var body: some View {
-    RoundedRectangle(cornerRadius: 7, style: .continuous)
-      .stroke(intent.tint, lineWidth: 2)
+    RoundedRectangle(cornerRadius: 8, style: .continuous)
+      .strokeBorder(intent.tint, lineWidth: 1.5)
       .background(
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-          .fill(intent.tint.opacity(0.12))
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+          .fill(intent.tint.opacity(0.10))
       )
       .frame(width: rect.width, height: rect.height)
       .position(x: rect.midX, y: rect.midY)
-      .shadow(color: intent.tint.opacity(0.5), radius: 8)
+      // Sized to the element, so the glow stays proportional instead of
+      // swamping a small control and vanishing on a large one.
+      .shadow(color: intent.tint.opacity(0.45), radius: min(rect.height * 0.4, 10))
   }
 }
 
@@ -127,24 +139,41 @@ private struct NarrationChip: View {
 
   var body: some View {
     HStack(spacing: 6) {
+      // Small text wants slightly POSITIVE tracking — letters read too close
+      // together as they shrink. The inverse of what large display text needs,
+      // and a single letter-spacing value for both is wrong somewhere.
       Text(verb.uppercased())
-        .font(.system(size: 9, weight: .bold, design: .rounded))
-        .tracking(0.6)
+        .font(.system(size: 9, weight: .semibold))
+        .tracking(0.7)
         .foregroundStyle(intent.tint)
 
       if !label.isEmpty {
         Text(label)
           .font(.system(size: 12, weight: .medium))
+          .tracking(0.1)
+          // Slightly heavier than body weight, because flat text over a
+          // blurred surface loses contrast against whatever is behind it.
           .foregroundStyle(.primary)
           .lineLimit(1)
           .truncationMode(.middle)
+          .frame(maxWidth: 260, alignment: .leading)
       }
     }
-    .padding(.horizontal, 10)
+    .padding(.horizontal, 11)
     .padding(.vertical, 6)
     .background(.regularMaterial, in: Capsule())
-    .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 0.5))
-    .shadow(color: .black.opacity(0.28), radius: 8, y: 2)
+    // A bright top edge is light catching the material — the cue that makes a
+    // translucent surface read as a real one rather than a tinted rectangle.
+    .overlay(
+      Capsule().strokeBorder(
+        LinearGradient(
+          colors: [.white.opacity(0.22), .white.opacity(0.06)],
+          startPoint: .top, endPoint: .bottom
+        ),
+        lineWidth: 0.5
+      )
+    )
+    .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
     .fixedSize()
   }
 }

@@ -18,9 +18,14 @@ enum CursorDemo {
     overlay.show()
 
     if let rect = options.single {
-      await step(overlay, rect, options.overlayVerb, options.label, options.intent)
-      try? await Task.sleep(for: .seconds(0.6))
-      overlay.hide()
+      // `--loop` applies here too. It previously did not, so
+      // `--at … --danger --loop` rendered one frame and exited, which makes the
+      // one state you most want to sit and look at the one you cannot.
+      repeat {
+        await step(overlay, rect, options.overlayVerb, options.label, options.intent)
+        try? await Task.sleep(for: .seconds(0.6))
+        if !options.loop { overlay.hide() }
+      } while options.loop
       try? await Task.sleep(for: .seconds(0.4))
       return
     }
