@@ -813,3 +813,45 @@ struct FinalVerificationTests {
     #expect(await judge.callCount == 0)
   }
 }
+
+
+/// **"hello world from open-agenthello world from open-agent".**
+///
+/// Rung 0 rewound `planIndex` to the step that failed and returned `nil` to
+/// carry on. But `planStep` is read at the top of the iteration, so carrying on
+/// ran the step the loop had *already* moved to — and `record` then advanced
+/// from the rewound index and landed on that same step a second time. A plan
+/// with one `type` in it typed the message twice, into a composer that had not
+/// been cleared in between, and the user watched it happen.
+@Suite("A retry re-runs the step that failed")
+struct RetryTargetsTheFailedStepTests {
+
+  @Test("retrying a click does not run the type after it, twice")
+  func retryDoesNotRunTheNextStep() async {
+    let judge = ScriptedJudge([
+      Make.verdict(),  // the click is selected and dispatched
+      Make.verdict(progressed: 0.03, unchanged: 0.88),  // it changed nothing
+      Make.verdict(),  // so the click is retried
+      Make.verdict(taskDone: 0.95),  // and this time it took
+    ])
+    let executor = RecordingExecutor()
+    let plan = Plan(steps: [
+      PlanStep(
+        kind: .click, target: "the compose box", payload: nil,
+        declaredIrreversible: false),
+      PlanStep(
+        kind: .type, target: "the compose box", payload: "hello world from open-agent",
+        declaredIrreversible: false),
+    ])
+
+    _ = await Make.loop(plan: plan, judge: judge, executor: executor).run()
+
+    let kinds = await executor.executed.map(\.kind)
+    // The bug's exact signature was [.click, .type, .type].
+    #expect(
+      kinds == [.click, .click],
+      "the retry ran the following step instead of the one it named: \(kinds)")
+    let typedTwice = await executor.executed.filter { $0.kind == .type }.count
+    #expect(typedTwice < 2, "the message was typed more than once")
+  }
+}

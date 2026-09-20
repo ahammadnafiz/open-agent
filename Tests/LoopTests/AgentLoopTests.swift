@@ -52,7 +52,8 @@ struct AgentLoopTests {
     let judge = ScriptedJudge([
       Make.verdict(),  // step 0 acts
       Make.verdict(progressed: 0.03, unchanged: 0.84),  // it did nothing
-      Make.verdict(taskDone: 0.95),  // retry worked
+      Make.verdict(),  // the retry acts
+      Make.verdict(taskDone: 0.95),  // and that worked
     ])
     let executor = RecordingExecutor()
     let result = await Make.loop(
@@ -60,8 +61,9 @@ struct AgentLoopTests {
     ).run()
 
     #expect(result.status == .completed)
-    // rung 0 retried the plan step rather than advancing past it
-    #expect(await executor.executed.count >= 2)
+    // Rung 0 retried the plan step rather than advancing past it: the same
+    // step twice, and not a third action from running the plan on past it.
+    #expect(await executor.executed.count == 2)
   }
 
   /// The branch measurement justified. `progressed` low **and** `unchanged`

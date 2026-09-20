@@ -68,6 +68,9 @@ public actor AgentLoop {
   /// the *plan* step whose action failed — keying on the monotonic counter
   /// would hand every retry a fresh rung 0 and never escalate.
   private var lastPlanIndex = -1
+  /// Set by ladder rung 0. The step it wants re-attempted is not the step this
+  /// iteration already picked up, so the iteration has to start again.
+  private var rewoundForRetry = false
   /// A mark the host picked off the screenshot, consumed by the next selection.
   ///
   /// Set only by `resume --eyes`. It overrides Jev's Choice for exactly one
@@ -243,6 +246,14 @@ public actor AgentLoop {
         verdict: verdict, candidates: candidates, since: started
       ) {
         return routed
+      }
+
+      // Rung 0 named a step other than the one this iteration is holding, so
+      // begin again rather than acting on a plan step that is no longer
+      // current. See `applyRecovery`.
+      if rewoundForRetry {
+        rewoundForRetry = false
+        continue
       }
 
       // Steps that name no on-screen element skip selection entirely. `openApp`
@@ -796,12 +807,22 @@ public actor AgentLoop {
     switch recovery {
     case .retry:
       // Rung 0 re-attempts the action that failed, which lives at
-      // `lastPlanIndex` — NOT the step the loop had moved on to. The
-      // screen was already re-observed and re-judged this iteration, so
-      // returning `nil` lets selection proceed against the current
-      // verdict, which is exactly what "retry the same action" means.
+      // `lastPlanIndex` — NOT the step the loop had moved on to.
+      //
+      // **Rewinding the index was not enough, and quietly did the wrong step
+      // twice.** `planStep` is read at the top of the iteration, so returning
+      // `nil` here ran the step the loop had *already* moved on to; `record`
+      // then advanced from the rewound index and landed on that same step
+      // again. Asking to redo the click typed the message twice instead —
+      // observed as "hello world from open-agenthello world from open-agent"
+      // in the composer, from a plan with one `type` in it.
+      //
+      // The verdict in hand chose a target for the step being abandoned, so it
+      // cannot be reused for a different one. The iteration starts over, which
+      // costs one more judgement and spends it on the right step.
       Log.info("ladder rung 0: retrying plan step \(lastPlanIndex) — \(reason)")
       planIndex = max(0, lastPlanIndex)
+      rewoundForRetry = true
       return nil
     case .escalate:
       budget.chargeEscalation()
