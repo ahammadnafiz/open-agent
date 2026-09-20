@@ -13,7 +13,19 @@ it belongs.
 
 ---
 
-## Status — 2026-09-18
+## Status — 2026-09-20
+
+**ADR 0009 changed the shape.** open-agent is now a CLI driven by a coding-agent
+skill. The host plans, sees and composes; Jev still runs every step. Three tasks
+were deleted rather than done (`OpenRouterClient`, `Planner`, `VisionFallback`),
+one more went with them (`OnDeviceWriter`), and two callbacks took their place.
+The fast-path measurements below are unaffected — nothing about perception,
+selection, verification or execution moved.
+
+**Built so far:** `Package.swift`, and the cursor overlay (5.4), ahead of
+sequence because it is a product decision that has to be watched to be judged.
+
+### Measured before any of it — 2026-09-18
 
 **Already measured and passing.** These were run as throwaway probes before any
 harness code; the numbers are in SPEC.md § Success Criteria.
@@ -93,9 +105,11 @@ Pure logic. No network, no UI, no browser. Fully unit-testable.
 ### 1.1 Package skeleton
 
 - **Acceptance:** `swift build` succeeds. Three targets: `Harness` (library),
-  `ComputerAgent` (app), `Probe` (executable). Zero external dependencies.
+  `open-agent` (the CLI, and the only thing that touches AppKit), `Probe`
+  (executable). Zero external dependencies.
 - **Verify:** `swift build -c release && swift test`
 - **Files:** `Package.swift`
+- **Status:** ✅ done 2026-09-20 — `Harness` + `open-agent`. `Probe` still absent.
 
 ### 1.2 Core types
 
@@ -149,6 +163,8 @@ Pure logic. No network, no UI, no browser. Fully unit-testable.
 
 - **Acceptance:** Questions match [jev-questions.md](./jev-questions.md) **verbatim**.
   `StepVerdict` carries raw probabilities only — no field on it is a `Bool`.
+  `wrong_context` is asked only when `task_context` is non-empty, and needs its
+  four fixtures (§2.5) before its threshold means anything.
 - **Verify:** `swift run Probe battery-eval`. Reproduce the measured baseline:
   17/18 on the verification fixtures, 412 ms for the full battery.
 - **Files:** `Sources/Harness/Judgment/{Batteries,StepVerdict}.swift`
@@ -282,12 +298,16 @@ it emits separate observations. When it merges, the text really is adjacent.
   does **not** charge machine time.
 - **Files:** `Sources/Harness/Core/Loop.swift`, `Sources/Harness/Core/Recovery.swift`
 
-### 4.2 Planner
+### 4.2 Plan ingestion — *no planner is written*
 
-- **Acceptance:** OpenRouter call returns a schema-valid `Plan`. A malformed or
-  empty plan surfaces to the user rather than retrying.
-- **Verify:** `swift run Probe plan "open Zen, go to x.com, post about Jev"`
-- **Files:** `Sources/Harness/Planning/{OpenRouterClient,Planner}.swift`
+- **Acceptance:** `--plan plan.json` from the host parses into a schema-valid
+  `Plan`. A malformed or empty plan **fails the invocation with a non-zero exit
+  and a parse error**, and does not start a loop. Plan steps naming targets as
+  ids or coordinates rather than semantically are rejected.
+- **Verify:** `swift run Probe plan-parse Tests/Fixtures/plans/*.json` — every
+  good fixture parses, every bad one is rejected with a readable reason.
+- **Files:** `Sources/Harness/Core/Plan.swift`
+- **Why there is no planner:** the host wrote it. ADR 0009.
 
 ### 4.3 Executors
 
@@ -302,24 +322,27 @@ it emits separate observations. When it merges, the text really is adjacent.
   the next step's Jev batch, and conflating the two is the failure this whole
   design exists to prevent.
 
-### 4.4 Composition
+### 4.4 ~~Composition~~ — REMOVED by ADR 0009
 
-- **Acceptance:** Apple FM composes post text in ≤8 s. `guardrailViolation` and
-  context overflow fall back to OpenRouter.
-- **Verify:** `swift run Probe compose "a short post about Jev"`
-- **Files:** `Sources/Harness/Composition/OnDeviceWriter.swift`
-- **Constraint:** instructions ≤400 characters. 4,096 tokens is the *total*
-  budget and a verbose instruction plus a schema overflows it before input.
+The host writes prose and puts it in the plan's payload. Apple Foundation Models
+is not called, which takes its unpredictable `guardrailViolation` with it.
 
-### 4.5 Vision fallback
+### 4.5 The two callbacks
 
-- **Acceptance:** On escalation, captures the **focused window only**, sends it
-  with the candidate list, and returns `{index, label}` — never a coordinate, and
-  `none` when the target is genuinely absent. The label is not optional: it is the
-  denylist's only input on an unlabelled icon (ADR 0007).
-- **Verify:** `swift run Probe escalate --fixture canvas-page` — assert every
-  non-`none` answer carries a non-empty label.
-- **Files:** `Sources/Harness/Planning/VisionFallback.swift`
+- **Acceptance:** On escalation, captures the **focused window only**, renders
+  the candidate boxes onto it as numbered marks, writes the PNG, and returns
+  `status: needs_eyes` with the path and the numbered list. `resume --eyes <n>`
+  accepts `{index, label}` and continues the loop; `--eyes none` falls to the
+  ladder. On ladder rung 2, returns `status: needs_plan` with the current
+  element list, history and failure reason, and `resume --plan` continues.
+  **The label is not optional** — it is the denylist's only input on an
+  unlabelled icon (ADR 0007), and a resume without one is rejected.
+- **Verify:** `swift run Probe callback --fixture canvas-page` — assert the PNG
+  has marks, the JSON round-trips, and a resume missing a label is refused.
+- **Files:** `Sources/Harness/Host/{Callback,MarkRenderer}.swift`
+- **Budget:** if `needs_eyes` fires on most steps, shape B has degraded into
+  shape A and the latency thesis is gone. `maxEscalations` is the ceiling that
+  makes that loud rather than silent.
 
 ### 4.6 Captured executor — *the only path that synthesizes an event*
 
@@ -341,13 +364,28 @@ it emits separate observations. When it merges, the text really is adjacent.
 
 ## Phase 5 — Application
 
-### 5.1 HUD
+### 5.0 The CLI surface — *the actual product*
 
-- **Acceptance:** `NSPanel`, always-on-top, non-activating (never steals focus),
-  380×120. Shows the instruction field, current step, elapsed, cost, Stop.
-- **Verify:** Run it; drive a task; confirm the browser keeps keyboard focus
-  throughout.
-- **Files:** `Sources/ComputerAgent/HUD/`
+- **Acceptance:** `run`, `resume`, `observe`, `act`, `overlay` dispatch. **One
+  JSON object on stdout per invocation, logs on stderr, exit 0 for any status the
+  host can act on and non-zero only for a malformed invocation.** `Session`
+  persists across invocations on disk; a `resume` against an unknown or finished
+  session is refused rather than starting a new one.
+- **Verify:** `swift run open-agent observe --app Finder | jq .status` — parses,
+  and nothing but JSON reached stdout.
+- **Files:** `Sources/OpenAgent/{main,Session}.swift`
+- **The test that matters:** assert **no argument, environment variable or config
+  key can approve an irreversible action**. Enumerate the flag surface; fail if
+  anything reaches the approval path except the sheet. ADR 0009 §5.
+
+### 5.1 HUD — *reduced by ADR 0009*
+
+- **Acceptance:** A small non-activating `NSPanel` showing current step, elapsed,
+  cost and **Stop**. **No instruction field** — the task arrives from the host on
+  the command line, and the terminal is where the user types.
+- **Verify:** Run a task; confirm the target app keeps keyboard focus throughout,
+  and that Stop halts between steps rather than mid-action.
+- **Files:** `Sources/OpenAgent/HUD/`
 
 ### 5.2 Confirmation
 
@@ -355,9 +393,11 @@ it emits separate observations. When it merges, the text really is adjacent.
   Approve / Edit / Cancel. **No timeout, no default.**
 - **Verify:** `swift test --filter ConfirmationTests` plus a manual pass on the
   publish step.
-- **Files:** `Sources/ComputerAgent/HUD/ConfirmationView.swift`
-- **This is the only safety boundary the user sees.** Edit must let them change
-  the payload before approving, or they will approve text they wanted to fix.
+- **Files:** `Sources/OpenAgent/HUD/ApprovalSheet.swift`
+- **This is the only safety boundary the user sees**, and since ADR 0009 it is
+  the only one that exists at all outside the classifier. Edit must let them
+  change the payload before approving, or they will approve text they wanted to
+  fix. The host is never shown this sheet and cannot dismiss it.
 
 ### 5.3 Step log
 
@@ -373,9 +413,9 @@ to be judged, and judging it later means changing it when it is expensive to.
 - **Acceptance:** A click-through panel draws a cursor, a target ring, a
   narration chip and a click ripple over every application, across Spaces and
   over full-screen windows, without stealing focus or swallowing a single event.
-- **Verify:** `swift run ComputerAgent` — plays a scripted mail task with no
+- **Verify:** `swift run open-agent overlay` — plays a scripted mail task with no
   harness behind it. ✅ builds clean, runs, exits.
-- **Files:** `Sources/ComputerAgent/HUD/{CursorOverlay,CursorView}.swift`
+- **Files:** `Sources/OpenAgent/HUD/{CursorOverlay,CursorView}.swift`
 - **The rule it must keep:** the overlay **reads** a target and never produces
   one. It consumes `Element.bounds`, which perception already captures for the
   candidate filter and the vision marks. Nothing it computes reaches an `Action`,
@@ -393,6 +433,17 @@ to be judged, and judging it later means changing it when it is expensive to.
 - **Cost:** ~0.6 s typical per acting step, 0.99 s worst case, charged to
   `Budget.maxMachineTime` like anything else. `Constants.HUD.motionEnabled`
   turns it off.
+
+### 5.5 The skill files
+
+- **Acceptance:** `/open-agent <task>` in Claude Code runs a task end to end.
+  The skill branches on `status`, treats `blocked` as terminal, asks the user
+  when the task names something only they know, and never claims an action
+  happened because a call returned.
+- **Verify:** dogfood — `/open-agent open Finder and select my Downloads folder`.
+- **Files:** `skills/claude-code/SKILL.md`, later `skills/codex/SKILL.md`
+- **Do this last.** A skill over a CLI that does not work yet is a prompt that
+  hallucinates a working tool.
 
 ---
 
@@ -434,14 +485,13 @@ to be judged, and judging it later means changing it when it is expensive to.
                      ├──→ 3.1 BiDi ──┐       │
                      ├──→ 3.2 AX ────┼──→ 4.1 Loop ──→ 4.3 Executors
                      │    3.3 Launch ┘       │
-                     └──→ 4.2 Planner ───────┤
-                          4.4 Compose ───────┤
-                          4.5 Vision ────────┴──→ 4.6 Captured
+                     └──→ 4.2 Plan parse ────┤
+                          4.5 Callbacks ─────┴──→ 4.6 Captured
                                              │         │
                                         5.x HUD ──→ 6.x Validation
 ```
 
-**Parallelisable:** 3.1/3.2/3.3 are independent of 2.x. 4.2/4.4/4.5 are
+**Parallelisable:** 3.1/3.2/3.3 are independent of 2.x. 4.2 and 4.5 are
 independent of each other.
 
 **Strictly sequential:** 1.3 (Safety) before anything that can act. 0.3 (Fixtures)

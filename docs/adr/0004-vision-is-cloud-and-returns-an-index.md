@@ -4,7 +4,15 @@ Date: 2026-09-18
 
 ## Status
 
-Accepted
+Accepted. **Vendor superseded 2026-09-20 by
+[ADR 0009](./0009-the-agent-is-a-skill-and-the-host-model-plans.md)** — the
+escalation now goes to the host coding agent rather than to OpenRouter. The
+reasoning below survives intact and is the reason 0009 could be taken at all:
+because the answer is an *index* and not a coordinate, the model behind it is
+swappable. Had this ADR chosen a local grounding model, or asked for a point, the
+pivot would have meant redesigning the safety boundary rather than changing a
+caller. Read the latency and accuracy argument as live; read the model names and
+prices as history.
 
 ## Context
 

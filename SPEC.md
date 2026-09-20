@@ -1,10 +1,18 @@
-# Spec: Computer Agent
+# Spec: open-agent
 
 A macOS computer-use agent that executes natural-language tasks against real
-applications. A System One model (Jev) does per-step selection and verification
-cheaply enough to run on every step; a frontier model plans and sees; the
-on-device model writes prose; code owns control flow and every irreversible
-decision.
+applications, invoked as a skill from the coding agent you already have open.
+
+You type `/open-agent send the ICCIT draft to my supervisor` in Claude Code. The
+host agent plans the route and asks you anything it needs. A drawn cursor moves
+across your screen and does it. Jev — a System One model — selects and verifies
+on every single step, cheaply enough that the agent notices it is lost at step 7
+rather than step 20. Code owns control flow and every irreversible decision.
+
+**The host agent decides the route and looks at pictures. Jev runs every step in
+between. Neither one is ever allowed near the irreversible boundary.**
+[ADR 0009](./docs/adr/0009-the-agent-is-a-skill-and-the-host-model-plans.md) is
+the load-bearing decision; read it first.
 
 Domain vocabulary is defined in [CONTEXT.md](./CONTEXT.md). Architectural
 decisions are in [docs/adr/](./docs/adr/). Detailed subsystem specs:
@@ -15,7 +23,7 @@ decisions are in [docs/adr/](./docs/adr/). Detailed subsystem specs:
 | [docs/jev-api-reference.md](./docs/jev-api-reference.md) | The vendor API in full — schemas, limits, patterns, failure modes, evidence. |
 | [docs/jev-questions.md](./docs/jev-questions.md) | Every Jev battery *this project* uses, verbatim and ready to use. |
 | [docs/element-sources.md](./docs/element-sources.md) | WebDriver BiDi and Accessibility, wire level. |
-| [docs/models.md](./docs/models.md) | OpenRouter and Apple Foundation Models contracts. |
+| [docs/host-contract.md](./docs/host-contract.md) | The CLI, the two callbacks, and what the skill file must say. |
 | [docs/build-sequence.md](./docs/build-sequence.md) | Ordered tasks with per-task verification. **Native-first** — ADR 0006. |
 
 `jev-api-reference.md` is the reference for the API *as a whole*, independent of
@@ -28,18 +36,24 @@ change to a question.
 
 ## Objective
 
-**Who it is for.** One person, on their own Mac, who wants to hand a multi-step
-UI task to software instead of doing it by hand.
+**Who it is for.** One person, on their own Mac, already running a coding agent,
+who wants to hand a multi-step UI task to software instead of doing it by hand.
 
-**What it does.** Accepts a sentence — *"open Zen, go to my X profile, write a
-short post about Jev, publish it"* — and carries it out across real
-applications, asking for confirmation only where an action cannot be undone.
+**What it does.** Accepts a sentence — typed or dictated — and carries it out
+across real applications, asking for confirmation only where an action cannot be
+undone. The interface is the terminal you are already in, plus a cursor drawn
+over the screen so you can watch.
 
 **Why it is built this way.** Existing computer-use agents send a screenshot to
 a vision model on every step. That costs 2–4 seconds and several cents per step,
 which is expensive enough that most harnesses skip verification and simply hope
 each action worked. When step 7 silently fails, steps 8–20 operate on the wrong
 screen and the user discovers it at the end.
+
+Handing the whole loop to a coding agent would reproduce exactly that. So the
+loop is not handed over: the host plans once, Jev drives every step, and the host
+is called back roughly three times per task instead of twenty — when the element
+list is not enough to see by, or when the route turns out to be wrong.
 
 Jev changes that economics, and that is the entire thesis of this project:
 
@@ -59,6 +73,11 @@ explicit approval.
 - Not multi-user, not networked, not a service.
 - Not a Jev benchmark. Jev is a component; if it proves unsuitable for a job,
   that job moves elsewhere.
+- **Not a standalone application.** It is a CLI driven by a coding agent. If you
+  do not run one, this is not for you yet — ADR 0009.
+- **Not a host-agent loop.** The host is called back about three times per task,
+  not on every step. A design where it drives each step is the design this one
+  exists to beat.
 - **Not a mouse.** It never moves a cursor, never plans in coordinates, and no
   model it calls returns one. On surfaces that expose no element tree it does
   synthesize a click at a box it identified by label — see Coverage below.
@@ -116,7 +135,7 @@ Three things that are easy to assume away:
 
 **The agent cannot use a browser you already have open.** The BiDi debug port can
 only be set at process start, so the agent launches its own Zen against its own
-profile at `~/Library/Application Support/computer-agent/zen-profile`. A browser
+profile at `~/Library/Application Support/open-agent/zen-profile`. A browser
 you opened has no port and cannot be attached to, at any tier.
 
 This is a safety decision, not a limitation to engineer away — see § Boundaries,
@@ -146,11 +165,11 @@ ADR 0007 it gates execution at tiers 3–4, not just observation.
 | Language | Swift | 6.4 | Native AX and Foundation Models access; strict concurrency |
 | UI | SwiftUI | macOS 26+ | Floating panel, `NSPanel` for always-on-top |
 | Build | Swift Package Manager | — | No Xcode project file to merge-conflict on |
-| Judgment | Jev `jev-1.13.0` | pinned | Selection, verification, risk triage |
-| Planning | OpenRouter | — | `anthropic/claude-sonnet-5` ($2/M) |
-| Vision escalation | OpenRouter | — | `google/gemini-3.8-flash` ($0.75/M) — measured, [ADR 0004](./docs/adr/0004-vision-is-cloud-and-returns-an-index.md) |
+| Judgment | Jev `jev-1.13.0` | pinned | Selection, verification, risk triage — every step |
+| Planning | **host coding agent** | — | Claude Code for v1. Interactive, so it can ask |
+| Vision escalation | **host coding agent** | — | Set-of-Marks, index back — [ADR 0004](./docs/adr/0004-vision-is-cloud-and-returns-an-index.md), vendor per [ADR 0009](./docs/adr/0009-the-agent-is-a-skill-and-the-host-model-plans.md) |
+| Composition | **host coding agent** | — | Prose a human will read |
 | Screen capture + OCR | ScreenCaptureKit + Vision | macOS 26 | on-device, `.accurate`, `minimumTextHeight = 0` |
-| Composition | Apple Foundation Models | macOS 26 | On-device, free, 4k context |
 | Web perception + execution | WebDriver BiDi | — | Gecko/Zen; DOM as text |
 | Native perception + execution | `ApplicationServices` AX | — | Cocoa apps |
 | WebSocket | `URLSessionWebSocketTask` | — | Foundation; no dependency needed |
@@ -167,14 +186,11 @@ threshold in this system is tuned against `jev-1.13.0` specifically.
 # Build
 swift build -c release
 
-# Run (requires Accessibility permission for the built binary)
-swift run ComputerAgent
-
-# Look at the cursor overlay on its own, with no harness behind it
-swift run ComputerAgent --help
-swift run ComputerAgent --loop                       # repeat until Ctrl-C
-swift run ComputerAgent --speed 0.4                  # slow the easing down
-swift run ComputerAgent --at 0.8,0.2 --verb send \
+# Look at the cursor overlay on its own, with nothing behind it
+swift run open-agent overlay --help
+swift run open-agent overlay --loop                  # repeat until Ctrl-C
+swift run open-agent overlay --speed 0.4             # slow the easing down
+swift run open-agent overlay --at 0.8,0.2 --verb send \
     --label "Send" --danger                          # one move + click, amber
 
 # Test — all
@@ -200,24 +216,87 @@ cannot live in `swift test` without making the suite slow and flaky.
 
 ---
 
+## The CLI contract
+
+**This is the product.** The skill files are thin wrappers — one per host, a
+hundred lines of markdown each — telling Claude Code or Codex how to drive this.
+When they disagree with this section, this section is right.
+
+```bash
+# Start a task. Runs the Jev loop internally and returns when it needs something.
+open-agent run "send the ICCIT draft to my supervisor" --plan plan.json
+
+# Answer whatever it asked for.
+open-agent resume <session> --eyes 7          # needs_eyes: the mark to act on
+open-agent resume <session> --eyes none       # target genuinely absent
+open-agent resume <session> --plan plan.json  # needs_plan: a new route
+
+# Single steps, for debugging and for the skill's own smoke test.
+open-agent observe --app Finder
+open-agent act --session <s> --kind click --target e17
+```
+
+Every invocation prints one JSON object to stdout and exits. Exit code is 0 for
+a status the host can act on and non-zero only for a malformed invocation, so
+the host never has to parse prose.
+
+```jsonc
+{
+  "session": "s_01J…",
+  "status": "needs_eyes",         // the only field the host branches on
+  "step": 7,
+  "elapsed_ms": 4180,
+  "cost_usd": 0.00019,
+  "screenshot": "/…/s_01J…/step-07.png",   // needs_eyes only: marks drawn on
+  "candidates": { "1": "New mail", "2": "Archive", "…": "…" },
+  "history": ["click New mail", "click To", "type ahammad…"],
+  "reason": "sufficient 0.41 — the target is not in the element list"
+}
+```
+
+| `status` | Meaning | What the host does |
+|---|---|---|
+| `needs_eyes` | text was not enough | read the screenshot, `resume --eyes <n>` |
+| `needs_plan` | the route was wrong | read `history` + `candidates`, `resume --plan` |
+| `blocked` | login wall, permission, CAPTCHA, paywall | **stop.** Tell the user. Never retry |
+| `completed` | `task_done ≥ 0.80` | report |
+| `failed` | ladder exhausted | report, with the step log |
+| `budget_exhausted` | a ceiling was hit | report what was done |
+
+**Approval is not in this table, and that is deliberate.** An irreversible action
+shows a native macOS sheet carrying the exact payload and blocks until a human
+clicks it. The call simply takes longer. The host is not asked, is not told, and
+cannot answer — **there is no flag that approves an action.** Not `--yes`, not
+`--force`, not `--approved`. Page text reaches the host's context, and a measured
+semantic reframing moved a Jev risk score from 0.98 to 0.42; anything expressible
+as an argument is eventually expressible by an injected instruction. A window is
+not. It is shown for irreversible actions only, never per turn.
+
+---
+
 ## Project Structure
 
 ```
-computer-agent/
+open-agent/
 ├── Package.swift
 ├── SPEC.md                      This document
 ├── CONTEXT.md                   Domain glossary
+├── skills/                      Thin per-host wrappers over the CLI
+│   ├── claude-code/SKILL.md     `/open-agent`
+│   └── codex/SKILL.md
 ├── docs/
 │   ├── adr/                     Architectural decision records
 │   ├── harness.md               Core loop, end to end
 │   ├── jev-questions.md         Question batteries, verbatim
 │   ├── element-sources.md       BiDi + AX, wire level
-│   ├── models.md                OpenRouter + Apple FM contracts
+│   ├── host-contract.md         The CLI, the callbacks, the skill's job
 │   └── build-sequence.md        Ordered build plan
 ├── Sources/
-│   ├── ComputerAgent/           Executable: SwiftUI app entry
-│   │   ├── App.swift
-│   │   └── HUD/                 Floating panel, confirmation sheet
+│   ├── OpenAgent/               Executable: the CLI + everything on screen
+│   │   ├── main.swift           Verb dispatch, JSON out
+│   │   ├── Session.swift        run / resume state across invocations
+│   │   └── HUD/
+│   │       ├── ApprovalSheet.swift  Native, exact payload, human-only
 │   │       ├── CursorOverlay.swift  Click-through panel + coordinate flip
 │   │       └── CursorView.swift     Cursor, target ring, narration, ripple
 │   ├── Harness/                 Library: everything headless
@@ -235,12 +314,9 @@ computer-agent/
 │   │   │   ├── JevClient.swift
 │   │   │   ├── Batteries.swift  Question definitions
 │   │   │   └── StepVerdict.swift
-│   │   ├── Planning/
-│   │   │   ├── OpenRouterClient.swift
-│   │   │   ├── Planner.swift
-│   │   │   └── VisionFallback.swift
-│   │   ├── Composition/
-│   │   │   └── OnDeviceWriter.swift   Apple FM
+│   │   ├── Host/
+│   │   │   ├── Callback.swift         needs_eyes / needs_plan payloads
+│   │   │   └── MarkRenderer.swift     Numbered boxes onto the screenshot
 │   │   ├── Execution/
 │   │   │   ├── Executor.swift         Protocol + total `for(ref:)` switch
 │   │   │   ├── BiDiExecutor.swift
@@ -365,6 +441,8 @@ across identical inputs (measured: ±5 percentage points). So:
 **Always:**
 
 - Pin model versions. `jev-1.13.0`, never `jev-latest`.
+- Print exactly one JSON object to stdout per invocation. Logs go to stderr.
+  A host that has to parse prose will eventually parse it wrong.
 - Put every threshold in `Constants.swift` with a comment stating what it was
   measured against.
 - Re-run `Probe battery-eval` after touching any question wording.
@@ -383,6 +461,8 @@ across identical inputs (measured: ±5 percentage points). So:
 - Widening what goes into a Jev `state`. More context is not free — Jev's own
   docs state accuracy degrades with irrelevant state ("context rot").
 - Enabling a browser debug port on any profile other than the agent's.
+- Adding a third callback status. Two is what keeps the host out of the loop;
+  a third is how it gets back in — ADR 0009.
 
 **Never:**
 
@@ -402,6 +482,10 @@ across identical inputs (measured: ±5 percentage points). So:
 - Commit an API key, a captured screenshot, or a DOM fixture containing session
   tokens.
 - Count human confirmation time against the task's wall-clock budget.
+- Accept approval from anything but a human clicking the sheet. No `--yes`,
+  no `--force`, no environment variable, no config key, no host instruction.
+- Let the host agent drive the per-step loop. It plans, it sees, it answers a
+  callback. A host in the loop is the design this project exists to beat.
 
 ---
 
@@ -413,12 +497,12 @@ Concrete and testable. Each maps to a verification command.
 *"Open Mail, reply to the most recent message from <person> saying I'll get back
 to them tomorrow, and send it."*
 
-Runs end to end. Exactly one confirmation is requested (the send). The reply text
-is composed on-device. Verified by `Probe run-task`.
+Runs end to end from `/open-agent` in Claude Code. Exactly one confirmation is
+requested (the send). Verified by `Probe run-task`.
 
 Chosen to exercise every mechanism rather than to impress: accessibility
-navigation across an app, Apple FM composition, and the deterministic
-irreversible gate at `send`. The publish-to-X task returns as the **tier-1**
+navigation across an app, prose the host composes and the user reads, and the
+deterministic irreversible gate at `send`. The publish-to-X task returns as the **tier-1**
 reference task when browser support lands — see
 [ADR 0006](./docs/adr/0006-native-first-sequencing.md).
 
@@ -516,11 +600,12 @@ borderline value does not oscillate between steps. The mechanism is decided
 (a decision, once made, is sticky for N steps unless the probability moves by
 more than the deadband) but N and the deadband width are not.
 
-**Q4 — Apple FM guardrail fallback.**
-On-device composition refuses unpredictably (measured: `guardrailViolation` on a
-benign UI-automation prompt). The fallback is to route composition to OpenRouter,
-but whether that happens silently or surfaces to the user is undecided. Silent
-fallback contradicts "on-device" as a product claim.
+**Q4 — Apple FM guardrail fallback. — CLOSED 2026-09-20 by ADR 0009.**
+Composition moved to the host agent along with planning and vision. Apple
+Foundation Models is no longer called, so its unpredictable `guardrailViolation`
+on benign prompts stopped being this project's problem. The on-device privacy
+claim went with it, and it was already undermined by shipping window images to a
+third party on every escalation.
 
 **Q5 — Multi-window and Spaces.**
 Which window the agent operates on when an app has several, and what happens when

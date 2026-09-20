@@ -59,9 +59,15 @@ because a batched question is free in wall-clock and near-free in money.
   "screen_before": "<a> Home\n<a> Explore\n<button> Post\n…",
   "screen_now": "<dialog> Create Post\n<textbox> What is happening?!\n<button> Post (disabled)\n…",
   "recent_history": ["openApp Zen", "navigate x.com/ahammad_nafiz", "click compose"],
-  "candidates": { "e0": "Post", "e1": "Home", "e2": "What is happening?!", "…": "…" }
+  "candidates": { "e0": "Post", "e1": "Home", "e2": "What is happening?!", "…": "…" },
+  "task_context": "the x.com account @ahammad_nafiz"
 }
 ```
+
+`task_context` is the specific *instance* the task names — an account, a mailbox,
+a document, a repository — extracted by the host when it plans, and empty when the
+task names none. It exists for one question, `wrong_context`, and nothing else
+reads it. See §2.5.
 
 `screen_before` and `screen_now` are **filtered** element lists, never raw DOM.
 Jev's documented failure mode is that accuracy falls as `state` grows with
@@ -272,6 +278,60 @@ experiments, same conclusion: **the value is in the decomposition, not the model
 
 ---
 
+### 2.5 Right thing, wrong instance — `wrong_context`
+
+**UNMEASURED. Added 2026-09-20. Needs fixtures and a `battery-eval` run before
+any threshold here is trusted.**
+
+The five verification questions cover whether the task moved forward. None of
+them covers whether it is moving forward *in the right place*. Traced on a real
+task — *"go to my company email and send an email to ahammadnafiz86@gmail.com"* —
+where the browser profile is signed into a personal inbox rather than the
+company one:
+
+| Question | Answer | |
+|---|---|---|
+| `progressed` | ~0.95 | it navigated to mail ✓ |
+| `unchanged` | ~0.03 | the screen changed ✓ |
+| `blocked` | ~0.04 | nothing is in the way ✓ |
+| `task_done` | ~0.05 | not yet ✓ |
+| `looping` | ~0.04 | not repeating ✓ |
+
+**Every answer is correct and the agent composes from the wrong account.** This
+is jaggedness #1 — *Jev answers the question you wrote* — and unlike the login
+wall in §2.2 there is no second question that rescues it, because nobody asked.
+
+```json
+{
+  "wrong_context": {
+    "type": "noul",
+    "instructions": "Does `screen_now` show a different account, mailbox, document, workspace, or repository than the one named in `task_context`?",
+    "criteria": {
+      "true": "The screen identifies a specific one, and it is not the one named",
+      "false": "It is the one named, or the screen does not identify one either way"
+    }
+  }
+}
+```
+
+Two deliberate choices, both from §7:
+
+- **`true` means more caution.** A match sends the step to the recovery ladder
+  rather than letting it proceed.
+- **`false` absorbs "cannot tell".** Most screens never display an account badge,
+  and a question that fires on every one of them is a question that gets its
+  threshold raised until it never fires at all.
+
+Skipped entirely when `task_context` is empty, which is most tasks. Asking about
+a context the task never named invents one.
+
+**Fixtures this needs before it ships** — at least four, per §7, including one
+deliberately ambiguous: the right account visibly shown; a different account
+visibly shown; no account identifiable anywhere; and two accounts on screen at
+once, which is what a switcher looks like mid-transition.
+
+---
+
 ## 3. Prompt injection: what this battery cannot do
 
 Jev's own documentation is explicit:
@@ -341,8 +401,8 @@ Each of these is a documented `jev-1.13` failure mode. Code does them instead.
 | "How many X are on screen?" | *"does not count reliably… error grows with the size of the thing being counted"* | `candidates.count` |
 | "Is date A before date B?" | *"reads dates as text, not as ordered quantities"* | `Foundation.Date` |
 | "What is the total?" | *"Jev is not a calculator"* | arithmetic in code |
-| "Write the post text" | not trained to generate text | Apple FM / OpenRouter |
-| "What should we do next?" | *"not agents… does not choose its own next action"* | Planner |
+| "Write the post text" | not trained to generate text | the host agent |
+| "What should we do next?" | *"not agents… does not choose its own next action"* | the host agent |
 | "Is this element at these coordinates?" | no vision, no spatial reasoning | bounds in code |
 | "Does this element publish?" | attacker-influenceable; safety-critical | `LabelDenylist` |
 
@@ -364,6 +424,7 @@ unchanged         12        0/12      0.004   no
 blocked            8        0/8       0.011   no
 task_done         10        0/10      0.006   no
 looping            6        0/6       0.019   no
+wrong_context      0        —         —       NOT YET RUN  ← §2.5
 target            14        1/14      0.021   no
 sufficient        14        0/14      0.014   no
 risk_destructive  14        1/14      0.031   no

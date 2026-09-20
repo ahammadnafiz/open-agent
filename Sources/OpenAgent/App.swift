@@ -3,7 +3,7 @@ import Harness
 import SwiftUI
 
 @main
-struct ComputerAgentApp: App {
+struct OpenAgentApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     // No main window. The agent's interface is the overlay it draws over other
@@ -39,9 +39,27 @@ struct CLI {
     var label = "Send"
     var intent: CursorIntent = .routine
 
+    /// Verbs the CLI contract defines but the binary does not implement yet.
+    ///
+    /// They fail loudly with machine-readable JSON rather than being absent,
+    /// because a skill file written against `docs/host-contract.md` will reach
+    /// for them and "unknown argument, doing something else" is the worst
+    /// possible answer to give an agent. See build-sequence 5.0.
+    private static let plannedVerbs: Set<String> = ["run", "resume", "observe", "act"]
+
     static func parse(_ argv: [String]) -> CLI {
         var o = CLI()
         var i = 1
+
+        if let verb = argv.dropFirst().first, plannedVerbs.contains(verb) {
+            print("""
+            {"status":"not_implemented","verb":"\(verb)",\
+            "reason":"the CLI surface is build-sequence task 5.0; only `overlay` exists so far",\
+            "see":"docs/host-contract.md"}
+            """)
+            exit(2)
+        }
+
         func next() -> String? { i + 1 < argv.count ? argv[i + 1] : nil }
 
         while i < argv.count {
@@ -78,19 +96,29 @@ struct CLI {
     }
 
     static let help = """
-    computer-agent — cursor overlay
+    open-agent — a computer-use agent driven by the coding agent you already run
 
-      swift run ComputerAgent                    scripted mail task, once
-      swift run ComputerAgent --loop             repeat until Ctrl-C
-      swift run ComputerAgent --speed 0.4        slow the easing down to look at it
-      swift run ComputerAgent --at 0.8,0.2 \\
+    Implemented:
+
+      open-agent overlay                         scripted mail task, once
+      open-agent overlay --loop                  repeat until Ctrl-C
+      open-agent overlay --speed 0.4             slow the easing down to look at it
+      open-agent overlay --at 0.8,0.2 \\
           --verb send --label "Send" --danger    one move + click, amber
+
+    Specified, not built yet (build-sequence 5.0) — these exit 2 with JSON:
+
+      open-agent run "<task>" --plan plan.json
+      open-agent resume <session> --eyes <n> | --plan plan.json
+      open-agent observe [--app <name> | --browser]
+      open-agent act --session <s> --kind <kind> --target <id>
 
     --at takes fractions of the main display (0,0 top-left) so it reads the
     same on any screen. --danger is the colour an irreversible action gets.
 
     Tuning lives in Sources/Harness/Config/Constants.swift § HUD (timing) and
-    Sources/ComputerAgent/HUD/CursorView.swift (everything visual).
+    Sources/OpenAgent/HUD/CursorView.swift (everything visual).
+    The contract a host drives is docs/host-contract.md.
     """
 }
 
@@ -117,7 +145,7 @@ enum CursorDemo {
             return
         }
 
-        print("▸ computer-agent — cursor overlay")
+        print("▸ open-agent — cursor overlay")
         print("  narrating a mail task with no harness behind it")
         print("  --help for the knobs\(options.loop ? " · Ctrl-C to stop" : "")\n")
 

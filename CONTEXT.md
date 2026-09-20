@@ -1,6 +1,6 @@
 # Context
 
-Domain glossary for the macOS computer-use agent. Terms only — no implementation
+Domain glossary for open-agent. Terms only — no implementation
 detail, no decisions. Decisions live in `docs/adr/`.
 
 ## Task
@@ -60,10 +60,32 @@ Handling a single Step by falling back to interpreting an image of the screen,
 because the Fast Path could not identify the target confidently. Escalation is
 per-Step; it does not switch the whole Task.
 
+## Host Agent
+The coding agent the user is already running, which invokes this one. It decides
+the route, looks at the screen when text is not enough, writes any prose the Task
+needs, and can ask the user a question — which no component here can do. It is
+never in the per-Step loop and is never consulted about a Confirmation.
+
+## Skill
+The file that teaches one Host Agent to drive this one. There is a Skill per
+host and they are interchangeable wrappers; the command-line interface is the
+real contract, and a Skill that contradicts it is wrong.
+
+## Callback
+A point at which the agent stops and hands a specific question back to the Host
+Agent: either it cannot identify a target from text, or the route it was given
+turns out to be wrong. A Callback is a question with one answer, never a transfer
+of control — the agent resumes its own loop as soon as it is answered.
+
+## Session
+One Task's state, persisted so it survives between Callbacks. The agent exits
+between them rather than holding a process open, because the Host Agent's turns
+are separated by gaps it does not control.
+
 ## Plan
-An ordered outline of intended Steps produced once, at the start of a Task, from
-the instruction alone. A Plan is a hypothesis about the route, not a script. The
-agent is expected to depart from it; departing is not failure.
+An ordered outline of intended Steps produced once, at the start of a Task, by
+the Host Agent. A Plan is a hypothesis about the route, not a script. The agent
+is expected to depart from it; departing is not failure.
 
 ## Verification
 The judgment made after every Step about whether the Task moved forward. It is
@@ -85,9 +107,9 @@ single Step.
 
 ## Composition
 Producing prose the Task requires — the body of a post, the text of a reply.
-Distinct from every other model call in the system because its output is read by
-a human rather than acted on by code, and because a refusal to compose is
-visible and harmless where a refusal to plan would stall the agent.
+Distinct from every other judgment in the system because its output is read by a
+human rather than acted on by code. It is the one thing the Host Agent produces
+that the user, rather than the agent, is the audience for.
 
 ## Candidate Set
 The elements the agent considers as possible targets for one Step, after

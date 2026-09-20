@@ -105,10 +105,9 @@ invariant, and it holds.
 ### 3. The classifier takes a third input, still upgrade-only
 
 Captured labels come from three sources, in priority order: OCR text falling
-inside the box; the label the vision model returns alongside its index (**new** —
-tier 4's response becomes `{index, label}`, see [jev-questions.md](../jev-questions.md) §2.5);
-and, failing both, empty. Tier 4's response type changes from an index to
-`{index, label}` — see [models.md](../models.md) § Vision escalation.
+inside the box; the label the vision model returns alongside its index; and,
+failing both, empty. Tier 4's response type therefore changes from a bare index
+to `{index, label}` — see [host-contract.md](../host-contract.md) § needs_eyes.
 
 ```swift
 func classify(_ action: Action, target: Element?) -> Reversibility {

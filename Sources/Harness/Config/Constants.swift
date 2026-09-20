@@ -19,26 +19,13 @@ public enum Constants {
 
     public enum Models {
         /// Pinned, never `jev-latest`. Every threshold here assumes this version.
+        ///
+        /// The only model id this project owns. Planning, vision and composition
+        /// moved to the host agent in ADR 0009, which took `claude-sonnet-5`,
+        /// `gemini-3.8-flash`, `claude-opus-5` and Apple Foundation Models with
+        /// them. The measured A/B that chose the vision model is preserved in
+        /// ADR 0004; it does not belong here now that nothing reads it.
         public static let jev = "jev-1.13.0"
-
-        /// OpenRouter IDs. Configuration, not truth — the catalogue moves.
-        public static let planner = "anthropic/claude-sonnet-5"      // $2.00/M
-
-        /// Vision escalation. Chosen by measurement, not reputation — see ADR 0004.
-        ///
-        /// Measured on 12 intents over one screenshot with 23 numbered boxes:
-        ///   gemini-3.8-flash      icons 5/7 (71%)  text 5/5  total 83%  $0.00096
-        ///   gemini-3.5-flash-lite icons 4/7 (57%)  text 5/5  total 75%  $0.00039
-        ///   gemini-2.5-pro        icons 5/7 (71%)  text 5/5  total 83%  $0.00443
-        ///   claude-sonnet-5       icons 5/7 (71%)  text 5/5  total 83%  $0.00989
-        ///
-        /// flash-lite is the only one below the ceiling, and the gap is entirely on
-        /// icon targets — which is the only class tier 4 ever sees, since tiers 1–3
-        /// already resolve anything text-labelled.
-        public static let vision = "google/gemini-3.8-flash"          // $0.75/M
-
-        /// Used only when a replan has already failed once at the default tier.
-        public static let replanEscalated = "anthropic/claude-opus-5"
     }
 
     // MARK: - Jev thresholds
@@ -74,6 +61,23 @@ public enum Constants {
         /// Recent history is repeating with no screen change.
         /// Measured 0.95 when looping, 0.04–0.15 when not.
         public static let looping = 0.70
+
+        /// The screen shows a *different* account, mailbox, document or
+        /// repository than the one the task named.
+        ///
+        /// **UNMEASURED — this value is a placeholder.** It is the only
+        /// threshold in this file without provenance, and it is written down
+        /// rather than guessed silently. Needs the four fixtures in
+        /// `jev-questions.md` §2.5 and a `battery-eval` run before it is
+        /// trusted; if the answers straddle it, reword the question rather
+        /// than move the number.
+        ///
+        /// Exists because the other five verification questions all answer
+        /// *correctly* while the agent operates on the wrong instance — traced
+        /// on a real task, and the failure is silent.
+        ///
+        /// Only asked when `task_context` is non-empty.
+        public static let wrongContext = 0.70
 
         // -- Selection ----------------------------------------------------
 
@@ -357,18 +361,6 @@ public enum Constants {
         /// captured successfully.
         public static let captureRetries = 3
         public static let captureRetryDelay: Duration = .milliseconds(250)
-    }
-
-    // MARK: - On-device composition
-
-    public enum OnDevice {
-        /// Apple Foundation Models is a hard 4,096 tokens TOTAL. A verbose
-        /// instruction string plus a nested @Generable schema overflowed it at
-        /// 4,090 tokens before any input arrived. Keep instructions short.
-        public static let maxInstructionChars = 400
-
-        /// Measured 1.33 s for a short post. Beyond this, fall back.
-        public static let timeout: Duration = .seconds(8)
     }
 
     // MARK: - UI

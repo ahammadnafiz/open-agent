@@ -8,10 +8,11 @@ behind the shape. Terms are defined in [../CONTEXT.md](../CONTEXT.md).
 ## 1. The shape in one page
 
 ```
-runTask(instruction)
+open-agent run "<task>" --plan plan.json
 │
 ├─ Budget()                      40 steps / 90s machine / 3 escalations / 2 replans / $0.25
-├─ Planner.plan(instruction)     OpenRouter, ONCE. Produces a Plan (a hypothesis, not a script).
+├─ Plan                          from the HOST, ONCE, before the loop starts.
+│                                A hypothesis about the route, not a script.
 │
 └─ loop until done, failed, or budget exhausted:
    │
@@ -31,6 +32,8 @@ runTask(instruction)
    │              blocked      login wall / permission / captcha / error
    │              taskDone     is the whole task visibly complete
    │              looping      is recent history repeating
+   │              wrongContext is this a DIFFERENT account/doc than the task named
+   │                           (only asked when task_context is non-empty)
    │              target       Choice over candidate ids  ← the selection
    │              sufficient   is this element list enough, or do we need eyes
    │              risk*        intent-level risk nouls
@@ -39,10 +42,13 @@ runTask(instruction)
    ├─ if verdict.taskDone           → finish(.succeeded)
    ├─ if verdict.blocked  ≥ T       → surface to user, STOP. Never retried.
    ├─ if verdict.looping  ≥ T       → escalate once, then STOP.
+   ├─ if verdict.wrongContext ≥ T   → RecoveryLadder.next()  right screen, wrong one
    ├─ if ¬verdict.progressed        → RecoveryLadder.next()
    ├─ if verdict.sufficient < T
    │     ∨ verdict.target.confidence < T
-   │                                 → VisionFallback.decide(screenshot)   2–4 s
+   │                                 → RETURN needs_eyes, exit.
+   │                                   Host reads the marked screenshot and
+   │                                   resumes with an index. One tool call.
    │  else                           → action from verdict.target          fast path
    │
    │  ── GATE ──────────────────────────────────────  deterministic, no model
@@ -406,12 +412,29 @@ rung 2   replan from the current screen     the plan's assumption about the rout
 rung 3   stop, surface state, ask the user
 ```
 
+**Rung 0 is skipped when the screen moved.** Jev distinguishes two failures that
+the rung order alone conflates, and retrying the second is guaranteed waste:
+
+| `progressed` | `unchanged` | What happened | Rung |
+|---|---|---|---|
+| low | **high** | the action did nothing — a click genuinely missed | 0, retry |
+| low | **low** | the screen moved, just not toward the goal | **straight to 2** |
+
+The second row is what "the screen is new" looks like from inside the loop: an
+unexpected dialog, the wrong account, a redirect. Retrying reproduces it. The
+fixtures separate cleanly — 0.84/0.91 on genuine no-ops against 0.02–0.06
+otherwise — so the branch is cheap and well supported.
+
 ```swift
 actor RecoveryLadder {
     private var rungByStep: [Int: Int] = [:]
 
-    func next(for stepIndex: Int, budget: inout Budget) -> Recovery {
-        let rung = (rungByStep[stepIndex] ?? -1) + 1
+    func next(for stepIndex: Int, verdict: StepVerdict, budget: inout Budget) -> Recovery {
+        var rung = (rungByStep[stepIndex] ?? -1) + 1
+
+        // The screen changed and did not help. Retrying reproduces it exactly.
+        if rung == 0, verdict.unchanged < Constants.Jev.unchanged { rung = 2 }
+
         rungByStep[stepIndex] = rung
         switch rung {
         case 0: return .retry
@@ -577,9 +600,8 @@ architecture exists to prevent.
 public actor AgentLoop {
     private let source: ElementSourceRegistry
     private let jev: JevClient          // actor, one shared HTTPS connection
-    private let router: OpenRouterClient
-    private let writer: OnDeviceWriter
-    private let hud: HUDBridge          // @MainActor, awaits human approval
+    private let session: Session        // run/resume state, on disk between invocations
+    private let hud: HUDBridge          // @MainActor: the overlay, and the approval sheet
 }
 ```
 
@@ -603,20 +625,22 @@ Rules, each of which exists because of a real failure mode:
 
 | # | Source | Action | Jev verdict (prev step) | Gate | ms |
 |---|---|---|---|---|---|
-| 0 | — | plan | — | — | ~2500 |
+| 0 | — | plan (host, before `run` is invoked) | — | — | host turn |
 | 1 | ax | `openApp` Zen (agent profile, `--remote-debugging-port`) | — | auto | ~1500 |
 | 2 | bidi | `navigate` x.com/ahammad_nafiz | progressed 0.97 | auto | ~800 |
 | 3 | bidi | `click` compose | progressed 0.95, sufficient 0.93 | auto | ~410 |
-| 4 | — | compose text on-device (Apple FM) | — | — | ~1330 |
+| 4 | — | post body arrives in the plan payload, written by the host | — | — | 0 |
 | 5 | bidi | `type` post body | progressed 0.97 | auto | ~600 |
 | 6 | bidi | `publish` Post button | progressed 0.95 | **CONFIRM** | human |
 | 7 | bidi | — | taskDone 0.95 | — | ~410 |
 
-Machine time ≈ 7.6 s. Jev cost ≈ 6 × $0.000027 ≈ **$0.00016**. Plan ≈ $0.005.
-Vision: not used. One confirmation, showing the exact post text.
+Machine time ≈ 6.3 s inside `open-agent`. Jev cost ≈ 6 × $0.000027 ≈ **$0.00016**,
+which is the entire metered cost — planning and composition were host turns.
+No callback fired. One confirmation, showing the exact post text.
 
 The failure path is the more instructive one. If step 3's click does nothing,
 step 4's batch returns `progressed 0.03, unchanged 0.84`. The ladder retries the
-click once. Still unchanged, so it escalates: one screenshot, one vision call,
-2–4 s and roughly a cent. That is the entire cost of being wrong, and it is paid
+click once. Still unchanged, so it escalates: one screenshot, one `needs_eyes`
+return, one host turn to look at it, one `resume`. That is the entire cost of
+being wrong — two tool calls rather than a cent — and it is paid
 only on the steps that actually go wrong.
