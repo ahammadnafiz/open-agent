@@ -24,6 +24,16 @@ public final class CursorOverlay {
     private let state = OverlayState()
     private var panel: NSPanel?
 
+    /// Multiplies pointer velocity. 1.0 is `Constants.HUD.pixelsPerSecond`.
+    ///
+    /// Exists so the motion can be judged at half and double speed without a
+    /// rebuild — the easing curve is a product decision and product decisions
+    /// need to be *watched*, repeatedly, before anyone can have an opinion.
+    /// It is an instance property rather than a constant because it is a
+    /// debugging affordance, not a tuned value; the shipped value lives in
+    /// `Constants.HUD`.
+    public var speedScale: Double = 1.0
+
     private init() {}
 
     // MARK: - Lifecycle
@@ -145,7 +155,7 @@ public final class CursorOverlay {
         let travel = min(
             max(distance / Constants.HUD.pixelsPerSecond, Constants.HUD.minMoveSeconds),
             Constants.HUD.maxMoveSeconds
-        )
+        ) / speedScale
 
         state.intent = intent
         state.verb = verb

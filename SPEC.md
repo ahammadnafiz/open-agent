@@ -170,6 +170,13 @@ swift build -c release
 # Run (requires Accessibility permission for the built binary)
 swift run ComputerAgent
 
+# Look at the cursor overlay on its own, with no harness behind it
+swift run ComputerAgent --help
+swift run ComputerAgent --loop                       # repeat until Ctrl-C
+swift run ComputerAgent --speed 0.4                  # slow the easing down
+swift run ComputerAgent --at 0.8,0.2 --verb send \
+    --label "Send" --danger                          # one move + click, amber
+
 # Test — all
 swift test
 
