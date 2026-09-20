@@ -180,7 +180,8 @@ enum CLI {
     Approval is not part of this interface. An irreversible action shows a native
     sheet and blocks until a human clicks it. There is no flag that answers it.
 
-    Credentials: export TYPESAFE_API_KEY (the vendor is TypeSafe; Jev is the
-    model). The contract a host drives is docs/host-contract.md.
+    Credentials: TYPESAFE_API_KEY in the environment, or the key on its own in
+    ~/.config/open-agent/credentials (the vendor is TypeSafe; Jev is the model).
+    The contract a host drives is docs/host-contract.md.
     """
 }

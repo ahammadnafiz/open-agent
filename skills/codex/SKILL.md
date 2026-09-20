@@ -157,8 +157,12 @@ Never count their thinking time against the task — the binary already doesn't.
 
 ## Before the first run
 
-- `TYPESAFE_API_KEY` must be exported. The vendor is **TypeSafe**; Jev is the
+- The TypeSafe key must be resolvable. The vendor is **TypeSafe**; Jev is the
   model. There is no `JEV_API_KEY`.
+  You are running in the user's project directory, not in the agent's checkout,
+  so a `.env` bridged by `direnv` does not reach here — the key comes from
+  `TYPESAFE_API_KEY` in the environment, or from
+  `~/.config/open-agent/credentials`. `install.sh` writes that file. ADR 0012.
 - The binary needs **Accessibility** permission, and the grant is per-binary — a
   freshly built executable is untrusted even in a granted terminal.
   System Settings → Privacy & Security → Accessibility.

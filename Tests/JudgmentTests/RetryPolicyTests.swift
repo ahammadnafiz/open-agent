@@ -137,6 +137,20 @@ struct RetryPolicyTests {
 @Suite("Credentials")
 struct CredentialsTests {
 
+  /// A scratch credentials file, created with the mode `install.sh` uses.
+  private func withCredentialsFile(
+    _ contents: String, mode: Int = 0o600, _ body: (String) throws -> Void
+  ) throws {
+    let path = FileManager.default.temporaryDirectory
+      .appendingPathComponent("open-agent-credentials-\(UUID().uuidString)").path
+    FileManager.default.createFile(
+      atPath: path, contents: Data(contents.utf8),
+      attributes: [.posixPermissions: mode]
+    )
+    defer { try? FileManager.default.removeItem(atPath: path) }
+    try body(path)
+  }
+
   /// The vendor's own SDK convention, so a `.env` written for the Python or JS
   /// SDK works here unchanged. **Not `JEV_API_KEY`** — Jev is the model,
   /// TypeSafe is the vendor.
@@ -147,14 +161,15 @@ struct CredentialsTests {
 
   @Test("a present key is returned, trimmed")
   func presentKey() throws {
-    let key = try Credentials.apiKey(environment: ["TYPESAFE_API_KEY": "  abc123\n"])
+    let key = try Credentials.apiKey(
+      environment: ["TYPESAFE_API_KEY": "  abc123\n"], file: nil)
     #expect(key == "abc123")
   }
 
   @Test("an absent key throws naming the variable")
   func absentKey() {
     #expect(throws: JevError.missingAPIKey(variable: "TYPESAFE_API_KEY")) {
-      try Credentials.apiKey(environment: [:])
+      try Credentials.apiKey(environment: [:], file: nil)
     }
   }
 
@@ -163,7 +178,7 @@ struct CredentialsTests {
   @Test("an empty or whitespace key is treated as absent", arguments: ["", "   ", "\n\t"])
   func emptyKey(value: String) {
     #expect(throws: JevError.missingAPIKey(variable: "TYPESAFE_API_KEY")) {
-      try Credentials.apiKey(environment: ["TYPESAFE_API_KEY": value])
+      try Credentials.apiKey(environment: ["TYPESAFE_API_KEY": value], file: nil)
     }
   }
 
@@ -172,14 +187,79 @@ struct CredentialsTests {
   @Test("JEV_API_KEY is not read")
   func legacyNameIgnored() {
     #expect(throws: JevError.missingAPIKey(variable: "TYPESAFE_API_KEY")) {
-      try Credentials.apiKey(environment: ["JEV_API_KEY": "abc123"])
+      try Credentials.apiKey(environment: ["JEV_API_KEY": "abc123"], file: nil)
     }
   }
 
-  @Test("the guidance names the variable and the console")
+  /// ADR 0012. The installed binary runs from any directory; `direnv` exports
+  /// only inside the checkout. Without this the `/open-agent` skill fails on
+  /// step one for every task that is not about this repository.
+  @Test("the file is read when the environment is silent")
+  func fileFallback() throws {
+    try withCredentialsFile("filekey123\n") { path in
+      let key = try Credentials.apiKey(environment: [:], file: path)
+      #expect(key == "filekey123")
+    }
+  }
+
+  /// An explicit `export` is what a person reaches for to override what is
+  /// installed. A stored file that outranked it would make that impossible.
+  @Test("the environment outranks the file")
+  func environmentWins() throws {
+    try withCredentialsFile("filekey123") { path in
+      let key = try Credentials.apiKey(
+        environment: ["TYPESAFE_API_KEY": "envkey456"], file: path)
+      #expect(key == "envkey456")
+    }
+  }
+
+  /// `export TYPESAFE_API_KEY=` is how a shell unsets a variable it already
+  /// exported. Treating that as "present but empty" would shadow the file with
+  /// nothing and produce a 401 instead of a working key.
+  @Test("an empty environment value falls through to the file")
+  func emptyEnvironmentFallsThrough() throws {
+    try withCredentialsFile("filekey123") { path in
+      let key = try Credentials.apiKey(
+        environment: ["TYPESAFE_API_KEY": "  "], file: path)
+      #expect(key == "filekey123")
+    }
+  }
+
+  @Test("an empty file is treated as absent")
+  func emptyFile() throws {
+    try withCredentialsFile("\n  \n") { path in
+      #expect(throws: JevError.missingAPIKey(variable: "TYPESAFE_API_KEY")) {
+        try Credentials.apiKey(environment: [:], file: path)
+      }
+    }
+  }
+
+  @Test("a missing file is not an error, just no key")
+  func missingFile() {
+    #expect(throws: JevError.missingAPIKey(variable: "TYPESAFE_API_KEY")) {
+      try Credentials.apiKey(environment: [:], file: "/nonexistent/open-agent/credentials")
+    }
+  }
+
+  /// A key the whole machine can read is not a secret. Tightened rather than
+  /// refused, because refusing would abort the task at the moment it matters and
+  /// the only remedy available to the user is this exact `chmod`.
+  @Test("a world-readable file still works, and is tightened to 0600")
+  func loosePermissionsTightened() throws {
+    try withCredentialsFile("filekey123", mode: 0o644) { path in
+      let key = try Credentials.apiKey(environment: [:], file: path)
+      #expect(key == "filekey123")
+      let mode = try #require(
+        FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? NSNumber)
+      #expect(mode.intValue & 0o777 == 0o600)
+    }
+  }
+
+  @Test("the guidance names the variable, the file and the console")
   func guidance() {
     #expect(Credentials.missingKeyGuidance.contains("TYPESAFE_API_KEY"))
     #expect(Credentials.missingKeyGuidance.contains("console.typesafe.ai"))
+    #expect(Credentials.missingKeyGuidance.contains(".config/open-agent/credentials"))
   }
 }
 
