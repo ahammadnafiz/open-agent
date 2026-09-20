@@ -55,9 +55,13 @@ struct BiDiSnapshot: Sendable {
   let readyState: String
   /// The content area's origin on screen, in CSS pixels.
   let screenOrigin: CGPoint
+  /// The element holding keyboard focus, as an action id. Empty when focus is
+  /// on nothing the snapshot collected.
+  let focusedID: String
 
   init(_ raw: [String: Any]) {
     url = (raw["url"] as? String) ?? ""
+    focusedID = (raw["focused"] as? String) ?? ""
     title = (raw["title"] as? String) ?? ""
     text = (raw["text"] as? String) ?? ""
     pageKey = (raw["page_key"] as? String) ?? ""
@@ -151,6 +155,20 @@ public actor BiDiSource: ElementSource {
     // state rather than a count lets the caller refuse to settle on it.
     guard let latest else { return "" }
     return latest.readyState == "complete" ? "\(latest.nodeCount)" : "loading"
+  }
+
+  /// The candidate holding keyboard focus, when the page reports one.
+  ///
+  /// This is what makes `Enter` after `type` deterministic: the field just
+  /// typed into is the field focus is in, whatever its accessible name has
+  /// become. Selection by name cannot answer that question — the name changed
+  /// the moment the text landed.
+  public func focused(among elements: [Element]) async -> Element? {
+    guard let handle = latest?.focusedID, !handle.isEmpty else { return nil }
+    return elements.first { element in
+      if case .dom(let candidate, _, _, _) = element.ref { return candidate == handle }
+      return false
+    }
   }
 
   /// The snapshot's own fingerprint of the page.

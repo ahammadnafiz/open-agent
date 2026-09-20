@@ -232,9 +232,17 @@ enum Commands {
         let (client, browserSource) = try await browserSession()
         bidiClient = client
         source = browserSource
-        // Work in our own tab, from the first observation onward. The tab is
-        // found by name, so a run plus two resumes is one tab and not three.
-        _ = try await client.openAgentTab()
+        // Settle which tab this run works in before the first observation,
+        // otherwise the task is judged against whatever page happened to be
+        // open — measured: a leftover Instagram login tab produced
+        // `blocked 0.91` at step 0, before the agent had done anything.
+        //
+        // The plan's first navigation says which site this is about, which is
+        // what lets an already-open tab on that site be used instead of a
+        // second copy of it. A plan with no navigation names no site, and then
+        // nothing is opened at all.
+        _ = try await client.tab(
+          for: session.plan.steps.first(where: { $0.kind == .navigate })?.payload)
         do {
           // The AX executor still exists: `openApp` and native fallbacks are
           // reachable from a browser task.

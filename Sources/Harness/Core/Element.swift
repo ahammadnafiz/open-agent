@@ -67,6 +67,17 @@ public protocol ElementSource: Sendable {
   /// Everything actionable the source can see, unfiltered.
   func observe() async throws -> [Element]
   var kind: SourceKind { get }
+  /// The candidate that currently holds keyboard focus, when the source can say.
+  ///
+  /// A requirement rather than a cast at the call site: both tiers can answer
+  /// it, and the loop asking `source as? AXSource` is what left the browser
+  /// tier guessing where `Enter` should go.
+  func focused(among elements: [Element]) async -> Element?
+}
+
+extension ElementSource {
+  /// Sources with no notion of focus say so, rather than being asked to lie.
+  public func focused(among elements: [Element]) async -> Element? { nil }
 }
 
 /// How finished a screen looks, beyond the elements it is offering.

@@ -336,16 +336,18 @@ public actor BiDiClient {
     return try JSONSerialization.data(withJSONObject: plain)
   }
 
-  /// Navigates, in a tab this run opened for itself.
+  /// Navigates — in the tab already showing that site, when there is one.
   ///
-  /// **The agent does not take over the tab you are reading.** Navigating
-  /// whichever context `getTree` returned replaced the page the user had open,
-  /// in their own browser, with no way back but history — observed: an
-  /// Instagram login page appeared where their page had been.
+  /// **The agent does not take over the tab you are reading, and it does not
+  /// open a second copy of the tab you already have.** Navigating whichever
+  /// context `getTree` returned replaced the page the user had open, with no
+  /// way back but history. Opening a fresh tab regardless went the other way:
+  /// a browser already showing Instagram got a second Instagram, every run.
   ///
-  /// A person given this task opens a tab for it. So does this.
+  /// A person given this task uses the window they already have open, and opens
+  /// one only if they have none. So does this — `tab(for:)`.
   public func navigate(to url: String) async throws {
-    let target = try await openAgentTab()
+    let target = try await tab(for: url)
     try await send(
       "browsingContext.navigate",
       ["context": target, "url": url, "wait": "complete"]
@@ -371,8 +373,42 @@ public actor BiDiClient {
   /// task against a page that had nothing to do with it — measured: a leftover
   /// Instagram login tab from an earlier run produced `blocked 0.91` at step 0,
   /// before the agent had navigated anywhere or done anything at all.
-  public func openAgentTab() async throws -> String {
-    if let agentTabID { return agentTabID }
+  public func tab(for url: String? = nil) async throws -> String {
+    let contexts = try await topLevelContexts()
+
+    // Once this run has a tab, it keeps it. Re-deciding every step is how an
+    // agent ends up hopping between two tabs on the same site — and the user
+    // has two open right now, because of the bug above.
+    if let agentTabID, contexts.contains(where: { $0.id == agentTabID }) {
+      return agentTabID
+    }
+
+    // 1. The tab already showing this site. This is the one the user means by
+    //    "I already have Instagram open".
+    if let host = Self.host(of: url),
+      let existing = contexts.first(where: { Self.host(of: $0.url) == host })
+    {
+      Log.info("using the tab already on \(host)")
+      return await adopt(existing, naming: true)
+    }
+
+    // 2. A tab this agent opened before, found by window name rather than by
+    //    id — BiDi context ids are not stable across sessions, so the id a run
+    //    writes down is not the id its own resume sees for the same tab.
+    //
+    //    Scanned across every context, not looked up through `window.open`:
+    //    named targeting only searches contexts the opener is familiar with, so
+    //    a run that resolved to an unrelated tab could not see its own tab and
+    //    opened another one. Measured — a blank tab per invocation.
+    for context in contexts {
+      guard await name(of: context.id) == Self.tabName else { continue }
+      Log.info("re-using the agent tab from an earlier run")
+      return await adopt(context, naming: false)
+    }
+
+    // 3. Nothing to reuse. Open one — but only when a navigation is about to
+    //    fill it, so a blank tab is never left behind for its own sake.
+    guard url != nil else { return try context() }
 
     // **A named window.** `window.open(url, name)` returns the existing tab
     // with that name if there is one, and opens it if there is not — so every
@@ -418,6 +454,80 @@ public actor BiDiClient {
     _ = try? await send("browsingContext.activate", ["context": id])
     Log.debug("agent tab \(id) in container \(userContextID ?? "default")")
     return id
+  }
+
+  /// One top-level tab, as `browsingContext.getTree` describes it.
+  struct TabContext: Sendable {
+    let id: String
+    let url: String
+    let userContext: String?
+  }
+
+  /// Every tab the browser has, ignoring frames inside them.
+  private func topLevelContexts() async throws -> [TabContext] {
+    let tree = try await send("browsingContext.getTree", [:])
+    guard let contexts = tree["contexts"] as? [[String: Any]] else { return [] }
+    return contexts.compactMap { raw in
+      guard let id = raw["context"] as? String else { return nil }
+      return TabContext(
+        id: id,
+        url: (raw["url"] as? String) ?? "",
+        userContext: raw["userContext"] as? String
+      )
+    }
+  }
+
+  /// The host a URL names, with `www.` dropped so one spelling matches another.
+  ///
+  /// Host rather than full URL: the user's open Instagram tab is sitting on a
+  /// thread, and the task navigates to the inbox. Same tab, same session, and
+  /// requiring the URLs to be equal would open a second one.
+  static func host(of url: String?) -> String? {
+    guard let url, let host = URLComponents(string: url)?.host, !host.isEmpty else { return nil }
+    return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+  }
+
+  /// Makes this tab the one the run works in, and brings it to the front.
+  private func adopt(_ context: TabContext, naming: Bool) async -> String {
+    agentTabID = context.id
+    contextID = context.id
+    userContextID = context.userContext
+    if naming { await claimName(of: context.id) }
+    _ = try? await send("browsingContext.activate", ["context": context.id])
+    Log.debug("working in tab \(context.id) in container \(userContextID ?? "default")")
+    return context.id
+  }
+
+  /// What a tab calls its own window.
+  private func name(of context: String) async -> String {
+    guard
+      let result = try? await send(
+        "script.evaluate",
+        [
+          "expression": "window.name",
+          "target": ["context": context],
+          "awaitPromise": false,
+          "resultOwnership": "none",
+        ]),
+      let value = result["result"] as? [String: Any]
+    else { return "" }
+    return (value["value"] as? String) ?? ""
+  }
+
+  /// Names an adopted tab so the next process recognises it.
+  ///
+  /// Only when the page has not named its own window. `window.name` belongs to
+  /// the page and some sites keep state in it; a tab that will not take the
+  /// name still works for this run, it just has to be found by host next time.
+  private func claimName(of context: String) async {
+    _ = try? await send(
+      "script.evaluate",
+      [
+        "expression": "if (!window.name) { window.name = '\(Self.tabName)'; }",
+        "target": ["context": context],
+        "awaitPromise": false,
+        "resultOwnership": "none",
+      ])
   }
 
   /// The window name the agent's tab answers to.

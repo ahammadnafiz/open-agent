@@ -53,24 +53,55 @@ struct AgentTabRegressionTests {
   /// in the user's own browser, with no way back but history. Observed: an
   /// Instagram login page appeared where their page had been.
   ///
-  /// A person given a browser task opens a tab for it.
-  @Test("navigate opens a tab instead of taking over the current one")
+  /// So when nothing open is on that site, a tab is opened for the task.
+  @Test("navigate opens a tab when nothing open is on that site")
   func navigateOpensItsOwnTab() async throws {
     let transport = FakeBiDiTransport(replies: [
       ok(1),  // session.new
       ok(2, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
+      ok(3, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
+      ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name — not ours
       // window.open, answering with the WindowProxy for the named tab
-      ok(3, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(4),  // browsingContext.activate
-      ok(5),  // browsingContext.navigate
+      ok(5, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(6),  // browsingContext.activate
+      ok(7),  // browsingContext.navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
     #expect(try await client.context() == "users-tab", "attaches to what is open")
 
     try await client.navigate(to: "https://instagram.com/")
-    #expect(await transport.methods().contains("script.evaluate"))
     #expect(try await client.context() == "agent-tab", "and works in its own tab after")
+  }
+
+  /// **A browser already showing Instagram got a second Instagram, every run.**
+  ///
+  /// The rule that kept the agent out of the user's tab had no exception for
+  /// the tab that is already on the site the task is about — which is the one
+  /// case where taking it over is not taking anything over. They are signed in
+  /// there, they are looking at it, and they said so twice: *"i already open
+  /// instagram, but it again open new tab"*.
+  ///
+  /// Matched on host, not on URL: their tab sits on a thread while the task
+  /// navigates to the inbox, and requiring equality would open a second one.
+  @Test("a tab already on that site is used instead of a second one")
+  func navigateReusesTheOpenTab() async throws {
+    let open = #"{"contexts":[{"context":"insta-tab","url":"https://www.instagram.com/direct/t/17/"}]}"#
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),  // session.new
+      ok(2, open),  // resolveContext
+      ok(3, open),  // tab(for:)
+      ok(4),  // window.name claimed, so a later run finds it again
+      ok(5),  // browsingContext.activate
+      ok(6),  // browsingContext.navigate
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    try await client.navigate(to: "https://www.instagram.com/direct/inbox/")
+
+    #expect(try await client.context() == "insta-tab")
+    let opened = await transport.sent.filter { $0.contains("window.open") }
+    #expect(opened.isEmpty, "nothing was opened — their tab was already the right one")
   }
 
   /// **The tab is found by name, not remembered by id.** Persisting the id was
@@ -78,14 +109,64 @@ struct AgentTabRegressionTests {
   /// sessions, so the id one process writes is not the id the next one sees for
   /// the same tab. Measured — the browser's tab count climbed with every
   /// invocation while `getTree` never contained the remembered id.
-  ///
-  /// `window.open(url, name)` returns the existing tab with that name, so every
-  /// process lands in the same one with nothing to remember. Measured after:
-  /// 7, 8, 8, 8.
   @Test("the tab is opened by name so separate processes share it")
   func tabIsNamed() {
     #expect(BiDiClient.tabName.contains("open_agent"))
     #expect(BiDiClient.tabName.count > 8, "a name a page might also use would be a collision")
+  }
+
+  /// **`window.open(url, name)` only finds tabs the opener is familiar with.**
+  ///
+  /// Named targeting searches the opener's browsing context group, so a process
+  /// that attached to an unrelated tab could not see its own tab and opened
+  /// another one. Measured: a resume of a run that was working in Instagram
+  /// attached to a GitHub tab, opened a third blank tab, and reported an empty
+  /// screen one keypress short of sending the message.
+  ///
+  /// So the name is scanned for across every tab instead of being looked up
+  /// through an opener.
+  @Test("the agent's tab is found from an unrelated tab")
+  func namedTabFoundAcrossTheTree() async throws {
+    let tree = #"""
+      {"contexts":[{"context":"github-tab","url":"https://github.com/monzim/ecom"},
+                   {"context":"agent-tab","url":"https://www.instagram.com/direct/t/17/"}]}
+      """#
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),  // session.new
+      ok(2, tree),  // resolveContext picks the first loaded tab — GitHub
+      ok(3, tree),  // tab(for:)
+      ok(4, #"{"result":{"type":"string","value":"not-ours"}}"#),
+      ok(5, #"{"result":{"type":"string","value":"__open_agent_tab"}}"#),
+      ok(6),  // browsingContext.activate
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    #expect(try await client.context() == "github-tab")
+
+    // No URL: this is a resume, and the navigation it would have hinted with
+    // happened in the run before.
+    let tab = try await client.tab()
+    #expect(tab == "agent-tab")
+    let opened = await transport.sent.filter { $0.contains("window.open") }
+    #expect(opened.isEmpty, "found, not opened")
+  }
+
+  /// Nothing to reuse and nowhere to go is not a reason to open a blank tab.
+  /// One was opened per invocation, and the user watched them pile up.
+  @Test("with nothing to reuse and no destination, no tab is opened")
+  func noDestinationOpensNothing() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),
+      ok(2, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
+      ok(3, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
+      ok(4, #"{"result":{"type":"string","value":""}}"#),
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+
+    #expect(try await client.tab() == "users-tab")
+    let opened = await transport.sent.filter { $0.contains("window.open") }
+    #expect(opened.isEmpty)
   }
 
   /// Once per session, not once per navigation. A task that visits three pages
@@ -93,14 +174,22 @@ struct AgentTabRegressionTests {
   /// mess of someone's browser.
   @Test("a multi-step task reuses the one tab it opened")
   func oneTabPerSession() async throws {
+    let after = #"""
+      {"contexts":[{"context":"ctx-1","url":"about:blank"},
+                   {"context":"agent-tab","url":"https://a.example/"}]}
+      """#
     let transport = FakeBiDiTransport(replies: [
       ok(1),
       ok(2, oneContext),
-      ok(3, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(4),
-      ok(5),  // first navigate
-      ok(6),  // second navigate
-      ok(7),  // third navigate
+      ok(3, oneContext),  // tab(for:) — one blank tab, no host to match
+      ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name
+      ok(5, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(6),  // activate
+      ok(7),  // first navigate
+      ok(8, after),  // tab(for:) — the tab it made is in the tree now
+      ok(9),  // second navigate
+      ok(10, after),
+      ok(11),  // third navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
@@ -108,8 +197,19 @@ struct AgentTabRegressionTests {
     try await client.navigate(to: "https://b.example/")
     try await client.navigate(to: "https://c.example/")
 
-    let opens = await transport.methods().filter { $0 == "script.evaluate" }
-    #expect(opens.count == 1, "one tab, not three")
+    let opened = await transport.sent.filter { $0.contains("window.open") }
+    #expect(opened.count == 1, "one tab, not three")
+  }
+
+  /// `www.` is a spelling, not a site. Instagram links carry it and the address
+  /// bar hides it, so matching the string would have opened a second tab beside
+  /// the one it was looking at.
+  @Test("host matching ignores the www prefix")
+  func hostMatchingIgnoresWWW() {
+    #expect(BiDiClient.host(of: "https://www.instagram.com/direct/t/17/") == "instagram.com")
+    #expect(BiDiClient.host(of: "https://instagram.com/") == "instagram.com")
+    #expect(BiDiClient.host(of: "about:blank") == nil, "a blank tab is on no site")
+    #expect(BiDiClient.host(of: nil) == nil)
   }
 }
 

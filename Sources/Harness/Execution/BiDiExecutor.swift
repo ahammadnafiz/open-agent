@@ -62,6 +62,7 @@ public struct BiDiExecutor: Executor {
       let handle = try Self.handle(action)
       try await validate(handle)
       try await focus(handle)
+      try await client.performActions([Self.clearSequence()])
       try await client.performActions([Self.keySequence(text)])
       return ExecutionResult(dispatched: true, via: .bidi)
 
@@ -168,6 +169,33 @@ public struct BiDiExecutor: Executor {
         ["type": "pointerMove", "x": Int(point.x), "y": Int(point.y)],
         ["type": "pointerDown", "button": 0],
         ["type": "pointerUp", "button": 0],
+      ],
+    ]
+  }
+
+  /// Select-all, then delete — in whatever now has focus.
+  ///
+  /// **`type` means "this field says this", not "append this".** The recovery
+  /// ladder retries a step by running it again, so a `type` that appended
+  /// doubled the text it was retrying; and a field holding a draft ran the
+  /// payload on to the end of it. Both produce a message that was composed
+  /// correctly and is wrong on screen.
+  ///
+  /// Real key events rather than clearing the value through the DOM: a React
+  /// application does not see an assignment to `.value`, and Instagram's
+  /// composer is a `contenteditable` with no value to assign.
+  private static func clearSequence() -> [String: Any] {
+    let meta = "\u{E03D}"
+    let backspace = "\u{E003}"
+    return [
+      "type": "key", "id": "openAgentKeyboard",
+      "actions": [
+        ["type": "keyDown", "value": meta],
+        ["type": "keyDown", "value": "a"],
+        ["type": "keyUp", "value": "a"],
+        ["type": "keyUp", "value": meta],
+        ["type": "keyDown", "value": backspace],
+        ["type": "keyUp", "value": backspace],
       ],
     ]
   }

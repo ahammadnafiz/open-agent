@@ -270,12 +270,16 @@ public actor AgentLoop {
         )
         Log.info("using host-selected mark \(index): \(element.label)")
       } else if planStep.kind == .pressKey,
-        let ax = source as? AXSource,
-        let focused = ax.focused(among: candidates.elements)
+        let focused = await source.focused(among: candidates.elements)
       {
-        // A keystroke goes where focus is, not where a model guessed. See
-        // `AXSource.focused(among:)` — this is the same element ADR 0008 says
-        // `enter` must be classified against.
+        // A keystroke goes where focus is, not where a model guessed — on both
+        // tiers. This is the same element ADR 0008 says `enter` must be
+        // classified against.
+        //
+        // The browser tier had no answer here, so `Enter` after `type` went
+        // through selection by name — and the name had just changed to the text
+        // that was typed. Measured: a message sat composed and unsent because
+        // nothing on screen was called `Message` any more.
         element = focused
         Log.info("pressKey targets the focused element: \(element.label)")
       } else if verdict.passesSelectionGate,

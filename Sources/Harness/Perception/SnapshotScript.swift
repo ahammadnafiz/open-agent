@@ -292,8 +292,26 @@ enum SnapshotScript {
         if (v) text += v + ' ';
       }
 
+      // What the keyboard is pointing at, by element id.
+      //
+      // **A keystroke goes where focus is, not where a model guessed.** After a
+      // `type` step the composer's accessible name IS the text just typed into
+      // it — Instagram's is named `Message` while empty and `hiii orumoni`
+      // after — so a plan that named the target when it wrote the step can no
+      // longer match it, and the run stalls one keypress short of sending.
+      // Reported here so `pressKey` can skip selection altogether.
+      //
+      // Descends through shadow roots: `document.activeElement` stops at the
+      // host, and the field the user is typing in is inside it.
+      let af = document.activeElement;
+      while (af && af.shadowRoot && af.shadowRoot.activeElement) {
+        af = af.shadowRoot.activeElement;
+      }
+      const focusedID = (af && C.ids.get(af) !== undefined) ? 'e' + C.ids.get(af) : '';
+
       return {
         url: location.href,
+        focused: focusedID,
         title: document.title,
         // Where elements are lost, when none survive. Counted only, never
         // content — this is a funnel, not a page dump.

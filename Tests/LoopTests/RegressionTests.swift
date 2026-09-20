@@ -457,4 +457,59 @@ struct RegressionTests {
     }
     #expect(ladder.next(for: 0, verdict: noOp, budget: budget) == .escalate)
   }
+
+  // MARK: - Enter went looking for a name that had changed
+
+  /// **A keystroke goes where focus is, on every tier.**
+  ///
+  /// The focused-element short-circuit existed, and it was reached through
+  /// `source as? AXSource` — so on a web page `Enter` fell through to selection
+  /// by name. That is the one moment where the name cannot hold: a field's
+  /// accessible name is its own value once something has been typed into it.
+  /// Instagram's composer is `Message` while empty and `hiii orumoni` after,
+  /// and a plan that named it when it was written no longer matches anything.
+  ///
+  /// Measured: a message composed, dispatched, verified — and never sent,
+  /// because step 4 could not find a target called `Message`.
+  @Test("enter goes where focus is, not where the plan's name points")
+  func pressKeyFollowsFocusNotName() async throws {
+    // The judge would pick the Send button; focus is in the composer, whose
+    // name is now the text that was typed into it.
+    let judge = ScriptedJudge([Make.verdict(choice: "e0")])
+    let executor = RecordingExecutor()
+    let composer = Make.element(label: "hiii orumoni", role: "AXTextArea", path: [1])
+
+    _ = await Make.loop(
+      plan: Make.plan([.pressKey]),
+      judge: judge,
+      executor: executor,
+      elements: [Make.element(label: "Send", path: [0]), composer],
+      focusedLabel: "hiii orumoni"
+    ).run()
+
+    let action = try #require(await executor.executed.first)
+    #expect(action.target == composer.ref, "the keystroke went to the focused field")
+  }
+
+  /// A source that cannot report focus is not made to guess — it falls through
+  /// to selection, which is the behaviour every non-browser, non-AX tier has.
+  @Test("a source with no notion of focus still selects normally")
+  func pressKeyWithoutFocusFallsBackToSelection() async throws {
+    let judge = ScriptedJudge([Make.verdict(choice: "e0")])
+    let executor = RecordingExecutor()
+    // Deliberately not a word on the denylist: this test is about selection,
+    // and a confirmation would stop the step before it could be observed.
+    let chosen = Make.element(label: "Compose", path: [0])
+
+    _ = await Make.loop(
+      plan: Make.plan([.pressKey]),
+      judge: judge,
+      executor: executor,
+      elements: [chosen, Make.element(label: "hiii orumoni", role: "AXTextArea", path: [1])],
+      focusedLabel: nil
+    ).run()
+
+    let action = try #require(await executor.executed.first)
+    #expect(action.target == chosen.ref)
+  }
 }

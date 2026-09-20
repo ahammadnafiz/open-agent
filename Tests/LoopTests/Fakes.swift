@@ -7,7 +7,14 @@ import Foundation
 struct FakeSource: ElementSource {
   let kind: SourceKind = .ax
   var elements: [Element]
+  /// Which element the keyboard is pointing at, by label. `nil` is a source
+  /// that cannot tell — which is what every source used to be.
+  var focusedLabel: String?
   func observe() async throws -> [Element] { elements }
+  func focused(among elements: [Element]) async -> Element? {
+    guard let focusedLabel else { return nil }
+    return elements.first { $0.label == focusedLabel }
+  }
 }
 
 struct FailingSource: ElementSource {
@@ -131,6 +138,7 @@ enum Make {
     hud: any HUDBridge = HeadlessHUD(),
     elements: [Element] = [Make.element(), Make.element(label: "Home", path: [1])],
     taskContext: String = "",
+    focusedLabel: String? = nil,
     budget: Budget = Budget(),
     // Defaults to ON so that every test written about the gate keeps testing
     // the gate. `Constants.Safety.askBeforeIrreversible` is what ships, and
@@ -140,7 +148,7 @@ enum Make {
     AgentLoop(
       task: "test task", taskContext: taskContext, plan: plan,
       sessionID: "s_test", pid: 0,
-      source: FakeSource(elements: elements),
+      source: FakeSource(elements: elements, focusedLabel: focusedLabel),
       jev: judge, executors: executor, hud: hud,
       budget: budget,
       asksBeforeIrreversible: asksBeforeIrreversible,
