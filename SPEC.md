@@ -547,3 +547,13 @@ native text field whose window sends on `enter` with no denylist-reachable label
 No example has been collected yet. If one exists, the mitigation is to classify
 `pressKey(.enter)` as irreversible for `.ax` targets by default and absorb the
 extra confirmations.
+
+**Q9 — Two cursors at tiers 3–4. — NEW.**
+`CapturedExecutor` posts a real `CGEvent`, which moves the user's system pointer;
+tiers 1 and 2 move no pointer at all. On a captured step both the overlay cursor
+and the real arrow arrive at the target, which reads as a rendering glitch on
+precisely the steps where the least familiar thing is happening. The proposed
+answer is to hide the overlay cursor on `.captured` and let the real pointer do
+the visible move, keeping the ring and the narration chip so the step still reads
+the same as every other. Unverified — it needs to be watched on a real terminal
+or canvas before it is believed, and it cannot be until 4.6 lands.

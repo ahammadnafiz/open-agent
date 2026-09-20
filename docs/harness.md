@@ -533,6 +533,36 @@ total.** A ref the harness can produce but not act on is the defect ADR 0007 was
 written to close; if a case is ever added, this switch is where it must be
 handled rather than defaulted.
 
+### 7.1 Narration is the same call as execution
+
+The cursor overlay draws the target a moment before the executor fires. The
+ordering matters — it is what gives the user time to object — but the *coupling*
+matters more:
+
+```swift
+// The only supported shape.
+let result = try await hud.narrating(action, target: element) {
+    try await Executor.for(source).execute(action)
+}
+```
+
+Not `overlay.move(…)` followed by `executor.execute(…)`. Two calls can drift, and
+an overlay that rings element X while the executor acts on element Y is worse
+than no overlay at all: it is a confident, legible lie about what just happened,
+and the user has been trained by every correct step before it to believe it.
+Wrapping execution makes the two structurally inseparable.
+
+The overlay reaches the loop through `HUDBridge`, so `Harness` never imports
+AppKit and the headless library stays headless.
+
+**Two cursors at tiers 3–4.** `CapturedExecutor` posts a real `CGEvent` to
+`.cghidEventTap`, which moves the user's actual pointer. Tiers 1 and 2 move no
+pointer at all — they dispatch to the element. So on captured steps the overlay
+cursor and the system cursor both arrive at the same place, which reads as a
+glitch. On `.captured`, keep the ring and the narration chip and **hide the
+overlay cursor**: the real pointer is genuinely doing the work, and saying so is
+more honest than drawing a second arrow over it. Tracked as Open Question Q9.
+
 Both return a result carrying whether the call itself succeeded. **That is not
 verification.** A click can be dispatched perfectly and change nothing; only the
 next step's Jev batch knows whether the task moved. The executor reports
