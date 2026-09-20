@@ -186,6 +186,10 @@ threshold in this system is tuned against `jev-1.13.0` specifically.
 ## Commands
 
 ```bash
+# Install — binaries onto PATH, skill where the host agent looks for it
+./install.sh                 # symlinks, so a rebuild is picked up
+./install.sh --copy          # stable artifacts instead
+
 # Build
 swift build -c release
 
