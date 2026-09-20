@@ -93,9 +93,18 @@ Do not retry it. Do not work around it. Do not try another route, another app,
 or another account. Retrying a login wall produces another login wall — the
 agent has no credential to offer and no amount of retrying invents one.
 
-Tell the user what is in the way and stop. For a site the agent has never logged
-into, that is expected on first use: the agent drives its own browser profile,
-so the user logs in by hand once via `swift run Probe browser-login`.
+Tell the user what is in the way and stop.
+
+A login wall is worth one extra thought before you report it, because the
+commonest cause is not a missing login. The agent drives **Zen, on the profile
+Zen opens by default** — so if the user is signed in somewhere else, in Chrome
+or in a different Zen container, the agent lands on a signed-out page while the
+user is looking at a signed-in one. Say which browser the agent was in. If they
+meant a different one, see *Which browser* below: that is a wall no retry can
+get through.
+
+If the profile genuinely has never logged into that site, the user logs in by
+hand once via `swift run Probe browser-login`.
 
 ### `needs_eyes` is your one visual job
 
@@ -125,20 +134,47 @@ Pass `--browser` instead of `--app`:
 open-agent run "post this to my feed" --plan plan.json --browser
 ```
 
-Three things to know, because they surprise people:
+### Which browser — Zen, unless the user names one
 
-1. **The agent restarts the browser, once.** The debug port is a startup flag
-   with no runtime equivalent, so a browser that is already running cannot be
-   told to start listening. The agent asks it to quit — the session is saved and
-   the tabs come back — and relaunches it on the same profile. About 2 seconds.
+**The agent drives Zen.** Not "the default browser", not whichever window is in
+front of the user: Zen specifically, on the profile Zen itself opens. Say the
+name out loud every time, because the user cannot see which one you mean.
+
+- **They name no browser → Zen.** Tell them by name before you run — *"this
+  will restart Zen"*, never *"your browser"*. Someone watching Chrome while Zen
+  quits behind it has no idea what just happened.
+- **They name Zen → Zen.** Nothing to decide.
+- **They name Chrome, Edge, Safari, Brave or Arc → stop and say it cannot be
+  driven.** The agent speaks WebDriver BiDi, which Gecko exposes and Chromium
+  does not: ADR 0002 chose BiDi over CDP, and there is no CDP client in this
+  binary. Offer Zen and let them choose.
+- **They name another Gecko browser (Firefox, LibreWolf, Waterfox) → say it is
+  not wired up.** `BrowserLauncher.ensureDrivable` takes a binary path, but
+  nothing passes one, so `--browser` always resolves to Zen. Say so before the
+  run, not after.
+
+**Never silently substitute.** Running the task in Zen after the user asked for
+Chrome is the worst outcome available: Zen holds a different set of logins, so
+the task either stops at a login wall or — much worse — succeeds on the wrong
+account. If you cannot use the browser they asked for, say that and stop.
+
+A logged-out page is the usual symptom of this going unsaid. The user is signed
+in where they were looking, and the agent is somewhere else.
+
+### The rest of it
+
+1. **The agent restarts Zen, once.** The debug port is a startup flag with no
+   runtime equivalent, so a browser that is already running cannot be told to
+   start listening. The agent asks it to quit — the session is saved and the
+   tabs come back — and relaunches it on the same profile. About 2 seconds.
 2. **It drives the default profile**, so the user stays logged into everything.
    That also means the agent can reach every account in that browser. The
    confirmation window is what protects them, not the profile.
 3. **`navigate` is a browser step.** On a native app it is refused, and
    `openApp` is refused in the browser — the agent launches its own.
 
-Tell the user before the first browser task that their browser will restart.
-Finding out by watching it close is not the same as being told.
+Tell the user before the first browser task that Zen will restart. Finding out
+by watching it close is not the same as being told.
 
 ## Approval is not part of this interface
 

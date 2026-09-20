@@ -576,8 +576,9 @@ public actor AgentLoop {
         continue
       }
       // **A spinner does not reset stability.** It used to, and on a page that
-      // always has one — X keeps a visible progressbar on an idle timeline —
-      // that meant no poll was ever stable and every step ran to its ceiling.
+      // keeps one — X's composer leaves its character-counter progressbar in
+      // place from the first keystroke onward — that meant no poll was ever
+      // stable and every step after a type ran to its ceiling.
       // The document is complete; what is left is the page's own opinion of
       // itself, and the element list is the better witness.
       let measured =

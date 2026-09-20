@@ -15,6 +15,24 @@ import Foundation
 /// which is why it is no longer the default. ADR 0011.
 public enum BrowserLauncher {
 
+  /// The application's name, as the operating system knows it, derived from
+  /// the binary path.
+  ///
+  /// **So the logs can say which browser.** Every line here used to read "the
+  /// browser", and the one that quits it hardcoded `"Zen"` while the binary it
+  /// waited on was a parameter — two different browsers in one function. A
+  /// person watching Chrome while Zen quits behind it has no way to tell what
+  /// just happened, and that is the confusion this removes.
+  ///
+  /// `/Applications/Zen.app/Contents/MacOS/zen` → `Zen`.
+  static func appName(of binary: String) -> String {
+    for component in (binary as NSString).pathComponents.reversed()
+    where component.hasSuffix(".app") {
+      return String(component.dropLast(".app".count))
+    }
+    return (binary as NSString).lastPathComponent
+  }
+
   public struct Handle: Sendable {
     public let processIdentifier: Int32
     public let port: Int
@@ -152,6 +170,7 @@ public enum BrowserLauncher {
       throw LaunchError.binaryMissing(binary)
     }
     let profile = BrowserProfile.active(override: profileOverride)
+    let browser = appName(of: binary)
 
     // Already drivable. Attach; do NOT start a second browser.
     //
@@ -160,7 +179,7 @@ public enum BrowserLauncher {
     // failed attempt started another browser — each one grabbing a profile,
     // none of them reachable.
     if probes.isListening(port), !forceRestart {
-      Log.info("attaching to the browser already listening on port \(port)")
+      Log.info("attaching to \(browser), already listening on port \(port)")
       return Handle(
         processIdentifier: probes.runningBrowsers(binary).first ?? 0,
         port: port, profile: profile, restartedExistingBrowser: false
@@ -181,14 +200,17 @@ public enum BrowserLauncher {
       // Quit through the application, not with a signal. Gecko saves session
       // state on a clean quit, so the tabs come back; a SIGKILL loses them and
       // leaves the profile lock behind.
-      Log.info("quitting the running browser so its profile can be driven")
-      try probes.quit("Zen")
+      Log.info("quitting \(browser) so its profile can be driven")
+      // The name comes from the binary being launched, not a literal. These
+      // were allowed to disagree, and a quit aimed at one browser while
+      // waiting on another cannot ever succeed.
+      try probes.quit(browser)
       try await probes.waitForExit(binary, Constants.Browser.quitTimeout)
       restarted = true
     }
 
     let pid = try probes.launch(binary, profile, port)
-    Log.info("launched browser pid \(pid) on port \(port)")
+    Log.info("launched \(browser) pid \(pid) on port \(port)")
     Log.info("profile: \(profile)")
 
     return Handle(

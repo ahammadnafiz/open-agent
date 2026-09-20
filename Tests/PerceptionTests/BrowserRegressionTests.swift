@@ -788,3 +788,46 @@ struct TypingCadenceTests {
     #expect(actions.last?["type"] as? String == "keyUp")
   }
 }
+
+
+/// Which browser, said out loud.
+@Suite("Naming the browser being driven")
+struct BrowserNamingTests {
+
+  @Test("the app name comes from the binary path")
+  func appNameFromPath() {
+    #expect(BrowserLauncher.appName(of: "/Applications/Zen.app/Contents/MacOS/zen") == "Zen")
+    #expect(
+      BrowserLauncher.appName(of: "/Applications/Firefox.app/Contents/MacOS/firefox")
+        == "Firefox")
+    // No bundle in the path: fall back to the executable's own name rather
+    // than inventing one.
+    #expect(BrowserLauncher.appName(of: "/usr/local/bin/zen") == "zen")
+  }
+
+  /// **The quit was aimed at a literal while the wait was aimed at a
+  /// parameter.** `ensureDrivable` took the binary to launch but always sent
+  /// the quit to `"Zen"`, so pointing it at any other browser would ask one
+  /// application to close and then wait for a different one to exit — a wait
+  /// that can only time out.
+  @Test("it quits the browser it was asked to drive, not a hardcoded one")
+  func quitsTheBrowserItWasGiven() async throws {
+    let quitTarget = BrowserLaunchRegressionTests.Journal()
+    let probes = BrowserLauncher.Probes(
+      isListening: { _ in false },
+      runningBrowsers: { _ in [999] },
+      binaryExists: { _ in true },
+      quit: { name in quitTarget.record(name) },
+      waitForExit: { _, _ in },
+      launch: { _, _, _ in 4242 }
+    )
+
+    _ = try await BrowserLauncher.ensureDrivable(
+      binary: "/Applications/Firefox.app/Contents/MacOS/firefox",
+      allowRestart: true,
+      probes: probes
+    )
+
+    #expect(quitTarget.all == ["Firefox"])
+  }
+}

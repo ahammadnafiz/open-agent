@@ -169,12 +169,15 @@ public actor BiDiSource: ElementSource {
   static func readiness(readyState: String, busy: Int, nodeCount: Int) -> String {
     // **"Still loading" and "has a spinner on it" are not the same claim, and
     // treating them as one cost a second and a half on every step.** A
-    // document that has not finished is unarguable. A busy marker is not: X
-    // keeps one visible progressbar on a fully loaded, idle home timeline —
-    // measured `ready=complete busy=1` with nothing happening — so reporting
-    // that as `loading` meant the page was never once settled. Every settle
-    // poll hit the caller's reset branch, stability could never accumulate,
-    // and every step paid its ceiling in full.
+    // document that has not finished is unarguable. A busy marker is not.
+    //
+    // X's composer character counter is a `role="progressbar"`
+    // (`data-testid="countdown-circle"`). It appears on the first keystroke
+    // and stays for the rest of the composing session, so from the moment
+    // anything is typed the page claims to be loading and never stops. The
+    // step after a type is the one that clicks Post, so that step paid the
+    // whole budget twice over — every settle poll hit the caller's reset
+    // branch and stability could never accumulate.
     //
     // So they are reported apart, and the caller decides how much each one is
     // worth. `loading` still stops everything. `busy` carries the node count

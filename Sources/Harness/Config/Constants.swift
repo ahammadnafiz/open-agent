@@ -395,12 +395,19 @@ public enum Constants {
     /// How long a spinner on an otherwise finished document is believed.
     ///
     /// **A marker that never clears is scenery, not progress.** `readyState`
-    /// is a fact; `aria-busy` and `role="progressbar"` are a page's opinion,
-    /// and X holds one visible progressbar on an idle, fully loaded timeline
-    /// for as long as you care to watch. Waiting the whole page-load budget
-    /// for it to clear is waiting for something that is not going to happen —
-    /// measured as ready=4041ms on a resume and a settle that could never
-    /// accumulate a single stable poll.
+    /// is a fact; `aria-busy` and `role="progressbar"` are a page's opinion.
+    ///
+    /// X's composer is the case that made this expensive, and it is worth
+    /// naming exactly. Its character counter — `data-testid="countdown-circle"`
+    /// — carries `role="progressbar"`. Measured on x.com: an empty composer has
+    /// one progressbar, `aria-hidden`, counting zero. One keystroke adds the
+    /// ring and `busy` goes to 1. **Deleting the text again does not remove
+    /// it.** So from the first character typed, the page claims to be loading
+    /// for the rest of that composing session — and the step immediately after
+    /// a type is the one that clicks Post. That step paid the full page-load
+    /// budget and a settle that could never accumulate a single stable poll:
+    /// ready=4041ms and settle=1662ms, about 5.7s of waiting on a 20x20px
+    /// character counter.
     ///
     /// A genuine spinner on a complete document — a panel fetching its
     /// contents — resolves in well under this. So it is long enough to catch
