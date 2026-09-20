@@ -452,6 +452,18 @@ public enum Constants {
     /// not what any real keyboard produces, and some controls key off duration.
     public static let keyHoldMicroseconds: UInt32 = 8_000
 
+    /// Gap between characters in the browser, in milliseconds.
+    ///
+    /// The accessibility tier's interval above is a mechanical need — one trip
+    /// through the app's run loop per event. This one is not: `performActions`
+    /// would deliver a whole sentence in a frame, and text that materialises at
+    /// once reads as pasted by a machine rather than typed by someone. The
+    /// person watching is the reason this number exists, so it is set where a
+    /// sentence takes about a second.
+    public static let webKeystrokeMilliseconds = 45
+    /// How long a key is held down in the browser, in milliseconds.
+    public static let webKeyHoldMilliseconds = 25
+
     /// How long to wait for an application to accept focus.
     ///
     /// `AXUIElementSetAttributeValue(kAXFocused…)` returns immediately and the

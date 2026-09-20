@@ -512,4 +512,49 @@ struct RegressionTests {
     let action = try #require(await executor.executed.first)
     #expect(action.target == chosen.ref)
   }
+
+  // MARK: - Selection hesitated over the word it was given
+
+  /// **A run stopped to ask a human to look at a screenshot of the word
+  /// `Send`.** The step targeted `Send`, one element on the page was labelled
+  /// `Send`, and selection came back at 0.76 — under the gate.
+  ///
+  /// Verification, risk and the safety gate all still run. The only thing
+  /// skipped is a question with one answer.
+  @Test("an exactly and uniquely named target is selected without the gate")
+  func exactNameSkipsTheSelectionGate() async throws {
+    // Selection is refused outright: no choice, sufficiency on the floor.
+    let judge = ScriptedJudge([Make.verdict(choice: nil, sufficient: 0.10)])
+    let executor = RecordingExecutor()
+    let compose = Make.element(label: "Compose", path: [1])
+
+    let result = await Make.loop(
+      plan: Plan(steps: [PlanStep(kind: .click, target: "Compose", payload: nil)]),
+      judge: judge,
+      executor: executor,
+      elements: [Make.element(label: "Home", path: [0]), compose]
+    ).run()
+
+    let action = try #require(await executor.executed.first)
+    #expect(action.target == compose.ref)
+    #expect(result.status != .needsEyes, "nothing to look at — it was named")
+  }
+
+  /// And when the name is ambiguous, the model still decides. The shortcut is
+  /// for questions with one answer, not for skipping the hard ones.
+  @Test("two elements with that name still go to selection")
+  func ambiguousNameStillEscalates() async {
+    let judge = ScriptedJudge([Make.verdict(choice: nil, sufficient: 0.10)])
+    let executor = RecordingExecutor()
+
+    let result = await Make.loop(
+      plan: Plan(steps: [PlanStep(kind: .click, target: "Compose", payload: nil)]),
+      judge: judge,
+      executor: executor,
+      elements: [Make.element(label: "Compose", path: [0]), Make.element(label: "Compose", path: [1])]
+    ).run()
+
+    #expect(await executor.executed.isEmpty)
+    #expect(result.status == .needsEyes)
+  }
 }

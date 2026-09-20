@@ -102,6 +102,31 @@ public struct CandidateSet: Sendable, Equatable {
     return elements[index]
   }
 
+  /// The one element whose label *is* the name asked for.
+  ///
+  /// **An exact, unique name is not a guess.** Selection is a judgement about
+  /// which of several plausible controls is meant, and there is no judgement
+  /// left when the plan names the app's own label and exactly one element
+  /// carries it. Measured: a send button labelled `Send`, a step targeting
+  /// `Send`, and selection confidence 0.76 — under the gate, so the run
+  /// stopped to ask a human to look at a screenshot of the word `Send`.
+  ///
+  /// Whole-label only, never a substring: `Send` must not resolve to
+  /// `Send money`. Two elements with the same label is exactly the ambiguity
+  /// the model is for, and falls through to it.
+  public func uniqueMatch(named name: String) -> Element? {
+    let wanted = Self.normalize(name)
+    guard !wanted.isEmpty else { return nil }
+    let matches = elements.filter { Self.normalize($0.label) == wanted }
+    return matches.count == 1 ? matches[0] : nil
+  }
+
+  private static func normalize(_ text: String) -> String {
+    text.trimmingCharacters(in: .whitespacesAndNewlines)
+      .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+      .lowercased()
+  }
+
   /// A compact rendering for the Jev `state`. Filtered, never raw.
   public func describe() -> String {
     elements

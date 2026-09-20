@@ -204,8 +204,13 @@ public struct BiDiExecutor: Executor {
     var actions: [[String: Any]] = []
     for character in text {
       let value = String(character)
+      // Held, then a gap before the next one. `performActions` runs the whole
+      // sequence as fast as it can otherwise, and a sentence that appears in
+      // one frame is the tell that nobody typed it.
       actions.append(["type": "keyDown", "value": value])
+      actions.append(["type": "pause", "duration": Constants.Typing.webKeyHoldMilliseconds])
       actions.append(["type": "keyUp", "value": value])
+      actions.append(["type": "pause", "duration": Constants.Typing.webKeystrokeMilliseconds])
     }
     return ["type": "key", "id": "openAgentKeyboard", "actions": actions]
   }

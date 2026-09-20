@@ -71,6 +71,31 @@ layout. Name each target *semantically* and let the binary resolve it.
 Write prose the user will read — an email body, a post — yourself, in the
 payload. Jev cannot generate text at all.
 
+### Route it the way a person would
+
+A plan that jumps to a URL and presses Enter gets the same result as one that
+clicks through the app, and it is not the same thing to watch. The user sees a
+page replace itself and a message appear. They cannot tell what the agent did,
+or where it would have gone wrong.
+
+So plan the route a person would take:
+
+- **Start from what is on screen.** `navigate` is for reaching a site that is
+  not open. If the app is already open, click into it — the Messages icon, then
+  the conversation — rather than typing its URL.
+- **Click the thing that sends.** `pressKey enter` works and is invisible. Use
+  `kind: "send"` with the send button as the target; it clicks, it carries
+  `declared_irreversible`, and the user watches the pointer arrive on it.
+- **Click the field before typing in it.** One extra step, and it is the step
+  that makes the next one legible.
+- **Name each target the way the app names it.** Selection compares your words
+  against the app's own label, so `Message...` matches and `Message` does not.
+  `open-agent observe --app "Mail"` (or `--browser`) prints the real names when
+  you are unsure — one call, no cost, and cheaper than a screenshot round trip.
+
+Each extra step is one Jev call: about $0.0002 and two seconds. That is the
+whole price of a run that reads as deliberate rather than teleported.
+
 ## Step 3 — Branch on `status`, and nothing else
 
 `status` is the only field to branch on.

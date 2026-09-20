@@ -116,6 +116,23 @@ enum SnapshotScript {
         return out;
       };
 
+      // **A control can name itself twice.** An icon carries an SVG `<title>`
+      // and the link repeats the word in a visually hidden span, so the text
+      // content reads `MessagesMessages` — and nothing a person would write
+      // matches that. Measured: Instagram's Messages rail item came back at
+      // 0.67 selection confidence and stopped the run for a screenshot.
+      //
+      // Only an exact doubling collapses. `bonbon` would be halved too, and
+      // that is the price of a rule this simple: it costs a message preview a
+      // syllable, and it wins back every icon-with-hidden-label control on the
+      // page.
+      const undouble = (s) => {
+        const half = s.length / 2;
+        return (s.length > 3 && s.length % 2 === 0 && s.slice(0, half) === s.slice(half))
+          ? s.slice(0, half)
+          : s;
+      };
+
       // Cascading accessible name. Not the full accessible-name algorithm — the
       // common HTML and ARIA cases, in the order that actually resolves real
       // pages. An element nothing can name is dropped rather than guessed at.
@@ -142,7 +159,7 @@ enum SnapshotScript {
         }
         if (el.alt && el.alt.trim()) return el.alt.trim();
 
-        const own = textOf(el).replace(/\s+/g, ' ').trim();
+        const own = undouble(textOf(el).replace(/\s+/g, ' ').trim());
         if (own) return own.slice(0, 200);
 
         const img = el.querySelector('img[alt]');

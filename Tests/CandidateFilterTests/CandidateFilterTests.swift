@@ -140,3 +140,47 @@ struct CandidateFilterTests {
     #expect(set.describe() == "<AXButton> Post\n<AXButton> Draft (disabled)")
   }
 }
+
+@Suite("An exact name is not a guess")
+struct UniqueMatchTests {
+
+  private func set(_ labels: [String]) -> CandidateSet {
+    CandidateSet(
+      elements: labels.enumerated().map { index, label in
+        Element(
+          ref: .dom(handle: "h\(index)", selector: "button", label: label, submitLabel: ""),
+          role: "button", label: label, enabled: true, inViewport: true,
+          bounds: CGRect(x: 0, y: 0, width: 40, height: 20))
+      })
+  }
+
+  @Test("the one element carrying that exact label is returned")
+  func exactMatch() {
+    let candidates = set(["Message...", "Send", "Choose an emoji"])
+    #expect(candidates.uniqueMatch(named: "Send")?.label == "Send")
+  }
+
+  @Test("case and surrounding space do not count as a difference")
+  func normalised() {
+    #expect(set(["Send"]).uniqueMatch(named: "  send ")?.label == "Send")
+  }
+
+  /// Two controls with the same name is exactly the ambiguity the model is
+  /// for. Picking the first would be a coin flip wearing a rule's clothes.
+  @Test("two elements with the same label fall through to selection")
+  func ambiguityFallsThrough() {
+    #expect(set(["Send", "Send"]).uniqueMatch(named: "Send") == nil)
+  }
+
+  /// Whole label only. `Send` resolving to `Send money` is how a shortcut that
+  /// saves a model call spends someone's money.
+  @Test("a substring is not a match")
+  func substringIsNotAMatch() {
+    #expect(set(["Send money", "Cancel"]).uniqueMatch(named: "Send") == nil)
+  }
+
+  @Test("an empty target matches nothing")
+  func emptyMatchesNothing() {
+    #expect(set(["", "Send"]).uniqueMatch(named: "  ") == nil)
+  }
+}

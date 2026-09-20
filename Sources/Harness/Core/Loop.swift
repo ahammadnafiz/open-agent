@@ -282,6 +282,12 @@ public actor AgentLoop {
         // nothing on screen was called `Message` any more.
         element = focused
         Log.info("pressKey targets the focused element: \(element.label)")
+      } else if let exact = candidates.uniqueMatch(named: planStep.target) {
+        // The plan named the app's own label and exactly one element carries
+        // it. See `CandidateSet.uniqueMatch(named:)` — this is not the model
+        // being overridden, it is a question with one answer not being asked.
+        element = exact
+        Log.info("one element is named exactly \(planStep.target)")
       } else if verdict.passesSelectionGate,
         let choice = verdict.target,
         let resolved = candidates.element(forID: choice.choice)

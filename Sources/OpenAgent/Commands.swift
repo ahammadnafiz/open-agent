@@ -144,6 +144,9 @@ enum Commands {
   static func observeBrowser() async {
     do {
       let (client, source) = try await browserSession()
+      // The same tab a run would work in. Observing whichever tab `getTree`
+      // happened to return answered about a page nobody asked about.
+      _ = try await client.tab()
       let candidates = try CandidateFilter.reduce(try await source.observe())
       await client.close()
       emit(
