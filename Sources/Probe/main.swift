@@ -27,6 +27,7 @@ case "bidi-dom":
     url: arguments.count > 2 ? arguments[2] : "https://en.wikipedia.org/wiki/Accessibility")
 case "bidi-ax":
   await Probe.bidiAX(url: arguments.count > 2 ? arguments[2] : nil)
+case "tabs": await Probe.tabs()
 case "browser-login": Probe.browserLogin()
 case "battery-eval": await Probe.batteryEval()
 case "capture-fixtures": await Probe.captureFixtures()
@@ -579,6 +580,23 @@ enum Probe {
   /// ADR 0010's whole claim is that reading the page in **one** browser call is
   /// what makes a DOM agent fast — `browser-use/jev-ultrafast` measured protocol
   /// calls dropping from 1,092 to 101 on the same task. This prints the one call.
+  /// Which tabs exist, and what the agent sees when it picks one.
+  static func tabs() async {
+    let client = BiDiClient()
+    do {
+      _ = try await BrowserLauncher.ensureDrivable(allowRestart: true)
+      try await client.connect()
+      print("  who    container    url")
+      for row in try await client.inventory() { print(row) }
+      print("\n▸ is the tab on screen — a new tab is opened from there, so it")
+      print("  lands in the same container, which is the same cookie jar.")
+      await client.close()
+    } catch {
+      print("failed: \(error)")
+      await client.close()
+    }
+  }
+
   static func bidiDOM(url: String) async {
     let client = BiDiClient()
     do {

@@ -61,10 +61,11 @@ struct AgentTabRegressionTests {
       ok(2, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
       ok(3, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
       ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name — not ours
+      ok(5, #"{"result":{"type":"string","value":"visible"}}"#),  // where they are
       // window.open, answering with the WindowProxy for the named tab
-      ok(5, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(6),  // browsingContext.activate
-      ok(7),  // browsingContext.navigate
+      ok(6, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(7),  // browsingContext.activate
+      ok(8),  // browsingContext.navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
@@ -181,6 +182,74 @@ struct AgentTabRegressionTests {
     #expect(opened.isEmpty, "found, not opened")
   }
 
+  /// **A new tab opens where you are.** `window.open` inherits its opener's
+  /// container, and containers are separate cookie jars, so a tab opened from
+  /// whichever context `getTree` happened to return lands in a jar the user was
+  /// never signed in to. Measured: the agent's own x.com tab was served the
+  /// login page while their X tab, in the workspace they were looking at, was
+  /// signed in — and it reads as "the agent logged me out".
+  @Test("a new tab is opened from the tab the user is looking at")
+  func newTabOpensWhereTheUserIs() async throws {
+    let tree = #"""
+      {"contexts":[{"context":"background","url":"https://news.example/"},
+                   {"context":"onscreen","url":"https://mail.example/"}]}
+      """#
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),
+      ok(2, tree),
+      ok(3, tree),  // tab(for:) — neither is on x.com
+      ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name
+      ok(5, #"{"result":{"type":"string","value":""}}"#),
+      ok(6, #"{"result":{"type":"string","value":"hidden"}}"#),  // background
+      ok(7, #"{"result":{"type":"string","value":"visible"}}"#),  // onscreen
+      ok(8, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(9),  // activate
+      ok(10),  // navigate
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    try await client.navigate(to: "https://x.com/home")
+
+    let opener = await transport.sent.first { $0.contains("window.open") }
+    #expect(opener?.contains("onscreen") == true, "opened from the workspace they were in")
+  }
+
+  /// **`default` is the jar nobody is signed in to.** The browser reported five
+  /// containers; the user's X tab was in `8c0e920f…` and signed in, and the
+  /// agent's own x.com tab was in `default` and served the login page. Reusing
+  /// a tab like that is how the next task reports a login wall on a site the
+  /// user is logged in to, so it is dropped — and closed, because a signed-out
+  /// tab the agent left behind is exactly what they keep pointing at.
+  @Test("an agent tab stranded in the default container is closed, not reused")
+  func strandedAgentTabIsClosed() async throws {
+    let tree = #"""
+      {"contexts":[{"context":"stranded","url":"https://x.com/","userContext":"default"},
+                   {"context":"theirs","url":"https://mail.example/","userContext":"8c0e920f"}]}
+      """#
+    let transport = FakeBiDiTransport(replies: [
+      ok(1),
+      ok(2, tree),
+      ok(3, tree),  // tab(for:)
+      ok(4, #"{"result":{"type":"string","value":"__open_agent_tab"}}"#),  // ours
+      ok(5, #"{"result":{"type":"string","value":""}}"#),  // theirs
+      ok(6),  // browsingContext.close
+      ok(7, #"{"result":{"type":"string","value":"visible"}}"#),  // where they are
+      ok(8, #"{"result":{"type":"window","value":{"context":"fresh"}}}"#),
+      ok(9),  // activate
+      ok(10),  // navigate
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    try await client.navigate(to: "https://news.example/")
+
+    let sent = await transport.sent
+    let closed = sent.first { $0.contains("browsingContext.close") }
+    #expect(closed?.contains("stranded") == true, "the stranded tab was closed")
+    let opener = sent.first { $0.contains("window.open") }
+    #expect(opener?.contains("theirs") == true, "the new tab was opened in their container")
+    #expect(try await client.context() == "fresh")
+  }
+
   /// Nothing to reuse and nowhere to go is not a reason to open a blank tab.
   /// One was opened per invocation, and the user watched them pile up.
   @Test("with nothing to reuse and no destination, no tab is opened")
@@ -213,13 +282,14 @@ struct AgentTabRegressionTests {
       ok(2, oneContext),
       ok(3, oneContext),  // tab(for:) — one blank tab, no host to match
       ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name
-      ok(5, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(6),  // activate
-      ok(7),  // first navigate
-      ok(8, after),  // tab(for:) — the tab it made is in the tree now
-      ok(9),  // second navigate
-      ok(10, after),
-      ok(11),  // third navigate
+      ok(5, #"{"result":{"type":"string","value":"visible"}}"#),  // where they are
+      ok(6, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(7),  // activate
+      ok(8),  // first navigate
+      ok(9, after),  // tab(for:) — the tab it made is in the tree now
+      ok(10),  // second navigate
+      ok(11, after),
+      ok(12),  // third navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()

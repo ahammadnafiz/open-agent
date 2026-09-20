@@ -377,34 +377,39 @@ public actor BiDiClient {
     let contexts = try await topLevelContexts()
 
     // Once this run has a tab, it keeps it. Re-deciding every step is how an
-    // agent ends up hopping between two tabs on the same site — and the user
-    // has two open right now, because of the bug above.
+    // agent ends up hopping between two tabs on the same site.
     if let agentTabID, contexts.contains(where: { $0.id == agentTabID }) {
       return agentTabID
     }
+
+    // Who opened each tab, asked once. Everything below is a preference over
+    // this list, and each answer costs a round trip.
+    var mine: [TabContext] = []
+    var theirs: [TabContext] = []
+    for context in contexts {
+      if await name(of: context.id) == Self.tabName {
+        mine.append(context)
+      } else {
+        theirs.append(context)
+      }
+    }
+    // The cookie jars the user actually browses in. `default` is where
+    // automation lands and where nobody is signed in to anything.
+    let jars = Set(theirs.compactMap { $0.userContext }.filter { $0 != "default" })
 
     // 1. The tab already showing this site. This is the one the user means by
     //    "I already have Instagram open".
     //
     //    **Theirs, not ours, when there is a choice.** Containers — Zen calls
-    //    them workspaces — are separate cookie jars, and a tab the agent opens
-    //    inherits the container of whatever it was opened from. Measured: the
-    //    user's X tab sat signed in while the agent's own x.com tab, opened
-    //    from an Instagram tab in a different container, was served the login
-    //    page — and the run reported `blocked` against an account that was
-    //    logged in the whole time, two tabs away.
-    //
-    //    So a tab the agent did not create wins: the session lives in theirs.
+    //    them workspaces — are separate cookie jars. Measured: the user's X tab
+    //    sat signed in under container `8c0e920f…` while the agent's own x.com
+    //    tab, opened in `default`, was served the login page — and the run
+    //    reported `blocked` against an account that was logged in the whole
+    //    time, one tab away.
     if let host = Self.host(of: url) {
-      let onHost = contexts.filter { Self.host(of: $0.url) == host }
-      var theirs: TabContext?
-      for context in onHost {
-        if await name(of: context.id) != Self.tabName {
-          theirs = context
-          break
-        }
-      }
-      if let existing = theirs ?? onHost.first {
+      let onHost = theirs.filter { Self.host(of: $0.url) == host }
+        + mine.filter { Self.host(of: $0.url) == host }
+      if let existing = onHost.first {
         Log.info("using the tab already on \(host)")
         return await adopt(existing)
       }
@@ -418,15 +423,40 @@ public actor BiDiClient {
     //    named targeting only searches contexts the opener is familiar with, so
     //    a run that resolved to an unrelated tab could not see its own tab and
     //    opened another one. Measured — a blank tab per invocation.
-    for context in contexts {
-      guard await name(of: context.id) == Self.tabName else { continue }
-      Log.info("re-using the agent tab from an earlier run")
-      return await adopt(context)
+    //
+    //    **Unless it is in the wrong jar.** An agent tab parked in `default`
+    //    while every session the user has lives in a workspace container is
+    //    signed out of everything, and reusing it is how the next task reports
+    //    a login wall on a site they are logged in to. A tab like that is not
+    //    worth keeping, so it is closed rather than left to confuse them.
+    for context in mine {
+      if (context.userContext ?? "default") != "default" || jars.isEmpty {
+        Log.info("re-using the agent tab from an earlier run")
+        return await adopt(context)
+      }
+      Log.info("closing an agent tab left in the default container")
+      _ = try? await send("browsingContext.close", ["context": context.id])
     }
 
     // 3. Nothing to reuse. Open one — but only when a navigation is about to
     //    fill it, so a blank tab is never left behind for its own sake.
     guard url != nil else { return try context() }
+
+    // Opened from the tab the user is looking at, so it lands in the workspace
+    // their sessions live in. Otherwise it inherits whichever container
+    // `getTree` happened to hand back, and a tab in the wrong jar is a tab
+    // that is signed out of everything — which reads as "the agent logged me
+    // out" and is the single most alarming thing it can do.
+    //
+    // Their tab, never the agent's: ours may be parked in `default`, and a tab
+    // opened from it inherits that empty jar.
+    if let here = await visible(among: theirs)
+      ?? theirs.first(where: { ($0.userContext ?? "default") != "default" })
+      ?? theirs.first
+    {
+      contextID = here.id
+      userContextID = here.userContext
+    }
 
     // **A named window.** `window.open(url, name)` returns the existing tab
     // with that name if there is one, and opens it if there is not — so every
@@ -472,6 +502,34 @@ public actor BiDiClient {
     _ = try? await send("browsingContext.activate", ["context": id])
     Log.debug("agent tab \(id) in container \(userContextID ?? "default")")
     return id
+  }
+
+  /// Every tab, with the three things that decide which one the agent works
+  /// in: the container it lives in, whether the agent opened it, and whether
+  /// it is the one on screen.
+  ///
+  /// Three separate bugs in this file were all "which tab, and why", and each
+  /// took a screenshot and a guess to find. This answers it in one call.
+  public func inventory() async throws -> [String] {
+    var rows: [String] = []
+    // Which cookie jars exist at all. A browser with one container cannot be
+    // signed in "somewhere else", and that is worth knowing before blaming
+    // containers for a login page.
+    if let jars = try? await send("browser.getUserContexts", [:]),
+      let contexts = jars["userContexts"] as? [[String: Any]]
+    {
+      rows.append("containers: " + contexts.compactMap { $0["userContext"] as? String }
+        .joined(separator: ", "))
+    }
+    for context in try await topLevelContexts() {
+      let owner = await name(of: context.id) == Self.tabName ? "agent" : "user "
+      let onScreen = await string("document.visibilityState", in: context.id) == "visible"
+      rows.append(
+        "\(onScreen ? "▸" : " ") \(owner)  "
+          + "\((context.userContext ?? "default").padding(toLength: 10, withPad: " ", startingAt: 0))  "
+          + context.url)
+    }
+    return rows
   }
 
   /// One top-level tab, as `browsingContext.getTree` describes it.
@@ -522,11 +580,38 @@ public actor BiDiClient {
 
   /// What a tab calls its own window.
   private func name(of context: String) async -> String {
+    await string("window.name", in: context)
+  }
+
+  /// The tab the user is actually looking at.
+  ///
+  /// **A new tab opens where you are.** `window.open` inherits its opener's
+  /// container, and containers — Zen calls them workspaces — are separate
+  /// cookie jars. Opening from whichever context `getTree` happened to return
+  /// put the agent's tab in a jar the user was never signed in to: X served it
+  /// the login page while their own X tab, in the workspace they were looking
+  /// at, was signed in the whole time.
+  ///
+  /// `document.visibilityState` is the only thing in the protocol that knows
+  /// which tab that is — BiDi reports no active tab, and `getTree` order means
+  /// nothing.
+  private func visible(among contexts: [TabContext]) async -> TabContext? {
+    for context in contexts {
+      if await string("document.visibilityState", in: context.id) == "visible" {
+        return context
+      }
+    }
+    return nil
+  }
+
+  /// One expression, one string, no throwing. A context that cannot answer is
+  /// a context this was asking about, not an error worth failing the run over.
+  private func string(_ expression: String, in context: String) async -> String {
     guard
       let result = try? await send(
         "script.evaluate",
         [
-          "expression": "window.name",
+          "expression": expression,
           "target": ["context": context],
           "awaitPromise": false,
           "resultOwnership": "none",
