@@ -15,409 +15,480 @@ import Foundation
 /// version is pinned below and echoed on every response for verification.
 public enum Constants {
 
-    // MARK: - Models
+  // MARK: - Models
 
-    public enum Models {
-        /// Pinned, never `jev-latest`. Every threshold here assumes this version.
-        ///
-        /// The only model id this project owns. Planning, vision and composition
-        /// moved to the host agent in ADR 0009, which took `claude-sonnet-5`,
-        /// `gemini-3.8-flash`, `claude-opus-5` and Apple Foundation Models with
-        /// them. The measured A/B that chose the vision model is preserved in
-        /// ADR 0004; it does not belong here now that nothing reads it.
-        public static let jev = "jev-1.13.0"
-    }
-
-    // MARK: - Jev thresholds
-
-    public enum Jev {
-
-        // -- Verification -------------------------------------------------
-
-        /// Below this, the last action did not move the task forward.
-        ///
-        /// Measured on the fixture set: true cases landed 0.95–0.98, false cases
-        /// 0.03. The gap is enormous, so this sits in empty space rather than
-        /// near any observed value — which is the point, given ±5pp drift.
-        public static let progressed = 0.50
-
-        /// The screen is effectively identical to before the action.
-        /// Measured: 0.84 and 0.91 on genuine no-ops, 0.02–0.06 otherwise.
-        public static let unchanged = 0.60
-
-        /// An external obstacle blocks progress: login wall, permission prompt,
-        /// CAPTCHA, paywall, error page.
-        ///
-        /// Measured 0.95 on a login wall while `progressed` was ambiguous at
-        /// 0.54 — this question is what rescued that case. Never retried; a
-        /// blocked task surfaces to the user immediately.
-        public static let blocked = 0.70
-
-        /// The whole task is visibly complete. Measured 0.95 on success, 0.03–0.14
-        /// otherwise. Set high: a false positive here ends the task early and the
-        /// user gets a half-finished result reported as success.
-        public static let taskDone = 0.80
-
-        /// Recent history is repeating with no screen change.
-        /// Measured 0.95 when looping, 0.04–0.15 when not.
-        public static let looping = 0.70
-
-        /// The screen shows a *different* account, mailbox, document or
-        /// repository than the one the task named.
-        ///
-        /// **UNMEASURED — this value is a placeholder.** It is the only
-        /// threshold in this file without provenance, and it is written down
-        /// rather than guessed silently. Needs the four fixtures in
-        /// `jev-questions.md` §2.5 and a `battery-eval` run before it is
-        /// trusted; if the answers straddle it, reword the question rather
-        /// than move the number.
-        ///
-        /// Exists because the other five verification questions all answer
-        /// *correctly* while the agent operates on the wrong instance — traced
-        /// on a real task, and the failure is silent.
-        ///
-        /// Only asked when `task_context` is non-empty.
-        public static let wrongContext = 0.70
-
-        // -- Selection ----------------------------------------------------
-
-        /// Minimum Choice confidence to act without seeing the screen.
-        ///
-        /// Jev's confidence is `(n·p_max − 1)/(n − 1)` — derived and confirmed
-        /// live, 4/4 exact matches. It reads ONLY `p_max`, so it cannot see where
-        /// the runner-up sits. That is why `selectionMargin` exists and why this
-        /// value alone is never sufficient.
-        ///
-        /// VALIDATED 2026-09-18 on 16 intents across 4 real sites (tier 1, DOM):
-        ///   this pair gated 11/16 steps through, and 11/11 were correct.
-        ///   All 3 wrong answers fell below it (0.46/0.17, 0.38/0.22, 0.73/0.68).
-        ///   2 correct answers were also gated out — an unnecessary 4.8s
-        ///   escalation, which is the safe direction to be wrong in.
-        public static let selectionConfidence = 0.80
-
-        /// Minimum gap between the top two candidate probabilities.
-        ///
-        /// Two candidates at 0.48 and 0.47 produce an unremarkable `confidence`
-        /// and are a coin flip. This catches that; `confidence` cannot.
-        /// Carried its weight in the run above: 0.73/0.68 passed on margin alone
-        /// and was still caught by the confidence floor.
-        public static let selectionMargin = 0.25
-
-        /// Below this, the element list is not enough and the step needs vision.
-        ///
-        /// A Choice's probabilities sum to 1, so something always wins even when
-        /// the right target is absent. This unnormalised companion is the only
-        /// way to detect "none of the above".
-        public static let sufficient = 0.70
-
-        // -- Risk (advisory only) -----------------------------------------
-
-        /// Above this, ask the user before a *reversible* action.
-        ///
-        /// Measured with 7 atomic questions aggregated by `max` on 14 shell
-        /// commands: 2/14 errors, versus 4/14 for a single holistic question.
-        ///
-        /// This gate NEVER decides irreversibility. That is deterministic —
-        /// see `Safety` below and ADR 0001. A fork bomb scored 0.15 here, and a
-        /// semantic reframing moved a destructive command from 0.98 to 0.42.
-        public static let riskConfirm = 0.70
-
-        // -- Mechanics ----------------------------------------------------
-
-        /// Hard API ceiling. 256 returns
-        /// `400 {"detail":"Too many choices. Must have at most 255 choices."}`
-        public static let maxCandidates = 255
-
-        /// Hard API ceiling. 11 returns
-        /// `400 {"detail":"Too many score levels. Must have at most 10 levels."}`
-        public static let maxScoreLevels = 10
-
-        /// Action summaries carried in `recent_history`. Enough to detect a loop,
-        /// short enough not to bloat the state — Jev's accuracy degrades as the
-        /// state fills with content unrelated to the decision.
-        public static let historyWindow = 4
-
-        /// Measured: 383 ms warm from this machine, of which ~250 ms is network
-        /// round trip. A step exceeding this is a network problem, not a model one.
-        public static let requestTimeout: Duration = .seconds(10)
-    }
-
-    // MARK: - Non-determinism
-
-    /// Jev returns different values for byte-identical requests. Measured over
-    /// 8 identical calls: **0.59 – 0.69**, a ±5pp swing, 7 of 8 runs unique.
+  public enum Models {
+    /// Pinned, never `jev-latest`. Every threshold here assumes this version.
     ///
-    /// A threshold sitting inside that band flips between steps on unchanged
-    /// input. These constants keep a decision stable once made.
+    /// The only model id this project owns. Planning, vision and composition
+    /// moved to the host agent in ADR 0009, which took `claude-sonnet-5`,
+    /// `gemini-3.8-flash`, `claude-opus-5` and Apple Foundation Models with
+    /// them. The measured A/B that chose the vision model is preserved in
+    /// ADR 0004; it does not belong here now that nothing reads it.
+    public static let jev = "jev-1.13.0"
+  }
+
+  // MARK: - Jev thresholds
+
+  public enum Jev {
+
+    // -- Verification -------------------------------------------------
+
+    /// Below this, the last action did not move the task forward.
     ///
-    /// *Open Question Q3: both values are reasoned, not fitted. Tune against
-    /// the eval fixture set before relying on them.*
-    public enum Deadband {
-        /// A probability must move by more than this to reverse a decision that
-        /// has already been made for the current step index.
-        public static let width = 0.08
+    /// Measured on the fixture set: true cases landed 0.95–0.98, false cases
+    /// 0.03. The gap is enormous, so this sits in empty space rather than
+    /// near any observed value — which is the point, given ±5pp drift.
+    public static let progressed = 0.50
 
-        /// Steps a decision stays sticky before it may be re-evaluated.
-        public static let stickySteps = 2
-    }
+    /// The screen is effectively identical to before the action.
+    /// Measured: 0.84 and 0.91 on genuine no-ops, 0.02–0.06 otherwise.
+    public static let unchanged = 0.60
 
-    // MARK: - Safety
+    /// An external obstacle blocks progress: login wall, permission prompt,
+    /// CAPTCHA, paywall, error page.
+    ///
+    /// Measured 0.95 on a login wall while `progressed` was ambiguous at
+    /// 0.54 — this question is what rescued that case. Never retried; a
+    /// blocked task surfaces to the user immediately.
+    public static let blocked = 0.70
 
-    public enum Safety {
+    /// The whole task is visibly complete. Measured 0.95 on success, 0.03–0.14
+    /// otherwise. Set high: a false positive here ends the task early and the
+    /// user gets a half-finished result reported as success.
+    public static let taskDone = 0.80
 
-        /// Kinds that are irreversible by definition. Mirrors
-        /// `ActionKind.isIrreversibleByDefault` — the enum is the source of truth;
-        /// this exists so the list is visible in the file humans review.
-        public static let irreversibleKinds: Set<String> = [
-            "publish", "send", "delete", "purchase",
-        ]
+    /// Recent history is repeating with no screen change.
+    /// Measured 0.95 when looping, 0.04–0.15 when not.
+    public static let looping = 0.70
 
-        /// Element labels that force irreversible classification regardless of
-        /// what the planner declared.
-        ///
-        /// This exists because **the verb never tells you what a click does**.
-        /// Publishing a tweet is `click("Post")`, and `click` is reversible.
-        /// Without this rule the entire confirmation boundary is bypassed by
-        /// the ordinary mechanics of the task.
-        ///
-        /// Upgrade-only: matching forces `.irreversible`, never the reverse.
-        /// False positives are accepted — a search form saying "Submit" asks once,
-        /// which is the correct direction to be wrong in.
-        ///
-        /// English-only, and that is a known gap: a non-English UI falls back to
-        /// the planner's declared intent alone, which is the weaker half.
-        public static let labelDenylist = #"""
-            (?ix)
-            \b(
-                post | tweet | publish | share |
-                send | reply | submit | confirm |
-                delete | remove | discard | destroy | erase | wipe |
-                buy | purchase | pay | checkout | order | subscribe |
-                deactivate | close\s+account | transfer | withdraw
-            )\b
-            """#
+    /// The screen shows a *different* account, mailbox, document or
+    /// repository than the one the task named.
+    ///
+    /// **UNMEASURED — this value is a placeholder.** It is the only
+    /// threshold in this file without provenance, and it is written down
+    /// rather than guessed silently. Needs the four fixtures in
+    /// `jev-questions.md` §2.5 and a `battery-eval` run before it is
+    /// trusted; if the answers straddle it, reword the question rather
+    /// than move the number.
+    ///
+    /// Exists because the other five verification questions all answer
+    /// *correctly* while the agent operates on the wrong instance — traced
+    /// on a real task, and the failure is silent.
+    ///
+    /// Only asked when `task_context` is non-empty.
+    public static let wrongContext = 0.70
 
-        /// Roles that imply form submission regardless of label.
-        public static let submitRoles: Set<String> = ["submit", "menuitem-destructive"]
+    // -- Selection ----------------------------------------------------
 
-        /// Keys whose effect is routed through `labelDenylist` before executing.
-        ///
-        /// `enter` only. `tab` moves focus and activates nothing; `escape`
-        /// dismisses, which is reversible by construction. `enter` is classified
-        /// against the focused element's *submission target*, not the element
-        /// itself — a To-field carries no hint that its form submits to `Send`.
-        ///
-        /// Reasoned, not measured. See ADR 0008, and Open Question Q8 for the
-        /// uncovered case: a native text field whose window sends on `enter`
-        /// with no label the denylist can reach.
-        public static let gatedKeys: Set<String> = ["enter"]
+    /// Minimum Choice confidence to act without seeing the screen.
+    ///
+    /// Jev's confidence is `(n·p_max − 1)/(n − 1)` — derived and confirmed
+    /// live, 4/4 exact matches. It reads ONLY `p_max`, so it cannot see where
+    /// the runner-up sits. That is why `selectionMargin` exists and why this
+    /// value alone is never sufficient.
+    ///
+    /// VALIDATED 2026-09-18 on 16 intents across 4 real sites (tier 1, DOM):
+    ///   this pair gated 11/16 steps through, and 11/11 were correct.
+    ///   All 3 wrong answers fell below it (0.46/0.17, 0.38/0.22, 0.73/0.68).
+    ///   2 correct answers were also gated out — an unnecessary 4.8s
+    ///   escalation, which is the safe direction to be wrong in.
+    public static let selectionConfidence = 0.80
 
-        /// A `.captured` target that neither OCR, the tier 3b detector, nor the
-        /// vision model could name is classified `.irreversible` unconditionally.
-        ///
-        /// This is the narrow form of "confirm every icon". Blanket confirmation
-        /// was rejected as unusable — Chrome is 83% icon-only — but a target
-        /// nothing in the system can describe cannot be denylisted at all, and
-        /// acting on it unconfirmed is the one case with no mechanism behind it.
-        ///
-        /// Expected to fire rarely, because tier 4 labels what it selects. If it
-        /// fires often, tier 4's label output is not working and that is the bug
-        /// to fix — not this flag. Measure with `Probe run-task` before changing.
-        public static let confirmUnnamedCaptured = true
-    }
+    /// Minimum gap between the top two candidate probabilities.
+    ///
+    /// Two candidates at 0.48 and 0.47 produce an unremarkable `confidence`
+    /// and are a coin flip. This catches that; `confidence` cannot.
+    /// Carried its weight in the run above: 0.73/0.68 passed on margin alone
+    /// and was still caught by the confidence floor.
+    public static let selectionMargin = 0.25
 
-    // MARK: - Budgets
+    /// Below this, the element list is not enough and the step needs vision.
+    ///
+    /// A Choice's probabilities sum to 1, so something always wins even when
+    /// the right target is absent. This unnormalised companion is the only
+    /// way to detect "none of the above".
+    public static let sufficient = 0.70
 
-    /// Hard ceilings. Hitting any one stops the task cleanly, shows what was
-    /// done, and asks the user. None of these is advisory.
-    public enum Budget {
-        /// Beyond this, the agent is not making progress it understands.
-        public static let maxSteps = 40
+    // -- Risk (advisory only) -----------------------------------------
 
-        /// **Machine time only.** Time awaiting human confirmation is never
-        /// charged — a task must not die because the user read carefully.
-        public static let maxMachineTime: Duration = .seconds(90)
+    /// Above this, ask the user before a *reversible* action.
+    ///
+    /// Measured with 7 atomic questions aggregated by `max` on 14 shell
+    /// commands: 2/14 errors, versus 4/14 for a single holistic question.
+    ///
+    /// This gate NEVER decides irreversibility. That is deterministic —
+    /// see `Safety` below and ADR 0001. A fork bomb scored 0.15 here, and a
+    /// semantic reframing moved a destructive command from 0.98 to 0.42.
+    public static let riskConfirm = 0.70
 
-        /// Vision escalations per task. Each is ~2–4 s and ~$0.01. Three means
-        /// the fast path is failing repeatedly and vision is not rescuing it.
-        public static let maxEscalations = 3
+    // -- Mechanics ----------------------------------------------------
 
-        /// Full replans per task. Each discards the route and re-derives it.
-        public static let maxReplans = 2
+    /// Hard API ceiling. 256 returns
+    /// `400 {"detail":"Too many choices. Must have at most 255 choices."}`
+    public static let maxCandidates = 255
 
-        /// Total spend. At measured rates a normal task costs ~$0.006–0.03, so
-        /// this is roughly 10× a bad task and 100× a normal one.
-        public static let maxDollars = 0.25
+    /// Hard API ceiling. 11 returns
+    /// `400 {"detail":"Too many score levels. Must have at most 10 levels."}`
+    public static let maxScoreLevels = 10
 
-        /// Per-step wall clock before the step is abandoned and the ladder runs.
-        public static let stepTimeout: Duration = .seconds(20)
-    }
+    /// Action summaries carried in `recent_history`. Enough to detect a loop,
+    /// short enough not to bloat the state — Jev's accuracy degrades as the
+    /// state fills with content unrelated to the decision.
+    public static let historyWindow = 4
 
-    // MARK: - Recovery
+    /// Measured: 383 ms warm from this machine, of which ~250 ms is network
+    /// round trip. A step exceeding this is a network problem, not a model one.
+    public static let requestTimeout: Duration = .seconds(10)
 
-    public enum Recovery {
-        /// Retries of the identical action before escalating. Clicks genuinely
-        /// miss; more than one retry is just waiting for a different outcome from
-        /// the same input.
-        public static let retriesPerStep = 1
-    }
+    // -- Transport ----------------------------------------------------
+    //
+    // There is no Swift SDK — Python and JS only — so the retry behaviour
+    // the vendor SDKs provide has to be reproduced here. These mirror
+    // `docs/typesafe.ai/sdk/python/api/retries` defaults exactly, so a
+    // divergence in behaviour between this client and the reference
+    // implementations is a bug in this file and nowhere else.
 
-    // MARK: - Browser
+    /// `[D]` Vendor docs: `DEFAULT_BASE_URL = 'https://api.typesafe.ai'`.
+    public static let baseURL = URL(string: "https://api.typesafe.ai")!
 
-    public enum Browser {
-        public static let bidiPort = 9333
+    /// `[D]` `$0.042` per million input tokens. **Output tokens are free**,
+    /// which is why the batteries ask every question a branch might read.
+    public static let inputPricePerMillionTokens = 0.042
 
-        /// The debug port can only be enabled at process start, so the agent
-        /// cannot attach to a browser the user opened. It owns this profile;
-        /// the user's daily profile is never touched, never quit, never exposed.
-        public static let agentProfilePath =
-            NSString(string: "~/Library/Application Support/computer-agent/zen-profile")
-                .expandingTildeInPath
+    /// `[D]` Vendor SDK default `max_retries=2`.
+    ///
+    /// Retries are additionally clamped by the remaining step deadline — see
+    /// `RetryPolicy`. Unclamped, 2 retries at a 10 s request timeout can
+    /// reach 31.5 s inside a 20 s `Budget.stepTimeout`, and the step dies
+    /// reporting a timeout instead of the rate limit that actually caused it.
+    public static let maxRetries = 2
 
-        public static let zenBinary = "/Applications/Zen.app/Contents/MacOS/zen"
+    /// `[D]` Vendor SDK defaults: `backoff_initial=0.5`, `backoff_max=5.0`,
+    /// `backoff_jitter=0.25`.
+    public static let backoffInitial: Duration = .milliseconds(500)
+    public static let backoffMax: Duration = .seconds(5)
+    public static let backoffJitter = 0.25
 
-        /// `--no-remote` is REQUIRED. Without it Gecko hands the command to the
-        /// already-running Zen, the new process exits silently, and the agent
-        /// waits forever for a port that never opens.
-        public static let launchArgs = ["--no-remote"]
+    /// `[D]` 64k tokens per request total; **32k for `state` plus the single
+    /// longest question**. Checked locally before sending, so an oversized
+    /// state fails naming its own cause instead of arriving as an opaque
+    /// `422` whose message may not mention length.
+    public static let stateTokenLimit = 32_000
 
-        /// Cold start measured at 5–7 s. This is a connect-retry ceiling, not a
-        /// sleep — a fixed sleep either wastes time or races.
-        public static let launchTimeout: Duration = .seconds(20)
+    /// Characters per token, for the preflight estimate only.
+    ///
+    /// **A heuristic, not a measurement.** The vendor publishes no tokenizer.
+    /// Four is the common English approximation and it is deliberately
+    /// conservative here: over-estimating trips the preflight early, which
+    /// costs one avoidable escalation, while under-estimating ships a request
+    /// that fails at the API. `Probe jev-budget` replaces this with a real
+    /// number — see docs/open-agent-plan.md §7.1.
+    public static let charactersPerTokenEstimate = 4
+  }
 
-        public static let bundleIDs: Set<String> = [
-            "app.zen-browser.zen",
-            "com.google.Chrome",
-        ]
-    }
+  // MARK: - Non-determinism
 
-    // MARK: - Accessibility
+  /// Jev returns different values for byte-identical requests. Measured over
+  /// 8 identical calls: **0.59 – 0.69**, a ±5pp swing, 7 of 8 runs unique.
+  ///
+  /// A threshold sitting inside that band flips between steps on unchanged
+  /// input. These constants keep a decision stable once made.
+  ///
+  /// *Open Question Q3: both values are reasoned, not fitted. Tune against
+  /// the eval fixture set before relying on them.*
+  public enum Deadband {
+    /// A probability must move by more than this to reverse a decision that
+    /// has already been made for the current step index.
+    public static let width = 0.08
 
-    public enum AX {
-        /// Zen's menu tree alone is 10,804 nodes and takes 3.76 s to traverse.
-        /// Without a deadline a pathological tree consumes the step budget by
-        /// itself.
-        public static let walkDeadline: Duration = .seconds(2)
+    /// Steps a decision stays sticky before it may be re-evaluated.
+    public static let stickySteps = 2
+  }
 
-        /// Node cap per walk, independent of the deadline.
-        public static let maxNodes = 20_000
+  // MARK: - Safety
 
-        /// `AXWindows` intermittently returns an empty array for windows that
-        /// demonstrably exist. Measured: Notes and Cursor returned 0 after 8
-        /// retries over 3.2 s; Zen and Finder returned on the first try.
-        /// A single read is not a valid observation.
-        public static let windowRetries = 8
-        public static let windowRetryDelay: Duration = .milliseconds(400)
+  public enum Safety {
 
-        /// Electron's `AXManualAccessibility` unlock is debounced at a hard-coded
-        /// 2 s in `electron_application.mm`, and every toggle restarts it.
-        public static let electronUnlockDelay: Duration = .seconds(3)
-    }
+    /// Kinds that are irreversible by definition. Mirrors
+    /// `ActionKind.isIrreversibleByDefault` — the enum is the source of truth;
+    /// this exists so the list is visible in the file humans review.
+    public static let irreversibleKinds: Set<String> = [
+      "publish", "send", "delete", "purchase",
+    ]
 
-    // MARK: - Screen capture and OCR (tier 3)
+    /// Element labels that force irreversible classification regardless of
+    /// what the planner declared.
+    ///
+    /// This exists because **the verb never tells you what a click does**.
+    /// Publishing a tweet is `click("Post")`, and `click` is reversible.
+    /// Without this rule the entire confirmation boundary is bypassed by
+    /// the ordinary mechanics of the task.
+    ///
+    /// Upgrade-only: matching forces `.irreversible`, never the reverse.
+    /// False positives are accepted — a search form saying "Submit" asks once,
+    /// which is the correct direction to be wrong in.
+    ///
+    /// English-only, and that is a known gap: a non-English UI falls back to
+    /// the planner's declared intent alone, which is the weaker half.
+    public static let labelDenylist = #"""
+      (?ix)
+      \b(
+          post | tweet | publish | share |
+          send | reply | submit | confirm |
+          delete | remove | discard | destroy | erase | wipe |
+          buy | purchase | pay | checkout | order | subscribe |
+          deactivate | close\s+account | transfer | withdraw
+      )\b
+      """#
 
-    public enum OCR {
-        /// `.accurate`, never `.fast`. Measured on identical real pages, `.fast`
-        /// produced `Cr8ate`, `R&ad`, `Mlcrosoft`, `Hirln`; `.accurate` produced
-        /// none of them. 368 ms against 92 ms — the budget absorbs it.
-        public static let useAccurateRecognition = true
+    /// Roles that imply form submission regardless of label.
+    public static let submitRoles: Set<String> = ["submit", "menuitem-destructive"]
 
-        /// MUST be 0. `RecognizeTextRequest` defaults this to 0.03125 (1/32 of
-        /// image height), which returns ZERO observations on a Retina screenshot
-        /// in `.fast` mode. Measured sweep at 2880×1800, UI text ≈ 0.0144:
-        ///   0.0 → 86 obs · 0.010 → 81 · 0.0144 → 1 · 0.03125 (default) → 0
-        /// Apple's ObjC header claims the default is 0.0. The Swift struct
-        /// measurably disagrees. Silent total failure, not an error.
-        public static let minimumTextHeightFraction = 0.0
+    /// Keys whose effect is routed through `labelDenylist` before executing.
+    ///
+    /// `enter` only. `tab` moves focus and activates nothing; `escape`
+    /// dismisses, which is reversible by construction. `enter` is classified
+    /// against the focused element's *submission target*, not the element
+    /// itself — a To-field carries no hint that its form submits to `Send`.
+    ///
+    /// Reasoned, not measured. See ADR 0008, and Open Question Q8 for the
+    /// uncovered case: a native text field whose window sends on `enter`
+    /// with no label the denylist can reach.
+    public static let gatedKeys: Set<String> = ["enter"]
 
-        /// "Corrects" filenames and truncated UI labels into prose. Off.
-        public static let usesLanguageCorrection = false
+    /// A `.captured` target that neither OCR, the tier 3b detector, nor the
+    /// vision model could name is classified `.irreversible` unconditionally.
+    ///
+    /// This is the narrow form of "confirm every icon". Blanket confirmation
+    /// was rejected as unusable — Chrome is 83% icon-only — but a target
+    /// nothing in the system can describe cannot be denylisted at all, and
+    /// acting on it unconfirmed is the one case with no mechanism behind it.
+    ///
+    /// Expected to fire rarely, because tier 4 labels what it selects. If it
+    /// fires often, tier 4's label output is not working and that is the bug
+    /// to fix — not this flag. Measure with `Probe run-task` before changing.
+    public static let confirmUnnamedCaptured = true
+  }
 
-        /// Capture at native Retina scale and never downscale. At 1× recall of
-        /// known UI labels was 21/34 and missed the entire menu bar; at 2×, 34/34.
-        public static let downscale = false
+  // MARK: - Budgets
 
-        /// DO NOT ADD A GAP-SPLITTING THRESHOLD HERE. It was implemented and
-        /// measured on 2026-09-18, and no value works.
-        ///
-        /// Vision returns LINE observations, so adjacent controls merge into one
-        /// box — `"Donate Create account Log in"` is three separate links. The
-        /// per-word boxes from `boundingBox(for:)` are real glyph metrics
-        /// (`iiii` = 77 px vs `WWWW` = 257 px), but the gaps carry no signal:
-        ///
-        ///   DPR 1   between links 2 px   within a link 2 px
-        ///   DPR 2                 3 px                 3 px
-        ///   DPR 3                 6 px                 5 px
-        ///
-        /// Pages render navigation at word spacing and resolution scales both
-        /// gaps equally. Control boundaries must come from the detector, not
-        /// from text geometry. See build-sequence.md task 3.4b.
-        ///
-        /// UNTIL 3.4b EXISTS, TIER 3 IS NOT A SELECTION TIER — its output feeds
-        /// tier 4's numbered marks and is never selected from directly.
-        public static let tier3FeedsMarksOnly = true
+  /// Hard ceilings. Hitting any one stops the task cleanly, shows what was
+  /// done, and asks the user. None of these is advisory.
+  public enum Budget {
+    /// Beyond this, the agent is not making progress it understands.
+    public static let maxSteps = 40
 
-        /// Transient `-3811` SCStreamError occurs even on windows that just
-        /// captured successfully.
-        public static let captureRetries = 3
-        public static let captureRetryDelay: Duration = .milliseconds(250)
-    }
+    /// **Machine time only.** Time awaiting human confirmation is never
+    /// charged — a task must not die because the user read carefully.
+    public static let maxMachineTime: Duration = .seconds(90)
 
-    // MARK: - UI
+    /// Vision escalations per task. Each is ~2–4 s and ~$0.01. Three means
+    /// the fast path is failing repeatedly and vision is not rescuing it.
+    public static let maxEscalations = 3
 
-    public enum HUD {
-        public static let size = CGSize(width: 380, height: 120)
-        public static let confirmSize = CGSize(width: 380, height: 300)
+    /// Full replans per task. Each discards the route and re-derives it.
+    public static let maxReplans = 2
 
-        /// Never auto-dismiss or auto-approve a confirmation. It is the only
-        /// safety boundary in the system; a timeout that defaults to "yes" is a
-        /// hole, and one that defaults to "no" is a task that dies while the
-        /// user is reading.
-        public static let confirmationTimeout: Duration? = nil
+    /// Total spend. At measured rates a normal task costs ~$0.006–0.03, so
+    /// this is roughly 10× a bad task and 100× a normal one.
+    public static let maxDollars = 0.25
 
-        // -- Cursor overlay -----------------------------------------------
-        //
-        // The agent drives other people's applications, so without a drawn
-        // cursor the only evidence anything is happening is windows changing by
-        // themselves. These values buy legibility with wall-clock time, and
-        // that time is charged to `Budget.maxMachineTime` like any other.
-        //
-        // Styling — corner radii, blur, colour — deliberately does NOT live
-        // here. This file is what a human reviews before a release, and padding
-        // it with cosmetics hides the values that decide behaviour.
+    /// Per-step wall clock before the step is abandoned and the ladder runs.
+    public static let stepTimeout: Duration = .seconds(20)
+  }
 
-        /// Master switch. Off costs ~400 ms less per step and makes the agent
-        /// invisible while it works. On is the default because an agent nobody
-        /// can watch is an agent nobody can interrupt.
-        public static let motionEnabled = true
+  // MARK: - Execution
 
-        /// Pointer speed. Chosen to read as deliberate rather than instant —
-        /// an instantaneous jump conveys no direction, and direction is the
-        /// information the overlay exists to carry. Not measured; tune by eye.
-        public static let pixelsPerSecond: Double = 2_600
+  public enum Execution {
+    /// How long a `wait` action pauses for.
+    ///
+    /// Charged to `Budget.maxMachineTime` like any other step, which is the
+    /// reason it lives here rather than inline: a wait long enough to matter is
+    /// a wait that competes with the task's own ceiling.
+    public static let waitDuration: Duration = .milliseconds(300)
+  }
 
-        /// Floor and ceiling on travel time, so a short hop still reads as
-        /// movement and a corner-to-corner sweep does not stall the step.
-        public static let minMoveSeconds: Double = 0.26
-        public static let maxMoveSeconds: Double = 0.62
+  // MARK: - Recovery
 
-        /// How long the target ring is visible before the cursor sets off.
-        ///
-        /// This is the anticipation window — the user sees WHERE before WHAT.
-        /// It is the overlay's entire safety contribution and the reason it is
-        /// not purely decorative, so it is the last value that should be cut
-        /// for speed.
-        public static let anticipationSeconds: Double = 0.14
+  public enum Recovery {
+    /// Retries of the identical action before escalating. Clicks genuinely
+    /// miss; more than one retry is just waiting for a different outcome from
+    /// the same input.
+    public static let retriesPerStep = 1
+  }
 
-        /// Press-and-release, then a beat before the ring clears. Below ~0.1 s
-        /// the click reads as a flicker rather than as an action.
-        public static let pressSeconds: Double = 0.13
-        public static let settleSeconds: Double = 0.10
+  // MARK: - Browser
 
-        /// Worst case added per step: anticipation + maxMove + press + settle
-        /// = 0.99 s. Typical: ~0.6 s. Over a 10-step task that is 6 s against a
-        /// 90 s ceiling. Acceptable; revisit if `maxSteps` tasks become normal.
-        public static let worstCaseOverheadSeconds: Double =
-            anticipationSeconds + maxMoveSeconds + pressSeconds + settleSeconds
-    }
+  public enum Browser {
+    public static let bidiPort = 9333
+
+    /// The debug port can only be enabled at process start, so the agent
+    /// cannot attach to a browser the user opened. It owns this profile;
+    /// the user's daily profile is never touched, never quit, never exposed.
+    public static let agentProfilePath =
+      NSString(string: "~/Library/Application Support/open-agent/zen-profile")
+      .expandingTildeInPath
+
+    public static let zenBinary = "/Applications/Zen.app/Contents/MacOS/zen"
+
+    /// `--no-remote` is REQUIRED. Without it Gecko hands the command to the
+    /// already-running Zen, the new process exits silently, and the agent
+    /// waits forever for a port that never opens.
+    public static let launchArgs = ["--no-remote"]
+
+    /// Cold start measured at 5–7 s. This is a connect-retry ceiling, not a
+    /// sleep — a fixed sleep either wastes time or races.
+    public static let launchTimeout: Duration = .seconds(20)
+
+    public static let bundleIDs: Set<String> = [
+      "app.zen-browser.zen",
+      "com.google.Chrome",
+    ]
+  }
+
+  // MARK: - Accessibility
+
+  public enum AX {
+    /// Zen's menu tree alone is 10,804 nodes and takes 3.76 s to traverse.
+    /// Without a deadline a pathological tree consumes the step budget by
+    /// itself.
+    public static let walkDeadline: Duration = .seconds(2)
+
+    /// Node cap per walk, independent of the deadline.
+    public static let maxNodes = 20_000
+
+    /// `AXWindows` intermittently returns an empty array for windows that
+    /// demonstrably exist. Measured: Notes and Cursor returned 0 after 8
+    /// retries over 3.2 s; Zen and Finder returned on the first try.
+    /// A single read is not a valid observation.
+    public static let windowRetries = 8
+    public static let windowRetryDelay: Duration = .milliseconds(400)
+
+    /// Electron's `AXManualAccessibility` unlock is debounced at a hard-coded
+    /// 2 s in `electron_application.mm`, and every toggle restarts it.
+    public static let electronUnlockDelay: Duration = .seconds(3)
+  }
+
+  // MARK: - Screen capture and OCR (tier 3)
+
+  public enum OCR {
+    /// `.accurate`, never `.fast`. Measured on identical real pages, `.fast`
+    /// produced `Cr8ate`, `R&ad`, `Mlcrosoft`, `Hirln`; `.accurate` produced
+    /// none of them. 368 ms against 92 ms — the budget absorbs it.
+    public static let useAccurateRecognition = true
+
+    /// MUST be 0. `RecognizeTextRequest` defaults this to 0.03125 (1/32 of
+    /// image height), which returns ZERO observations on a Retina screenshot
+    /// in `.fast` mode. Measured sweep at 2880×1800, UI text ≈ 0.0144:
+    ///   0.0 → 86 obs · 0.010 → 81 · 0.0144 → 1 · 0.03125 (default) → 0
+    /// Apple's ObjC header claims the default is 0.0. The Swift struct
+    /// measurably disagrees. Silent total failure, not an error.
+    public static let minimumTextHeightFraction = 0.0
+
+    /// "Corrects" filenames and truncated UI labels into prose. Off.
+    public static let usesLanguageCorrection = false
+
+    /// Capture at native Retina scale and never downscale. At 1× recall of
+    /// known UI labels was 21/34 and missed the entire menu bar; at 2×, 34/34.
+    public static let downscale = false
+
+    /// DO NOT ADD A GAP-SPLITTING THRESHOLD HERE. It was implemented and
+    /// measured on 2026-09-18, and no value works.
+    ///
+    /// Vision returns LINE observations, so adjacent controls merge into one
+    /// box — `"Donate Create account Log in"` is three separate links. The
+    /// per-word boxes from `boundingBox(for:)` are real glyph metrics
+    /// (`iiii` = 77 px vs `WWWW` = 257 px), but the gaps carry no signal:
+    ///
+    ///   DPR 1   between links 2 px   within a link 2 px
+    ///   DPR 2                 3 px                 3 px
+    ///   DPR 3                 6 px                 5 px
+    ///
+    /// Pages render navigation at word spacing and resolution scales both
+    /// gaps equally. Control boundaries must come from the detector, not
+    /// from text geometry. See build-sequence.md task 3.4b.
+    ///
+    /// UNTIL 3.4b EXISTS, TIER 3 IS NOT A SELECTION TIER — its output feeds
+    /// tier 4's numbered marks and is never selected from directly.
+    public static let tier3FeedsMarksOnly = true
+
+    /// Backing-scale factor used when `downscale` is false.
+    ///
+    /// Measured, not assumed: at 1x, recall of known UI labels was 21/34 and
+    /// missed the entire menu bar; at 2x it was 34/34. This is the number that
+    /// measurement produced, so it belongs in the file that records provenance.
+    public static let retinaScale = 2
+
+    /// Characters of the SHA-256 frame hash kept in the step log.
+    ///
+    /// The hash exists so a `.captured` bbox can be tied back to the frame it
+    /// was measured in — ADR 0007 — and 16 hex characters is 64 bits, which is
+    /// collision-free for the handful of frames one task produces while staying
+    /// short enough to read in a log.
+    public static let frameHashLength = 16
+
+    /// Transient `-3811` SCStreamError occurs even on windows that just
+    /// captured successfully.
+    public static let captureRetries = 3
+    public static let captureRetryDelay: Duration = .milliseconds(250)
+  }
+
+  // MARK: - UI
+
+  public enum HUD {
+    public static let size = CGSize(width: 380, height: 120)
+    public static let confirmSize = CGSize(width: 380, height: 300)
+
+    /// Never auto-dismiss or auto-approve a confirmation. It is the only
+    /// safety boundary in the system; a timeout that defaults to "yes" is a
+    /// hole, and one that defaults to "no" is a task that dies while the
+    /// user is reading.
+    public static let confirmationTimeout: Duration? = nil
+
+    // -- Cursor overlay -----------------------------------------------
+    //
+    // The agent drives other people's applications, so without a drawn
+    // cursor the only evidence anything is happening is windows changing by
+    // themselves. These values buy legibility with wall-clock time, and
+    // that time is charged to `Budget.maxMachineTime` like any other.
+    //
+    // Styling — corner radii, blur, colour — deliberately does NOT live
+    // here. This file is what a human reviews before a release, and padding
+    // it with cosmetics hides the values that decide behaviour.
+
+    /// Master switch. Off costs ~400 ms less per step and makes the agent
+    /// invisible while it works. On is the default because an agent nobody
+    /// can watch is an agent nobody can interrupt.
+    public static let motionEnabled = true
+
+    /// Pointer speed. Chosen to read as deliberate rather than instant —
+    /// an instantaneous jump conveys no direction, and direction is the
+    /// information the overlay exists to carry. Not measured; tune by eye.
+    public static let pixelsPerSecond: Double = 2_600
+
+    /// Floor and ceiling on travel time, so a short hop still reads as
+    /// movement and a corner-to-corner sweep does not stall the step.
+    public static let minMoveSeconds: Double = 0.26
+    public static let maxMoveSeconds: Double = 0.62
+
+    /// How long the target ring is visible before the cursor sets off.
+    ///
+    /// This is the anticipation window — the user sees WHERE before WHAT.
+    /// It is the overlay's entire safety contribution and the reason it is
+    /// not purely decorative, so it is the last value that should be cut
+    /// for speed.
+    public static let anticipationSeconds: Double = 0.14
+
+    /// Press-and-release, then a beat before the ring clears. Below ~0.1 s
+    /// the click reads as a flicker rather than as an action.
+    public static let pressSeconds: Double = 0.13
+    public static let settleSeconds: Double = 0.10
+
+    /// Worst case added per step: anticipation + maxMove + press + settle
+    /// = 0.99 s. Typical: ~0.6 s. Over a 10-step task that is 6 s against a
+    /// 90 s ceiling. Acceptable; revisit if `maxSteps` tasks become normal.
+    public static let worstCaseOverheadSeconds: Double =
+      anticipationSeconds + maxMoveSeconds + pressSeconds + settleSeconds
+  }
 }

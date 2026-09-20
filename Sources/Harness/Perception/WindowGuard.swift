@@ -1,0 +1,100 @@
+import CoreGraphics
+import Foundation
+
+/// Resolves applications and proves their windows are actually on screen.
+///
+/// Uses `CGWindowListCopyWindowInfo` rather than `NSWorkspace`, so `Harness`
+/// stays headless — `Package.swift` declares it "no AppKit, no SwiftUI, no UI of
+/// any kind", and that boundary is what lets `Probe` and any future daemon reuse
+/// this code.
+///
+/// **Open Question Q6, and it is a correctness prerequisite, not a nuisance.**
+/// A minimized or off-Space window observes as *empty, not as an error*: Zen
+/// returned 1 AX node, Finder 2, ghostty 0, while `AXWindows` still reported
+/// handles. The agent would read that as "nothing actionable here" and proceed
+/// to do the wrong thing. Since ADR 0007 this also gates *execution* at tiers
+/// 3–4, because a synthesized click lands on whatever is topmost at that point.
+public enum WindowGuard {
+
+  public struct WindowInfo: Sendable, Equatable {
+    public let windowID: CGWindowID
+    public let ownerPID: pid_t
+    public let ownerName: String
+    public let title: String
+    public let bounds: CGRect
+    /// `kCGWindowLayer == 0` is a normal application window. Non-zero layers
+    /// are menu bars, docks, overlays — including this agent's own cursor
+    /// overlay, which must never be mistaken for a target.
+    public let layer: Int
+    public let isOnScreen: Bool
+  }
+
+  /// Every window the window server currently lists, excluding desktop elements.
+  public static func windows() -> [WindowInfo] {
+    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+    guard let raw = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+      return []
+    }
+    return raw.compactMap { entry in
+      guard let windowID = entry[kCGWindowNumber as String] as? CGWindowID,
+        let pid = entry[kCGWindowOwnerPID as String] as? pid_t,
+        let boundsDict = entry[kCGWindowBounds as String] as? [String: Any],
+        let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary)
+      else { return nil }
+      return WindowInfo(
+        windowID: windowID,
+        ownerPID: pid,
+        ownerName: entry[kCGWindowOwnerName as String] as? String ?? "",
+        title: entry[kCGWindowName as String] as? String ?? "",
+        bounds: bounds,
+        layer: entry[kCGWindowLayer as String] as? Int ?? 0,
+        isOnScreen: entry[kCGWindowIsOnscreen as String] as? Bool ?? false
+      )
+    }
+  }
+
+  /// Resolves an application name to its pid.
+  ///
+  /// Matches case-insensitively on the window owner name, preferring the owner
+  /// with the largest on-screen window — an app with a stray 1×1 helper window
+  /// should still resolve to the one the user can see.
+  public static func pid(forApp name: String) throws -> pid_t {
+    let wanted = name.lowercased()
+    let matches = windows().filter {
+      $0.layer == 0 && $0.ownerName.lowercased() == wanted
+    }
+    guard let best = matches.max(by: { $0.bounds.area < $1.bounds.area }) else {
+      throw PerceptionError.appNotRunning(name)
+    }
+    return best.ownerPID
+  }
+
+  /// Whether this pid has a normal window the user can currently see.
+  ///
+  /// A window with zero area, or on a non-zero layer, does not count. Neither
+  /// does one the window server no longer reports as on-screen.
+  public static func hasVisibleWindow(pid: pid_t) -> Bool {
+    windows().contains {
+      $0.ownerPID == pid && $0.layer == 0 && $0.isOnScreen && $0.bounds.area > 0
+    }
+  }
+
+  /// The largest visible window for a pid, or `nil`.
+  public static func frontmostWindow(pid: pid_t) -> WindowInfo? {
+    windows()
+      .filter { $0.ownerPID == pid && $0.layer == 0 && $0.isOnScreen }
+      .max(by: { $0.bounds.area < $1.bounds.area })
+  }
+
+  /// Fails loudly rather than letting an empty observation read as "nothing
+  /// actionable here".
+  public static func requireVisibleWindow(pid: pid_t, app: String) throws {
+    guard hasVisibleWindow(pid: pid) else {
+      throw PerceptionError.windowNotOnScreen(app: app)
+    }
+  }
+}
+
+extension CGRect {
+  var area: CGFloat { width * height }
+}

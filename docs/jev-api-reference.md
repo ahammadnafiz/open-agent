@@ -990,11 +990,20 @@ same conclusion:
 
 **Also worth knowing:**
 
-- **[M]** TypeSafe's Master Customer Agreement §2.3(f) prohibits customers from
-  *"publish\[ing\] benchmarks or performance information about the Services."*
-  They decline to publish benchmarks on principle **and** contractually bar you
-  from publishing any. If you build on this, you have agreed not to say how it
-  performed.
+- **[D]** TypeSafe's Master Customer Agreement §2.3(f) reads *"interfere with the
+  operation of the Services"*. It says nothing about benchmarks. Verified against the
+  full MCA (read through §16.14) at https://typesafe.ai/legal/mca on 2026-09-20: the
+  strings "benchmark" and "performance information" appear **zero times**. The nearest
+  real restriction is §2.3(b), which bars distillation and building a competing
+  product. TypeSafe declines to publish benchmarks itself, but does not contractually
+  bar you from publishing yours.
+
+  > **Correction 2026-09-20.** A previous revision of this file claimed §2.3(f)
+  > prohibited customers from *"publish[ing] benchmarks or performance information
+  > about the Services"*, tagged it **[M]**, and concluded "if you build on this, you
+  > have agreed not to say how it performed." That quotation does not appear in the
+  > MCA. The claim was fabricated and the conclusion drawn from it was false. Nothing
+  > in this project's licence terms restricts publishing measurements.
 - **[3P]** The founder is a verifiable InstructGPT author (4th, with a
   primary-author asterisk) credited by OpenAI for *"foundational RLHF and
   InstructGPT work."* "Co-invented RLHF" is an overstatement — Christiano 2017,

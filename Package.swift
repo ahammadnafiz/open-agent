@@ -14,5 +14,16 @@ let package = Package(
 
         // The CLI. Owns the overlay, the approval sheet, and stdout.
         .executableTarget(name: "OpenAgent", dependencies: ["Harness"]),
+
+        // Live probes against the real APIs. Deliberately NOT part of `swift test`:
+        // a test suite that needs an API key and a browser is a test suite people
+        // stop running — SPEC.md § Testing Strategy.
+        .executableTarget(name: "Probe", dependencies: ["Harness"]),
+
+        // Unit + fixture tests. swift-testing, not XCTest.
+        .testTarget(name: "SafetyTests", dependencies: ["Harness"]),
+        .testTarget(name: "CandidateFilterTests", dependencies: ["Harness"]),
+        .testTarget(name: "JudgmentTests", dependencies: ["Harness"]),
+        .testTarget(name: "LoopTests", dependencies: ["Harness"]),
     ]
 )
