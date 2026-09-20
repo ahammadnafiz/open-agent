@@ -158,6 +158,43 @@ public struct AXSource: ElementSource {
   /// **`path` is stable only within one observation.** It is an index chain
   /// from the window root and any layout change invalidates it, so this is
   /// called immediately before acting and never carried across steps.
+  /// The candidate that currently holds keyboard focus, if it is one of them.
+  ///
+  /// **A keystroke goes to the focused element.** ADR 0008 says so in the
+  /// declaration itself — *"target is the focused element"* — so asking a model
+  /// to *choose* it from a list is both unnecessary and worse. The system knows
+  /// the answer exactly; the model only has an opinion, and when that opinion
+  /// falls under the selection floor it becomes an escalation a human has to
+  /// answer by hand. Measured on WhatsApp: `pressKey enter` after a successful
+  /// `type` escalated at 0.61 confidence, to pick the field that had just been
+  /// typed into.
+  ///
+  /// This also preserves the property ADR 0008 leans on. The focused element's
+  /// label is what `LabelDenylist` inspects for `enter` — the ADR's stated
+  /// mitigation for native targets, where no submit button is computable — and
+  /// that check only means anything if the element really is the focused one.
+  /// Selecting by guess weakened exactly the input the guess was feeding.
+  ///
+  /// Returns `nil` when focus is elsewhere or cannot be read, which leaves the
+  /// ordinary selection path to handle it.
+  public func focused(among elements: [Element]) -> Element? {
+    var raw: CFTypeRef?
+    let app = AXUIElementCreateApplication(pid)
+    let focusedKey = kAXFocusedUIElementAttribute as CFString
+    guard AXUIElementCopyAttributeValue(app, focusedKey, &raw) == .success,
+      let value = raw, CFGetTypeID(value) == AXUIElementGetTypeID()
+    else { return nil }
+    let target = unsafeBitCast(value, to: AXUIElement.self)
+
+    for element in elements {
+      guard case .ax(let path, _, _) = element.ref, let candidate = resolve(path: path) else {
+        continue
+      }
+      if CFEqual(candidate, target) { return element }
+    }
+    return nil
+  }
+
   func resolve(path: [Int]) -> AXUIElement? {
     let app = AXUIElementCreateApplication(pid)
     guard var current = resolveWindow(app: app) else { return nil }

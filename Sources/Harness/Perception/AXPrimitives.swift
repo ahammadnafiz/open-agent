@@ -65,13 +65,52 @@ enum AXPrimitives {
     let candidates = [
       string(element, kAXTitleAttribute as String),
       string(element, kAXDescriptionAttribute as String),
+      // Placeholder before value, and that order is deliberate.
+      //
+      // **An empty text field has no label at all**, and the candidate filter
+      // keeps only elements that have one — so the moment you click into a
+      // search box it drops out of the element list, which is exactly when the
+      // next step needs to name it. Measured on WhatsApp: the field reads
+      // `Search` until it is focused, then reads nothing, and the `type` step
+      // after the `click` step reported "the target is not in the element
+      // list" at 0.69 against a 0.70 floor.
+      //
+      // Placeholder also outranks value because it is what the field *is*
+      // rather than what is currently in it. A search box does not stop being
+      // the search box once someone types in it, and a label that changes
+      // under the agent's own keystrokes makes the same element look like a
+      // different one between two consecutive steps.
+      string(element, kAXPlaceholderValueAttribute as String),
       string(element, kAXValueAttribute as String),
     ]
     for candidate in candidates {
-      let trimmed = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let trimmed = cleaned(candidate ?? "")
       if !trimmed.isEmpty { return trimmed }
     }
     return ""
+  }
+
+  /// Strips the characters that are in a label but not in its meaning.
+  ///
+  /// **Applications really do put invisible characters in their labels.**
+  /// Measured on WhatsApp: every label arrives with a leading `U+200E`
+  /// LEFT-TO-RIGHT MARK — `‎Search`, `‎Compose message` — which its own
+  /// bundle strings do not have. Nothing shows it: not a screenshot, not a log
+  /// line, not a diff.
+  ///
+  /// Two things break on it. Jev reads these labels to decide which candidate a
+  /// plan step is naming, and a step saying "the Search field" against a
+  /// candidate that is not quite `Search` is a worse match than it should be.
+  /// And `LabelDenylist` matches on this string — a format character sitting
+  /// inside a word would carry a denylisted term straight past the check, which
+  /// is the one place a silent mismatch is dangerous rather than annoying.
+  ///
+  /// Format characters (Unicode general category Cf) carry no identity; they
+  /// tell a text renderer what to do. The same reasoning as
+  /// `WindowGuard.normalized(appName:)`, at the layer where it matters more.
+  static func cleaned(_ label: String) -> String {
+    String(label.unicodeScalars.filter { $0.properties.generalCategory != .format })
+      .trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   /// Whether this process may inspect other applications' UI.

@@ -26,14 +26,16 @@ public struct AXExecutor: Executor {
       guard let key = action.key else {
         throw ExecutionError.unknownKey(action.payload ?? "<nil>")
       }
-      if let element = try resolveIfTargeted(action) {
-        // There is no AX action for a keystroke, so the element is focused
-        // first and the event is synthesized at the HID layer. The wait is the
-        // whole point — see `settleFocus`.
-        guard Self.settleFocus(element, pid: source.pid) else {
-          throw ExecutionError.focusNotAccepted
+      // There is no AX action for a keystroke, so the event is synthesized at
+      // the HID layer — and it goes to the frontmost application. Raising it
+      // first is the whole point; see `settleFocus`.
+      let settled =
+        if let element = try resolveIfTargeted(action) {
+          Self.settleFocus(element, pid: source.pid)
+        } else {
+          Self.settleFrontmost(pid: source.pid)
         }
-      }
+      guard settled else { throw ExecutionError.focusNotAccepted }
       try KeySynthesis.press(key)
       return ExecutionResult(dispatched: true, via: .ax)
 
@@ -55,6 +57,16 @@ public struct AXExecutor: Executor {
           throw ExecutionError.focusNotAccepted
         }
         try KeySynthesis.type(text)
+        // Keystrokes go to whatever holds focus, so where they landed is a
+        // question worth actually asking. When the element can answer it and
+        // says the text is not there, the step failed — and saying so lets the
+        // ladder act, instead of the next step finding a screen that does not
+        // match the route. A control that reports no value at all is not
+        // evidence of failure, so it is left alone.
+        let after = Self.stringValue(of: element)
+        if after != nil, Self.writeWasIgnored(text, before: before, after: after) {
+          throw ExecutionError.focusNotAccepted
+        }
       }
       return ExecutionResult(dispatched: true, via: .ax)
 
@@ -122,48 +134,62 @@ public struct AXExecutor: Executor {
     return false
   }
 
-  /// Focuses an element and waits until the application agrees that it has it.
+  /// Brings the application forward and aims it at the element, so that a
+  /// synthesized key lands where it was pointed.
   ///
-  /// **`AXUIElementSetAttributeValue(kAXFocused…)` returns before the focus
-  /// moves.** It posts a request; the application handles it on its own run
-  /// loop, whenever that next turns. Synthesized keys posted in the same breath
-  /// win that race and land wherever focus still is.
+  /// **A HID event goes to the frontmost application, not to an element.** That
+  /// is the invariant that actually decides where a keystroke ends up, and it
+  /// is the one checked here. Asking instead whether the *element* reports
+  /// focus was the wrong question, and it refused work that would have
+  /// succeeded: measured on WhatsApp, the compose field holds the caret, shows
+  /// the typed draft in the chat list, and still reports neither `kAXFocused`
+  /// nor a matching `kAXFocusedUIElement`. Enter was refused on a field that
+  /// visibly had focus.
   ///
-  /// Measured on WhatsApp: "Zisan" went to the chat list rather than the search
-  /// field, where it behaved as type-select and dismissed the search panel the
-  /// next step depended on. The step reported `dispatched=true`, the field was
-  /// empty, and the failure surfaced two steps later as a route that no longer
-  /// matched the screen.
+  /// So element focus is *requested* and not *required* — it is what puts the
+  /// caret in the right field on toolkits that implement it, and plenty do not.
+  /// Being frontmost is required, because without it the key goes to whatever
+  /// application is, which is how a send ends up typed into a terminal.
   ///
-  /// Two signals are accepted, because one of them is unreliable on its own:
-  /// the application naming this element as its focused one, or the element
-  /// reporting itself focused. Some toolkits maintain only the second.
+  /// The app is raised first and the element focused second: focusing something
+  /// inside a background application moves nothing the keyboard can see.
   ///
   /// Synchronous on purpose. `AXUIElement` is not `Sendable` and must not cross
-  /// a suspension point — the same reason `AXSource.attemptObservation` is kept
-  /// whole — and the wait is bounded at `Constants.Typing.focusTimeoutSeconds`.
+  /// a suspension point, and the wait is bounded.
   static func settleFocus(_ element: AXUIElement, pid: pid_t) -> Bool {
+    let app = AXUIElementCreateApplication(pid)
+    AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
     AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
 
-    let app = AXUIElementCreateApplication(pid)
     let deadline = Date().addingTimeInterval(Constants.Typing.focusTimeoutSeconds)
     repeat {
-      var focused: CFTypeRef?
-      if AXUIElementCopyAttributeValue(
-        app, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
-        let current = focused, CFEqual(current, element)
-      {
-        return true
-      }
-      var own: CFTypeRef?
-      if AXUIElementCopyAttributeValue(element, kAXFocusedAttribute as CFString, &own) == .success,
-        let flag = own as? Bool, flag
-      {
-        return true
-      }
+      if isFrontmost(app) { return true }
       usleep(Constants.Typing.focusPollMicroseconds)
     } while Date() < deadline
     return false
+  }
+
+  /// Brings an application forward with no element in mind.
+  ///
+  /// The same precondition, for the steps that name no target.
+  static func settleFrontmost(pid: pid_t) -> Bool {
+    let app = AXUIElementCreateApplication(pid)
+    AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+    let deadline = Date().addingTimeInterval(Constants.Typing.focusTimeoutSeconds)
+    repeat {
+      if isFrontmost(app) { return true }
+      usleep(Constants.Typing.focusPollMicroseconds)
+    } while Date() < deadline
+    return false
+  }
+
+  private static func isFrontmost(_ app: AXUIElement) -> Bool {
+    var value: CFTypeRef?
+    guard
+      AXUIElementCopyAttributeValue(app, kAXFrontmostAttribute as CFString, &value) == .success,
+      let flag = value as? Bool
+    else { return false }
+    return flag
   }
 
   /// The element's `AXValue`, when it is a string.

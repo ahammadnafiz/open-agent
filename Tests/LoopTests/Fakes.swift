@@ -129,14 +129,23 @@ enum Make {
     hud: any HUDBridge = HeadlessHUD(),
     elements: [Element] = [Make.element(), Make.element(label: "Home", path: [1])],
     taskContext: String = "",
-    budget: Budget = Budget()
+    budget: Budget = Budget(),
+    // Defaults to ON so that every test written about the gate keeps testing
+    // the gate. `Constants.Safety.askBeforeIrreversible` is what ships, and
+    // exactly one test asserts that value — see "the sheet is off by default".
+    asksBeforeIrreversible: Bool = true
   ) -> AgentLoop {
     AgentLoop(
       task: "test task", taskContext: taskContext, plan: plan,
       sessionID: "s_test", pid: 0,
       source: FakeSource(elements: elements),
       jev: judge, executors: executor, hud: hud,
-      budget: budget
+      budget: budget,
+      asksBeforeIrreversible: asksBeforeIrreversible,
+      // The fake screen never changes, so a real settle would be paid in full
+      // on every dispatched step. That is 1.2s each, against a suite that
+      // otherwise runs in milliseconds.
+      settleTimeout: .zero
     )
   }
 }

@@ -266,7 +266,8 @@ struct AgentLoopTests {
       task: "t", plan: Make.plan([.click]), sessionID: "s", pid: 0,
       source: FailingSource(error: PerceptionError.accessibilityNotTrusted),
       jev: ScriptedJudge([Make.verdict()]),
-      executors: RecordingExecutor(), hud: HeadlessHUD()
+      executors: RecordingExecutor(), hud: HeadlessHUD(),
+      settleTimeout: .zero
     )
     let result = await loop.run()
     #expect(result.status == .failed)

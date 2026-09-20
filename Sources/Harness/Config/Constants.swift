@@ -222,6 +222,26 @@ public enum Constants {
 
   public enum Safety {
 
+    /// Whether an irreversible step stops and waits for a human.
+    ///
+    /// **Off, at the owner's request.** This is a decision, not an oversight,
+    /// and it is worth writing down what it costs: page and message text
+    /// reaches the planning model's context by construction, so an instruction
+    /// embedded in something the agent *reads* can propose a send, a delete or
+    /// a purchase. The sheet was the one thing in this design that such an
+    /// instruction could not talk its way past, because a window is not
+    /// expressible as an argument.
+    ///
+    /// It lives here rather than behind a flag on purpose: `CLI.approvalFlags`
+    /// stays empty and `NoApprovalFlagTests` still holds. Nothing the agent
+    /// reads at run time can turn this on or off — only a person editing this
+    /// file and rebuilding. That is the part of the property worth keeping.
+    ///
+    /// `Irreversibility.classify` and `requiresConfirmation` are untouched, so
+    /// every step is still classified and every verdict still logged. What
+    /// changes is whether the agent stops, not whether it knows.
+    public static let askBeforeIrreversible = false
+
     /// Kinds that are irreversible by definition. Mirrors
     /// `ActionKind.isIrreversibleByDefault` — the enum is the source of truth;
     /// this exists so the list is visible in the file humans review.
@@ -319,6 +339,24 @@ public enum Constants {
     /// reason it lives here rather than inline: a wait long enough to matter is
     /// a wait that competes with the task's own ceiling.
     public static let waitDuration: Duration = .milliseconds(300)
+
+    /// How long to let the screen catch up after an action, before judging it.
+    ///
+    /// **An application is not finished when the call returns.** A click
+    /// dispatches in microseconds; the redraw it causes happens on the app's
+    /// own run loop. Reading the accessibility tree before that gives back the
+    /// screen as it was — so Jev compares two identical descriptions, reports
+    /// `unchanged`, and the ladder retries a step that had already worked.
+    /// On a control that toggles, the retry undoes it.
+    ///
+    /// Measured on WhatsApp: clicking Search opened the panel on every run, and
+    /// every run then read `unchanged ≈ 0.91` and retried.
+    ///
+    /// This *saves* time despite being a wait. A wasted retry costs a Jev call,
+    /// an execution and another observation; polling stops the moment the
+    /// screen differs, which is usually the first poll.
+    public static let settleTimeout: Duration = .milliseconds(1_200)
+    public static let settlePollInterval: Duration = .milliseconds(150)
   }
 
   // MARK: - Recovery

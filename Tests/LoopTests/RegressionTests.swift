@@ -11,6 +11,61 @@ import Testing
 @Suite("Review regressions")
 struct RegressionTests {
 
+  // MARK: - Invisible characters in element labels
+
+  /// WhatsApp puts a `U+200E` LEFT-TO-RIGHT MARK on the front of every label:
+  /// `‎Search`, `‎Compose message`. Nothing renders it — not a screenshot, not
+  /// a log line, not a diff — so a label looks correct and compares unequal.
+  ///
+  /// **The dangerous half is the denylist.** It matches on this string, so a
+  /// format character inside a word would carry a denylisted term straight past
+  /// the check. The annoying half is that Jev reads these labels to decide
+  /// which candidate a plan step names.
+  @Test("format characters are stripped from labels")
+  func labelsAreCleaned() {
+    #expect(AXPrimitives.cleaned("\u{200E}Search") == "Search")
+    #expect(AXPrimitives.cleaned("\u{200E}Compose message") == "Compose message")
+    #expect(AXPrimitives.cleaned("  \u{200F}Send  ") == "Send")
+    // A term hidden from the denylist by a zero-width joiner mid-word.
+    #expect(AXPrimitives.cleaned("Se\u{200D}nd") == "Send")
+  }
+
+  /// Stripping must not merge labels that name different things, or the
+  /// candidate list starts offering two identical-looking rows.
+  @Test("cleaning does not collapse distinct labels")
+  func cleaningKeepsDistinctions() {
+    #expect(AXPrimitives.cleaned("Send") != AXPrimitives.cleaned("Sent"))
+    #expect(AXPrimitives.cleaned("Reply") != AXPrimitives.cleaned("Reply all"))
+  }
+
+  // MARK: - The confirmation sheet is off
+
+  /// The owner turned it off. This asserts that it is actually off, and that
+  /// an irreversible step runs rather than hanging on a window nobody will
+  /// answer — a sheet that never appears but is still waited on is worse than
+  /// either choice.
+  ///
+  /// The classification is deliberately left alone: every step is still judged
+  /// irreversible or not, and every verdict still reaches the log. What changed
+  /// is whether the agent stops, not whether it knows.
+  @Test("the sheet is off by default, and the step still runs")
+  func sheetIsOffByDefault() async {
+    #expect(Constants.Safety.askBeforeIrreversible == false)
+
+    let hud = RecordingHUD(approve: false)
+    let executor = RecordingExecutor()
+    let loop = Make.loop(
+      plan: Make.plan([.send]),
+      judge: ScriptedJudge([Make.verdict(choice: "e0", probabilities: ["e0": 0.99])]),
+      executor: executor, hud: hud,
+      asksBeforeIrreversible: Constants.Safety.askBeforeIrreversible
+    )
+    _ = await loop.run()
+
+    #expect(await hud.confirmations.isEmpty, "nothing should have been asked")
+    #expect(await !executor.executed.isEmpty, "the step should still have run")
+  }
+
   // MARK: - Keystrokes outran the application
 
   /// Characters were posted back to back with no gap at all, and focus was
@@ -227,7 +282,8 @@ struct RegressionTests {
       resumeFrom: AgentLoop.LoopState(
         budget: spent, history: [], planIndex: 0, stepIndex: 0,
         screenBefore: "", totalCost: 0
-      )
+      ),
+      settleTimeout: .zero
     )
     let result = await loop.run()
     #expect(result.status == .budgetExhausted)
@@ -274,7 +330,8 @@ struct RegressionTests {
       task: "t", plan: Make.plan([.click]), sessionID: "s", pid: 0,
       source: FakeSource(elements: elements), jev: judge, executors: executor,
       hud: HeadlessHUD(),
-      pendingEyes: EyesAnswer(index: 3, label: "the compose icon")
+      pendingEyes: EyesAnswer(index: 3, label: "the compose icon"),
+      settleTimeout: .zero
     )
     _ = await loop.run()
 
@@ -297,7 +354,8 @@ struct RegressionTests {
       source: FakeSource(elements: [icon]),
       jev: ScriptedJudge([Make.verdict(choice: "e0", probabilities: ["e0": 0.99])]),
       executors: RecordingExecutor(), hud: hud,
-      pendingEyes: EyesAnswer(index: 1, label: "the paper-aeroplane send icon")
+      pendingEyes: EyesAnswer(index: 1, label: "the paper-aeroplane send icon"),
+      asksBeforeIrreversible: true, settleTimeout: .zero
     )
     let result = await loop.run()
 
@@ -313,7 +371,8 @@ struct RegressionTests {
       source: FakeSource(elements: [Make.element()]),
       jev: ScriptedJudge([Make.verdict()]), executors: RecordingExecutor(),
       hud: HeadlessHUD(),
-      pendingEyes: EyesAnswer(index: 99, label: "gone")
+      pendingEyes: EyesAnswer(index: 99, label: "gone"),
+      settleTimeout: .zero
     )
     let result = await loop.run()
     #expect(result.status == .needsPlan)
@@ -336,7 +395,8 @@ struct RegressionTests {
       // No candidates at all: a targetless step must not need any.
       source: FakeSource(elements: []),
       jev: ScriptedJudge([Make.verdict(choice: nil)]),
-      executors: executor, hud: HeadlessHUD()
+      executors: executor, hud: HeadlessHUD(),
+      settleTimeout: .zero
     )
     _ = await loop.run()
 
@@ -364,7 +424,8 @@ struct RegressionTests {
       task: "t", plan: Make.plan([.click]), sessionID: "s", pid: 0,
       source: FakeSource(elements: [Make.element()]),
       jev: ScriptedJudge([Make.verdict(progressed: 0.91, riskOutbound: 0.33)]),
-      executors: RecordingExecutor(), hud: HeadlessHUD()
+      executors: RecordingExecutor(), hud: HeadlessHUD(),
+      settleTimeout: .zero
     )
     let result = await loop.run()
     let step = try? #require(result.steps.first)

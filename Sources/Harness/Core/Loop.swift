@@ -77,6 +77,16 @@ public actor AgentLoop {
   private var pendingEyes: EyesAnswer?
   private var totalCost = 0.0
 
+  /// Whether an irreversible step stops for a human. Injected so the tests can
+  /// exercise both states; the shipped value is `Constants.Safety`, which
+  /// explains why it is what it is.
+  private let asksBeforeIrreversible: Bool
+
+  /// How long to let the screen catch up after an action. Injected so the unit
+  /// tests do not each pay a real settle against a fake screen that will never
+  /// change — a suite that takes ten seconds stops being run.
+  private let settleTimeout: Duration
+
   public init(
     task: String,
     taskContext: String = "",
@@ -91,8 +101,12 @@ public actor AgentLoop {
     artifactsDirectory: URL = URL(fileURLWithPath: NSTemporaryDirectory()),
     budget: Budget = Budget(),
     resumeFrom: LoopState? = nil,
-    pendingEyes: EyesAnswer? = nil
+    pendingEyes: EyesAnswer? = nil,
+    asksBeforeIrreversible: Bool = Constants.Safety.askBeforeIrreversible,
+    settleTimeout: Duration = Constants.Execution.settleTimeout
   ) {
+    self.settleTimeout = settleTimeout
+    self.asksBeforeIrreversible = asksBeforeIrreversible
     self.pendingEyes = pendingEyes
     self.task = task
     self.taskContext = taskContext
@@ -255,6 +269,15 @@ public actor AgentLoop {
           visionLabel: eyes.label ?? picked.visionLabel
         )
         Log.info("using host-selected mark \(index): \(element.label)")
+      } else if planStep.kind == .pressKey,
+        let ax = source as? AXSource,
+        let focused = ax.focused(among: candidates.elements)
+      {
+        // A keystroke goes where focus is, not where a model guessed. See
+        // `AXSource.focused(among:)` — this is the same element ADR 0008 says
+        // `enter` must be classified against.
+        element = focused
+        Log.info("pressKey targets the focused element: \(element.label)")
       } else if verdict.passesSelectionGate,
         let choice = verdict.target,
         let resolved = candidates.element(forID: choice.choice)
@@ -280,7 +303,11 @@ public actor AgentLoop {
         action, target: element, declaredByPlanner: planStep.declaredIrreversible
       )
       var confirmed = false
-      if Irreversibility.requiresConfirmation(effective, riskMax: verdict.riskMax) {
+      // The classification still happens and is still logged; only the stop is
+      // optional. `Constants.Safety.askBeforeIrreversible` says why.
+      if asksBeforeIrreversible,
+        Irreversibility.requiresConfirmation(effective, riskMax: verdict.riskMax)
+      {
         // Human time is NEVER charged to the machine-time budget.
         let approved = await hud.confirm(
           ConfirmationRequest(
@@ -310,6 +337,12 @@ public actor AgentLoop {
         executionResult = ExecutionResult(dispatched: false, via: element.ref.sourceKind)
       }
 
+      // Let the application actually do what it was asked before the next
+      // iteration reads the screen and judges whether it did. `screenNow` is
+      // the screen as it was *before* this action, which is exactly what the
+      // next observation has to differ from.
+      if executionResult.dispatched { await settle(from: screenNow) }
+
       // ── RECORD ───────────────────────────────────────────────────
       // Verification of THIS step arrives in the NEXT iteration's batch, so the
       // verdict recorded here is the one that *selected* the action.
@@ -337,7 +370,9 @@ public actor AgentLoop {
       action, target: nil, declaredByPlanner: planStep.declaredIrreversible
     )
     var confirmed = false
-    if Irreversibility.requiresConfirmation(effective, riskMax: verdict.riskMax) {
+    if asksBeforeIrreversible,
+      Irreversibility.requiresConfirmation(effective, riskMax: verdict.riskMax)
+    {
       let approved = await hud.confirm(
         ConfirmationRequest(
           actionKind: action.kind, targetLabel: action.payload ?? planStep.target,
@@ -376,6 +411,25 @@ public actor AgentLoop {
   /// model version that answered."* All three are written here, to stderr, on
   /// every step — a log that only appears on failure is a log nobody has when
   /// they need it.
+  /// Waits for the screen to change after an action, bounded.
+  ///
+  /// A timeout is not a failure and is not reported as one: plenty of actions
+  /// genuinely change nothing visible, and deciding which is Jev's job. All
+  /// this does is make sure that when Jev is asked, it is looking at the screen
+  /// *after* the action rather than the screen before it.
+  ///
+  /// See `Constants.Execution.settleTimeout` for what this cost buys.
+  private func settle(from before: String) async {
+    let deadline = ContinuousClock.now.advanced(by: settleTimeout)
+    while ContinuousClock.now < deadline {
+      try? await Task.sleep(for: Constants.Execution.settlePollInterval)
+      guard let elements = try? await source.observe(),
+        let now = try? CandidateFilter.reduce(elements).describe()
+      else { return }
+      if now != before { return }
+    }
+  }
+
   private func record(
     action: Action,
     result executionResult: ExecutionResult,
