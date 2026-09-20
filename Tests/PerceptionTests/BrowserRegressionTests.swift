@@ -62,11 +62,12 @@ struct AgentTabRegressionTests {
       ok(3, #"{"contexts":[{"context":"users-tab","url":"https://news.example/"}]}"#),
       ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name — not ours
       ok(5, #"{"result":{"type":"string","value":"visible"}}"#),  // where they are
-      ok(6, #"{"userContexts":[{"userContext":"default"}]}"#),  // one jar, so no cookie question to ask
+      ok(6, #"{"userContexts":[{"userContext":"default"}]}"#),  // one jar
+      ok(7, #"{"cookies":[]}"#),  // holding nothing for this site
       // window.open, answering with the WindowProxy for the named tab
-      ok(7, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(8),  // browsingContext.activate
-      ok(9),  // browsingContext.navigate
+      ok(8, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(9),  // browsingContext.activate
+      ok(10),  // browsingContext.navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
@@ -204,9 +205,10 @@ struct AgentTabRegressionTests {
       ok(6, #"{"result":{"type":"string","value":"hidden"}}"#),  // background
       ok(7, #"{"result":{"type":"string","value":"visible"}}"#),  // onscreen
       ok(8, #"{"userContexts":[{"userContext":"default"}]}"#),
-      ok(9, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(10),  // activate
-      ok(11),  // navigate
+      ok(9, #"{"cookies":[]}"#),
+      ok(10, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(11),  // activate
+      ok(12),  // navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
@@ -237,9 +239,10 @@ struct AgentTabRegressionTests {
       ok(6),  // browsingContext.close
       ok(7, #"{"result":{"type":"string","value":"visible"}}"#),  // where they are
       ok(8, #"{"userContexts":[{"userContext":"default"}]}"#),
-      ok(9, #"{"result":{"type":"window","value":{"context":"fresh"}}}"#),
-      ok(10),  // activate
-      ok(11),  // navigate
+      ok(9, #"{"cookies":[]}"#),
+      ok(10, #"{"result":{"type":"window","value":{"context":"fresh"}}}"#),
+      ok(11),  // activate
+      ok(12),  // navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
@@ -272,12 +275,18 @@ struct AgentTabRegressionTests {
       ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name
       ok(5, #"{"result":{"type":"string","value":"visible"}}"#),  // in `default`
       ok(6, #"{"userContexts":[{"userContext":"default"},{"userContext":"aaa"},{"userContext":"bbb"}]}"#),
-      ok(7, #"{"cookies":[]}"#),  // signed out here
-      ok(8, #"{"cookies":[{"name":"auth_token"},{"name":"ct0"}]}"#),  // and in here
-      ok(9, #"{"context":"fresh"}"#),  // browsingContext.create
-      ok(10),  // window.name
-      ok(11),  // activate
-      ok(12),  // navigate
+      // Asked in sorted order — aaa, bbb, then default, which is a jar like
+      // any other and used to be skipped without ever being looked in.
+      ok(7, #"{"cookies":[]}"#),  // aaa — signed out here
+      // **The leading dot is the point.** This is how sites really scope a
+      // session cookie, and `storage.getCookies`' own `domain` filter is an
+      // exact string match, so asking it for `x.com` returns none of these.
+      ok(8, #"{"cookies":[{"name":"auth_token","domain":".x.com"},{"name":"ct0","domain":".x.com"}]}"#),
+      ok(9, #"{"cookies":[{"name":"guest_id","domain":".x.com"}]}"#),  // default — browsed, not signed in
+      ok(10, #"{"context":"fresh"}"#),  // browsingContext.create
+      ok(11),  // window.name
+      ok(12),  // activate
+      ok(13),  // navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()
@@ -286,6 +295,17 @@ struct AgentTabRegressionTests {
     let created = await transport.sent.first { $0.contains("browsingContext.create") }
     #expect(created?.contains("bbb") == true, "created in the jar holding the session")
     #expect(try await client.context() == "fresh")
+
+    let asked = await transport.sent.filter { $0.contains("storage.getCookies") }
+    #expect(asked.count == 3, "every jar is asked, default included")
+    // **The protocol's own `domain` filter is an exact string match**, so it
+    // finds nothing for any site that scopes its session to a parent domain —
+    // measured as 0 of 10 real cookies for facebook.com and 0 of 17 for
+    // instagram.com, against 3 of 15 for x.com, which stores them on the bare
+    // name. Passing it is what made signing in change nothing anywhere but X.
+    #expect(
+      asked.allSatisfy { !$0.contains(#""domain""#) },
+      "the domain filter is back, and it cannot see a cookie on a parent domain")
   }
 
   /// Nothing to reuse and nowhere to go is not a reason to open a blank tab.
@@ -322,13 +342,14 @@ struct AgentTabRegressionTests {
       ok(4, #"{"result":{"type":"string","value":""}}"#),  // window.name
       ok(5, #"{"result":{"type":"string","value":"visible"}}"#),  // where they are
       ok(6, #"{"userContexts":[{"userContext":"default"}]}"#),
-      ok(7, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
-      ok(8),  // activate
-      ok(9),  // first navigate
-      ok(10, after),  // tab(for:) — the tab it made is in the tree now
-      ok(11),  // second navigate
-      ok(12, after),
-      ok(13),  // third navigate
+      ok(7, #"{"cookies":[]}"#),
+      ok(8, #"{"result":{"type":"window","value":{"context":"agent-tab"}}}"#),
+      ok(9),  // activate
+      ok(10),  // first navigate
+      ok(11, after),  // tab(for:) — the tab it made is in the tree now
+      ok(12),  // second navigate
+      ok(13, after),
+      ok(14),  // third navigate
     ])
     let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
     try await client.connect()

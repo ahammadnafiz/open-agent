@@ -580,26 +580,69 @@ public actor BiDiClient {
     return Set(list.compactMap { $0["userContext"] as? String })
   }
 
+  /// Whether a cookie on `domain` is sent to `host`.
+  ///
+  /// **`storage.getCookies`' own domain filter is an exact string match, and
+  /// almost no site stores cookies under the name you navigate to.** Facebook
+  /// keeps its session on `.facebook.com`; asking for `facebook.com` returned
+  /// nothing at all, in every jar, while a raw scan of the same jar found ten
+  /// cookies including `c_user`. Measured across three sites: the filter found
+  /// 0 of 10 for facebook.com, 0 of 17 for instagram.com, and 3 of 15 for
+  /// x.com — x.com only because X happens to store cookies on the bare name.
+  ///
+  /// That single mismatch is why signing in made no difference anywhere but X.
+  /// The lookup found no jar, the agent fell back to opening from whatever tab
+  /// was on screen, and that tab was in whichever jar the user last used —
+  /// usually the default one, which is signed in to nothing.
+  ///
+  /// So the match is done here, the way cookies are actually scoped: a leading
+  /// dot is not part of the name, and a cookie set on a parent domain reaches
+  /// its subdomains.
+  static func cookieReaches(host: String, domain: String) -> Bool {
+    let scope = domain.hasPrefix(".") ? String(domain.dropFirst()) : domain
+    guard !scope.isEmpty, !host.isEmpty else { return false }
+    // The suffix rules need a dot on the side doing the containing, or a
+    // cookie scoped to a bare `com` would reach every site on it. Browsers
+    // refuse such a cookie, but this should not depend on that.
+    return host == scope
+      || (scope.contains(".") && host.hasSuffix("." + scope))
+      || (host.contains(".") && scope.hasSuffix("." + host))
+  }
+
   /// The container that already holds this site's cookies.
   ///
   /// Containers are separate cookie jars, so "where is the user signed in to
   /// this site" has a direct answer that needs no tab loaded, no guess, and
-  /// nothing remembered between runs: ask each jar what it holds for that
-  /// domain. The one with cookies is the one with the session.
+  /// nothing remembered between runs: ask each jar what it holds, and match
+  /// the host against it here rather than trusting the protocol's filter.
+  ///
+  /// The count is the signal. A jar the user merely browsed holds a handful of
+  /// tracking cookies; a jar they signed in to holds those plus a session.
+  /// Facebook, measured: four in the jar that shows a login page
+  /// (`datr`, `fr`, `sb`, `wd`) against ten in the one that shows the feed.
   private func jarHoldingCookies(for url: String?) async -> String? {
     guard let host = Self.host(of: url) else { return nil }
     var best: (jar: String, count: Int)?
-    for jar in await containers().sorted() where jar != "default" {
+    // **`default` is a jar like any other.** Excluding it meant a site the user
+    // signed in to without opening a container could never be found, and the
+    // one jar most people use most was the one jar never looked in.
+    for jar in await containers().sorted() {
       guard
         let result = try? await send(
           "storage.getCookies",
-          [
-            "filter": ["domain": host],
-            "partition": ["type": "storageKey", "userContext": jar],
-          ]),
-        let cookies = result["cookies"] as? [[String: Any]], !cookies.isEmpty
+          ["partition": ["type": "storageKey", "userContext": jar]]),
+        let cookies = result["cookies"] as? [[String: Any]]
       else { continue }
-      if cookies.count > (best?.count ?? 0) { best = (jar, cookies.count) }
+      let mine = cookies.filter {
+        guard let domain = $0["domain"] as? String else { return false }
+        return Self.cookieReaches(host: host, domain: domain)
+      }
+      guard !mine.isEmpty else { continue }
+      Log.debug("\(jar) holds \(mine.count) cookies for \(host)")
+      if mine.count > (best?.count ?? 0) { best = (jar, mine.count) }
+    }
+    if let best {
+      Log.info("\(host) is signed in where \(best.count) of its cookies are")
     }
     return best?.jar
   }
@@ -642,9 +685,29 @@ public actor BiDiClient {
     // signed in "somewhere else", and that is worth knowing before blaming
     // containers for a login page.
     rows.append("containers: " + (await containers()).sorted().joined(separator: ", "))
-    if let url {
-      let jar = await jarHoldingCookies(for: url)
-      rows.append("cookies for \(Self.host(of: url) ?? url): \(jar ?? "nowhere but default")")
+    if let url, let host = Self.host(of: url) {
+      // Per jar, not a verdict. The old line printed "nowhere but default"
+      // whenever the lookup came back empty, which read as a finding about the
+      // default jar when nothing had looked in it — and the lookup was empty
+      // for every site but X, so the diagnostic agreed with the bug.
+      for jar in await containers().sorted() {
+        guard
+          let result = try? await send(
+            "storage.getCookies",
+            ["partition": ["type": "storageKey", "userContext": jar]]),
+          let cookies = result["cookies"] as? [[String: Any]]
+        else {
+          rows.append("  \(jar): unreadable")
+          continue
+        }
+        let mine = cookies.filter {
+          guard let domain = $0["domain"] as? String else { return false }
+          return Self.cookieReaches(host: host, domain: domain)
+        }
+        rows.append("  \(jar): \(mine.count) cookies for \(host)")
+      }
+      let chosen = await jarHoldingCookies(for: url)
+      rows.append("\(host) would be opened in: \(chosen ?? "the tab on screen")")
     }
 
     for context in try await topLevelContexts() {

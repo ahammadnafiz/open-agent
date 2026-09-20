@@ -230,3 +230,45 @@ struct UndrivableBrowserTests {
     #expect(said.count == 3, "a restart the user did not ask for should say why")
   }
 }
+
+
+/// **Signing in made no difference anywhere but X, and this is why.**
+/// `storage.getCookies` filters `domain` by exact string match, and almost no
+/// site stores its cookies under the name you navigate to. Measured across the
+/// same profile: the filter found 0 of 10 real cookies for facebook.com, 0 of
+/// 17 for instagram.com, and 3 of 15 for x.com — x.com only because X happens
+/// to use the bare name. With no jar found, the agent opened the site in
+/// whatever tab was on screen, which was signed in to nothing.
+@Suite("Which jar is signed in")
+struct CookieScopeTests {
+
+  @Test("a cookie on a dotted parent domain reaches the site")
+  func leadingDotReaches() {
+    // The case that broke every site but X.
+    #expect(BiDiClient.cookieReaches(host: "facebook.com", domain: ".facebook.com"))
+    #expect(BiDiClient.cookieReaches(host: "instagram.com", domain: ".instagram.com"))
+    #expect(BiDiClient.cookieReaches(host: "facebook.com", domain: "facebook.com"))
+    // A cookie set on a subdomain still belongs to the site being asked about.
+    #expect(BiDiClient.cookieReaches(host: "facebook.com", domain: "www.facebook.com"))
+    #expect(BiDiClient.cookieReaches(host: "mail.google.com", domain: ".google.com"))
+  }
+
+  @Test("a different site's cookie does not count as being signed in")
+  func neighboursDoNotReach() {
+    #expect(!BiDiClient.cookieReaches(host: "facebook.com", domain: "notfacebook.com"))
+    #expect(!BiDiClient.cookieReaches(host: "facebook.com", domain: "facebook.com.evil.test"))
+    #expect(!BiDiClient.cookieReaches(host: "x.com", domain: "example.com"))
+    #expect(!BiDiClient.cookieReaches(host: "facebook.com", domain: ""))
+    #expect(!BiDiClient.cookieReaches(host: "", domain: ".facebook.com"))
+  }
+
+  /// A cookie scoped to a bare public suffix must not make every site on it
+  /// look signed in. Browsers refuse to set one; this does not rely on that.
+  @Test("a bare suffix reaches nothing")
+  func bareSuffixReachesNothing() {
+    #expect(!BiDiClient.cookieReaches(host: "facebook.com", domain: "com"))
+    #expect(!BiDiClient.cookieReaches(host: "facebook.com", domain: ".com"))
+    // A host with no dot is still itself.
+    #expect(BiDiClient.cookieReaches(host: "localhost", domain: "localhost"))
+  }
+}
