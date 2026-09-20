@@ -25,6 +25,8 @@ case "bidi-dom":
   await Probe.bidiDOM(
     url: arguments.count > 2 ? arguments[2] : "https://en.wikipedia.org/wiki/Accessibility")
 case "browser-login": Probe.browserLogin()
+case "battery-eval": await Probe.batteryEval()
+case "capture-fixtures": await Probe.captureFixtures()
 case "--help", "-h": print(Probe.help)
 default:
   FileHandle.standardError.write(Data("unknown probe '\(arguments[1])'\n\n".utf8))
@@ -43,8 +45,10 @@ enum Probe {
       swift run Probe browser-login        log the agent profile into a site, once
       swift run Probe windows              what the window server reports
 
-    Not yet implemented (needs a labelled fixture set first):
-      battery-eval       every question x 5 repeats, straddle detection
+      swift run Probe battery-eval         every question x 5 repeats, straddle gate
+      swift run Probe capture-fixtures     record real DOM + AX element lists
+
+    Not yet implemented:
       captured-eval      tier 3/4 hit rate — Open Question Q7
     """
 
@@ -143,6 +147,224 @@ enum Probe {
     } catch {
       fail(error)
     }
+  }
+
+  // MARK: - battery-eval
+
+  /// SPEC.md § S8 — *"Every battery question, over 5 repeats on its fixture
+  /// set, stays on one side of its threshold."*
+  ///
+  /// **A single pass proves nothing.** Jev is non-deterministic: measured over
+  /// 8 identical requests, the same input returned 0.59–0.69, and 7 of 8 runs
+  /// were unique. So the metric that gates a merge is not mean accuracy — it is
+  /// whether any question's answers **straddle** its threshold across repeats.
+  ///
+  /// A question that straddles fails even at 100% mean accuracy, because a
+  /// threshold sitting where the answers live is a coin flip wearing a number.
+  /// The fix is never to nudge the threshold until the suite passes: reword the
+  /// question, or move the threshold away from the crowded region.
+  static func batteryEval(repeats: Int = 5) async {
+    guard let client = makeClient() else { return }
+
+    let directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+      .appending(path: "Tests/Fixtures/jev")
+    let fixtures: [BatteryFixture]
+    do {
+      fixtures = try BatteryFixture.load(from: directory)
+    } catch {
+      FileHandle.standardError.write(
+        Data("could not load fixtures from \(directory.path): \(error)\n".utf8))
+      exit(1)
+    }
+    guard !fixtures.isEmpty else {
+      FileHandle.standardError.write(Data("no fixtures in \(directory.path)\n".utf8))
+      exit(1)
+    }
+
+    print("\(fixtures.count) fixtures x \(repeats) repeats")
+    print("")
+
+    // question -> every observed value, and whether each landed correctly
+    var values: [String: [Double]] = [:]
+    var errors: [String: Int] = [:]
+    var counts: [String: Int] = [:]
+    var targetHits = 0
+    var targetTotal = 0
+    var cost = 0.0
+
+    for fixture in fixtures {
+      for repeatIndex in 1...repeats {
+        let verdict: StepVerdict
+        do {
+          verdict = try await client.step(fixture.state.context)
+        } catch {
+          print("  \(fixture.name) repeat \(repeatIndex): FAILED \(error)")
+          continue
+        }
+        cost += verdict.usage.dollars
+
+        let observed: [String: Double?] = [
+          Batteries.ID.progressed: verdict.progressed,
+          Batteries.ID.unchanged: verdict.unchanged,
+          Batteries.ID.blocked: verdict.blocked,
+          Batteries.ID.taskDone: verdict.taskDone,
+          Batteries.ID.looping: verdict.looping,
+          Batteries.ID.wrongContext: verdict.wrongContext,
+          Batteries.ID.sufficient: verdict.sufficient,
+          Batteries.ID.riskDestructive: verdict.riskDestructive,
+          Batteries.ID.riskOutbound: verdict.riskOutbound,
+          Batteries.ID.riskCredential: verdict.riskCredential,
+        ]
+
+        for (question, side) in fixture.expect {
+          guard let value = observed[question] ?? nil,
+            let threshold = BatteryFixture.threshold(for: question)
+          else { continue }
+          values[question, default: []].append(value)
+          counts[question, default: 0] += 1
+          let correct = side == .above ? value >= threshold : value < threshold
+          if !correct { errors[question, default: 0] += 1 }
+        }
+
+        // The ambiguous fixtures assert nothing but still contribute variance,
+        // which is the only reason they exist.
+        if fixture.expect.isEmpty, let wrongContext = verdict.wrongContext {
+          values[Batteries.ID.wrongContext, default: []].append(wrongContext)
+        }
+
+        if let expected = fixture.state.expectedTarget {
+          targetTotal += 1
+          if verdict.target?.choice == expected { targetHits += 1 }
+        }
+      }
+    }
+
+    print("question          n    err      mean    sd       straddles?")
+    print("────────────────  ───  ───────  ──────  ───────  ──────────")
+
+    var straddling: [String] = []
+    for question in values.keys.sorted() {
+      let observations = values[question] ?? []
+      guard !observations.isEmpty else { continue }
+      let n = counts[question] ?? observations.count
+      let err = errors[question] ?? 0
+      let mean = observations.reduce(0, +) / Double(observations.count)
+      let variance =
+        observations.reduce(0) { $0 + pow($1 - mean, 2) } / Double(observations.count)
+      let sd = variance.squareRoot()
+
+      // The gate. Not "was the mean right" — did any single repeat land on the
+      // wrong side of the line while another landed on the right side.
+      let threshold = BatteryFixture.threshold(for: question) ?? 0
+      let anyAbove = observations.contains { $0 >= threshold }
+      let anyBelow = observations.contains { $0 < threshold }
+      // Straddling only counts within a question whose fixtures agree on a
+      // side; a question with both above- and below-expectations legitimately
+      // produces values on both sides.
+      let sides = Set(
+        fixtures.compactMap { $0.expect[question]?.rawValue }
+      )
+      let straddles = anyAbove && anyBelow && sides.count == 1
+      if straddles { straddling.append(question) }
+
+      print(
+        pad(question, 18) + pad("\(observations.count)", 5)
+          + pad("\(err)/\(n)", 9) + pad(fmt(mean, 3), 8)
+          + pad(fmt(sd, 4), 9) + (straddles ? "STRADDLES" : "no")
+      )
+    }
+
+    if targetTotal > 0 {
+      print("")
+      print("target selection  \(targetHits)/\(targetTotal) correct")
+    }
+    print("")
+    print("cost              $\(fmt(cost, 4))")
+
+    if straddling.isEmpty {
+      print("\nPASS — no question straddles its threshold")
+    } else {
+      print("\nFAIL — straddling: \(straddling.joined(separator: ", "))")
+      print("Reword the question, or move the threshold away from the crowded")
+      print("region. Never nudge the threshold to make this pass.")
+      exit(1)
+    }
+  }
+
+  // MARK: - capture-fixtures
+
+  /// Records real element lists so SPEC.md § S7 can be asserted offline.
+  ///
+  /// S7 is *"Across every captured DOM and AX fixture, the filtered candidate
+  /// set is ≤255"* — **captured**, not synthesised. A test that builds 300
+  /// identical in-memory elements proves the comparison operator works; it says
+  /// nothing about whether real pages stay under the ceiling, which is the
+  /// claim. Link-dense pages are the interesting case, so they are what this
+  /// records.
+  static func captureFixtures() async {
+    let pages = [
+      ("wikipedia-accessibility", "https://en.wikipedia.org/wiki/Accessibility"),
+      ("hacker-news", "https://news.ycombinator.com"),
+      ("github-repo", "https://github.com/browser-use/jev-ultrafast"),
+    ]
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+      .appending(path: "Tests/Fixtures")
+
+    do {
+      let handle = try await BrowserLauncher.ensureDrivable(allowRestart: true)
+      let client = BiDiClient(port: handle.port)
+      try await client.connect()
+      let source = BiDiSource(client: client)
+
+      for (name, url) in pages {
+        try await client.navigate(to: url)
+        // Real pages settle after `complete`; a snapshot taken on the first
+        // frame records a page nobody ever saw.
+        try await Task.sleep(for: .seconds(1))
+        let elements = try await source.observe()
+        try write(elements, to: root.appending(path: "dom/\(name).json"))
+        print("  dom/\(name).json  \(elements.count) elements")
+      }
+      await client.close()
+    } catch {
+      print("  browser capture skipped: \(error)")
+    }
+
+    for app in ["Zen", "Finder", "Ghostty"] {
+      do {
+        let source = try AXSource(appName: app)
+        let elements = try await source.observe()
+        try write(elements, to: root.appending(path: "ax/\(app.lowercased()).json"))
+        print("  ax/\(app.lowercased()).json  \(elements.count) elements")
+      } catch {
+        print("  ax/\(app.lowercased()) skipped: \(error)")
+      }
+    }
+  }
+
+  /// Writes an element list, scrubbed.
+  ///
+  /// `SPEC.md` § Boundaries: never commit *"a captured screenshot, or a DOM
+  /// fixture containing session tokens."* A URL is the usual carrier, so query
+  /// strings and fragments come off before anything is written.
+  private static func write(_ elements: [Element], to url: URL) throws {
+    let scrubbed = elements.map { element -> Element in
+      Element(
+        ref: element.ref, role: element.role, label: scrub(element.label),
+        enabled: element.enabled, inViewport: element.inViewport,
+        bounds: element.bounds, visionLabel: element.visionLabel.map(scrub)
+      )
+    }
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    try encoder.encode(scrubbed).write(to: url, options: .atomic)
+  }
+
+  private static func scrub(_ text: String) -> String {
+    guard let range = text.range(of: "?") ?? text.range(of: "#") else { return text }
+    return String(text[text.startIndex..<range.lowerBound])
   }
 
   // MARK: - ax-tree

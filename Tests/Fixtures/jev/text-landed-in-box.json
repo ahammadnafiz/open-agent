@@ -1,0 +1,34 @@
+{
+  "name": "text-landed-in-box",
+  "provenance": "jev-questions.md 2.2 row 3: progressed 0.95",
+  "state": {
+    "task": "reply to the most recent message and send it",
+    "plan_step": {
+      "kind": "type",
+      "target": "the message body",
+      "payload": "I'll get back to you tomorrow."
+    },
+    "last_action": {
+      "kind": "type",
+      "target": "Body",
+      "payload": "I'll get back to you tomorrow."
+    },
+    "screen_before": "<AXWindow> New Message\n<AXTextField> To\n<AXTextField> Subject\n<AXTextArea> Body\n<AXButton> Send",
+    "screen_now": "<AXWindow> New Message\n<AXTextField> To\n<AXTextArea> I'll get back to you tomorrow.\n<AXButton> Send",
+    "recent_history": [
+      "click Reply",
+      "type body"
+    ],
+    "candidates": {
+      "e0": "Send",
+      "e1": "To"
+    },
+    "task_context": "",
+    "expected_target": null
+  },
+  "expect": {
+    "progressed": "above",
+    "unchanged": "below",
+    "task_done": "below"
+  }
+}

@@ -1,0 +1,1778 @@
+[
+  {
+    "bounds" : [
+      [
+        0,
+        0
+      ],
+      [
+        1,
+        1
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : false,
+    "label" : "Skip to content",
+    "ref" : {
+      "dom" : {
+        "handle" : "e1",
+        "label" : "Skip to content",
+        "selector" : "link[Skip to content]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        32,
+        20
+      ],
+      [
+        32,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Homepage",
+    "ref" : {
+      "dom" : {
+        "handle" : "e2",
+        "label" : "Homepage",
+        "selector" : "link[Homepage]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        80,
+        16
+      ],
+      [
+        101.18333435058594,
+        40
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Platform",
+    "ref" : {
+      "dom" : {
+        "handle" : "e3",
+        "label" : "Platform",
+        "selector" : "button[Platform]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        181.18333435058594,
+        16
+      ],
+      [
+        107.13333129882812,
+        40
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Solutions",
+    "ref" : {
+      "dom" : {
+        "handle" : "e4",
+        "label" : "Solutions",
+        "selector" : "button[Solutions]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        288.316650390625,
+        16
+      ],
+      [
+        115.91667175292969,
+        40
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Resources",
+    "ref" : {
+      "dom" : {
+        "handle" : "e5",
+        "label" : "Resources",
+        "selector" : "button[Resources]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        404.23333740234375,
+        16
+      ],
+      [
+        135.18333435058594,
+        40
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Open Source",
+    "ref" : {
+      "dom" : {
+        "handle" : "e6",
+        "label" : "Open Source",
+        "selector" : "button[Open Source]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        539.4166870117188,
+        16
+      ],
+      [
+        114.61666870117188,
+        40
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Enterprise",
+    "ref" : {
+      "dom" : {
+        "handle" : "e7",
+        "label" : "Enterprise",
+        "selector" : "button[Enterprise]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        654.0333251953125,
+        16
+      ],
+      [
+        69.11665344238281,
+        40
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Pricing",
+    "ref" : {
+      "dom" : {
+        "handle" : "e8",
+        "label" : "Pricing",
+        "selector" : "link[Pricing]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1016.36669921875,
+        20
+      ],
+      [
+        200,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Search or jump to, type \/ to search",
+    "ref" : {
+      "dom" : {
+        "handle" : "e9",
+        "label" : "Search or jump to, type \/ to search",
+        "selector" : "button[Search or jump to, type \/ to search]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        1224.36669921875,
+        20
+      ],
+      [
+        72.2833251953125,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Sign in",
+    "ref" : {
+      "dom" : {
+        "handle" : "e10",
+        "label" : "Sign in",
+        "selector" : "link[Sign in]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1304.6500244140625,
+        20
+      ],
+      [
+        77.35000610351562,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Sign up",
+    "ref" : {
+      "dom" : {
+        "handle" : "e11",
+        "label" : "Sign up",
+        "selector" : "link[Sign up]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1390,
+        20
+      ],
+      [
+        32,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Appearance settings",
+    "ref" : {
+      "dom" : {
+        "handle" : "e12",
+        "label" : "Appearance settings",
+        "selector" : "button[Appearance settings]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        56,
+        91
+      ],
+      [
+        110.11666870117188,
+        24
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "browser-use",
+    "ref" : {
+      "dom" : {
+        "handle" : "e13",
+        "label" : "browser-use",
+        "selector" : "link[browser-use]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        179.64999389648438,
+        91
+      ],
+      [
+        112.08334350585938,
+        24
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "jev-ultrafast",
+    "ref" : {
+      "dom" : {
+        "handle" : "e14",
+        "label" : "jev-ultrafast",
+        "selector" : "link[jev-ultrafast]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1037.2166748046875,
+        88
+      ],
+      [
+        123.66667175292969,
+        28
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "You must be signed in to change notification settings",
+    "ref" : {
+      "dom" : {
+        "handle" : "e15",
+        "label" : "You must be signed in to change notification settings",
+        "selector" : "link[You must be signed in to change notification settings]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1168.88330078125,
+        88
+      ],
+      [
+        118.55000305175781,
+        28
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Fork 646",
+    "ref" : {
+      "dom" : {
+        "handle" : "e16",
+        "label" : "Fork 646",
+        "selector" : "link[Fork 646]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1295.433349609375,
+        88
+      ],
+      [
+        126.56666564941406,
+        28
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "You must be signed in to star a repository",
+    "ref" : {
+      "dom" : {
+        "handle" : "e17",
+        "label" : "You must be signed in to star a repository",
+        "selector" : "link[You must be signed in to star a repository]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        32,
+        143
+      ],
+      [
+        75.41667175292969,
+        30
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Code",
+    "ref" : {
+      "dom" : {
+        "handle" : "e18",
+        "label" : "Code",
+        "selector" : "link[Code]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        115.41667175292969,
+        143
+      ],
+      [
+        117.96665954589844,
+        30
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Issues 17",
+    "ref" : {
+      "dom" : {
+        "handle" : "e19",
+        "label" : "Issues 17",
+        "selector" : "link[Issues 17]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        241.38333129882812,
+        143
+      ],
+      [
+        165.9166717529297,
+        30
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Pull requests 48",
+    "ref" : {
+      "dom" : {
+        "handle" : "e20",
+        "label" : "Pull requests 48",
+        "selector" : "link[Pull requests 48]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        415.29998779296875,
+        143
+      ],
+      [
+        90.93333435058594,
+        30
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Actions",
+    "ref" : {
+      "dom" : {
+        "handle" : "e21",
+        "label" : "Actions",
+        "selector" : "link[Actions]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        514.2333374023438,
+        143
+      ],
+      [
+        95.69999694824219,
+        30
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Projects",
+    "ref" : {
+      "dom" : {
+        "handle" : "e22",
+        "label" : "Projects",
+        "selector" : "link[Projects]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        617.933349609375,
+        143
+      ],
+      [
+        174.86666870117188,
+        30
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Security and quality 0",
+    "ref" : {
+      "dom" : {
+        "handle" : "e23",
+        "label" : "Security and quality 0",
+        "selector" : "link[Security and quality 0]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        800.7999877929688,
+        143
+      ],
+      [
+        93.86666870117188,
+        30
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Insights",
+    "ref" : {
+      "dom" : {
+        "handle" : "e24",
+        "label" : "Insights",
+        "selector" : "link[Insights]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        119,
+        206
+      ],
+      [
+        105.78334045410156,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "main branch",
+    "ref" : {
+      "dom" : {
+        "handle" : "e25",
+        "label" : "main branch",
+        "selector" : "button[main branch]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        232.78334045410156,
+        206
+      ],
+      [
+        107.91665649414062,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "7 Branches",
+    "ref" : {
+      "dom" : {
+        "handle" : "e26",
+        "label" : "7 Branches",
+        "selector" : "link[7 Branches]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        340.70001220703125,
+        206
+      ],
+      [
+        78.03334045410156,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "0 Tags",
+    "ref" : {
+      "dom" : {
+        "handle" : "e27",
+        "label" : "0 Tags",
+        "selector" : "link[0 Tags]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        698.5,
+        207
+      ],
+      [
+        190.6666717529297,
+        30
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Go to file",
+    "ref" : {
+      "dom" : {
+        "handle" : "e28",
+        "label" : "Go to file",
+        "selector" : "combobox[Go to file]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "combobox"
+  },
+  {
+    "bounds" : [
+      [
+        914.1666870117188,
+        206
+      ],
+      [
+        108.83332824707031,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Code",
+    "ref" : {
+      "dom" : {
+        "handle" : "e29",
+        "label" : "Code",
+        "selector" : "button[Code]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        132,
+        270.08331298828125
+      ],
+      [
+        29,
+        21.816665649414062
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "gregpr07",
+    "ref" : {
+      "dom" : {
+        "handle" : "e30",
+        "label" : "gregpr07",
+        "selector" : "link[gregpr07]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        161,
+        270.48333740234375
+      ],
+      [
+        62.51666259765625,
+        21
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "commits by gregpr07",
+    "ref" : {
+      "dom" : {
+        "handle" : "e31",
+        "label" : "commits by gregpr07",
+        "selector" : "link[commits by gregpr07]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        231.51666259765625,
+        272.5
+      ],
+      [
+        383.3333435058594,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "docs: announce the Cloud waitlist below the README title (",
+    "ref" : {
+      "dom" : {
+        "handle" : "e32",
+        "label" : "docs: announce the Cloud waitlist below the README title (",
+        "selector" : "link[docs: announce the Cloud waitlist below the README title (]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        614.8499755859375,
+        272.5
+      ],
+      [
+        25.966659545898438,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "",
+    "ref" : {
+      "dom" : {
+        "handle" : "e33",
+        "label" : "#30",
+        "selector" : "link[#30]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        640.816650390625,
+        272.5
+      ],
+      [
+        5.1999969482421875,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : ")",
+    "ref" : {
+      "dom" : {
+        "handle" : "e34",
+        "label" : ")",
+        "selector" : "link[)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        654.0166625976562,
+        267
+      ],
+      [
+        28,
+        28
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "success",
+    "ref" : {
+      "dom" : {
+        "handle" : "e35",
+        "label" : "success",
+        "selector" : "button[success]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        781.4500122070312,
+        272
+      ],
+      [
+        48.55000305175781,
+        18
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Commit 1231850",
+    "ref" : {
+      "dom" : {
+        "handle" : "e36",
+        "label" : "Commit 1231850",
+        "selector" : "link[Commit 1231850]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        909.7333374023438,
+        267
+      ],
+      [
+        100.26666259765625,
+        28
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "3 Commits",
+    "ref" : {
+      "dom" : {
+        "handle" : "e37",
+        "label" : "3 Commits",
+        "selector" : "link[3 Commits]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        319.5
+      ],
+      [
+        31.433334350585938,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "docs, (Directory)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e38",
+        "label" : "docs, (Directory)",
+        "selector" : "link[docs, (Directory)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        319.5
+      ],
+      [
+        417.316650390625,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Reduce browser round trips and record a 7-second Flights demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e39",
+        "label" : "Reduce browser round trips and record a 7-second Flights demo",
+        "selector" : "link[Reduce browser round trips and record a 7-second Flights demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        360.5
+      ],
+      [
+        61.18333435058594,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "examples, (Directory)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e40",
+        "label" : "examples, (Directory)",
+        "selector" : "link[examples, (Directory)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        360.5
+      ],
+      [
+        343.8833312988281,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Build Jev Ultrafast browser agent and real-web demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e41",
+        "label" : "Build Jev Ultrafast browser agent and real-web demo",
+        "selector" : "link[Build Jev Ultrafast browser agent and real-web demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        401.5
+      ],
+      [
+        78.53334045410156,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "jev_ultrafast, (Directory)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e42",
+        "label" : "jev_ultrafast, (Directory)",
+        "selector" : "link[jev_ultrafast, (Directory)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        401.5
+      ],
+      [
+        417.316650390625,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Reduce browser round trips and record a 7-second Flights demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e43",
+        "label" : "Reduce browser round trips and record a 7-second Flights demo",
+        "selector" : "link[Reduce browser round trips and record a 7-second Flights demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        442.5
+      ],
+      [
+        43.75,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "scripts, (Directory)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e44",
+        "label" : "scripts, (Directory)",
+        "selector" : "link[scripts, (Directory)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        442.5
+      ],
+      [
+        417.316650390625,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Reduce browser round trips and record a 7-second Flights demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e45",
+        "label" : "Reduce browser round trips and record a 7-second Flights demo",
+        "selector" : "link[Reduce browser round trips and record a 7-second Flights demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        483.5
+      ],
+      [
+        31.783340454101562,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "tests, (Directory)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e46",
+        "label" : "tests, (Directory)",
+        "selector" : "link[tests, (Directory)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        483.5
+      ],
+      [
+        417.316650390625,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Reduce browser round trips and record a 7-second Flights demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e47",
+        "label" : "Reduce browser round trips and record a 7-second Flights demo",
+        "selector" : "link[Reduce browser round trips and record a 7-second Flights demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        524.5
+      ],
+      [
+        83.48333740234375,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : ".env.example, (File)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e48",
+        "label" : ".env.example, (File)",
+        "selector" : "link[.env.example, (File)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        524.5
+      ],
+      [
+        417.316650390625,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Reduce browser round trips and record a 7-second Flights demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e49",
+        "label" : "Reduce browser round trips and record a 7-second Flights demo",
+        "selector" : "link[Reduce browser round trips and record a 7-second Flights demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        565.5
+      ],
+      [
+        61.03334045410156,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : ".gitignore, (File)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e50",
+        "label" : ".gitignore, (File)",
+        "selector" : "link[.gitignore, (File)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        565.5
+      ],
+      [
+        343.8833312988281,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Build Jev Ultrafast browser agent and real-web demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e51",
+        "label" : "Build Jev Ultrafast browser agent and real-web demo",
+        "selector" : "link[Build Jev Ultrafast browser agent and real-web demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        606.5
+      ],
+      [
+        79.48333740234375,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "AGENTS.md, (File)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e52",
+        "label" : "AGENTS.md, (File)",
+        "selector" : "link[AGENTS.md, (File)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        606.5
+      ],
+      [
+        343.8833312988281,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Build Jev Ultrafast browser agent and real-web demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e53",
+        "label" : "Build Jev Ultrafast browser agent and real-web demo",
+        "selector" : "link[Build Jev Ultrafast browser agent and real-web demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        647.5
+      ],
+      [
+        56.633331298828125,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "LICENSE, (File)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e54",
+        "label" : "LICENSE, (File)",
+        "selector" : "link[LICENSE, (File)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        647.5
+      ],
+      [
+        343.8833312988281,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Build Jev Ultrafast browser agent and real-web demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e55",
+        "label" : "Build Jev Ultrafast browser agent and real-web demo",
+        "selector" : "link[Build Jev Ultrafast browser agent and real-web demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        688.5
+      ],
+      [
+        81.23333740234375,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "README.md, (File)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e56",
+        "label" : "README.md, (File)",
+        "selector" : "link[README.md, (File)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        688.5
+      ],
+      [
+        383.33331298828125,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "docs: announce the Cloud waitlist below the README title (",
+    "ref" : {
+      "dom" : {
+        "handle" : "e57",
+        "label" : "docs: announce the Cloud waitlist below the README title (",
+        "selector" : "link[docs: announce the Cloud waitlist below the README title (]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        880.13330078125,
+        688.5
+      ],
+      [
+        25.9666748046875,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : false,
+    "label" : "",
+    "ref" : {
+      "dom" : {
+        "handle" : "e58",
+        "label" : "#30",
+        "selector" : "link[#30]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        906.0999755859375,
+        688.5
+      ],
+      [
+        5.1999969482421875,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : false,
+    "label" : ")",
+    "ref" : {
+      "dom" : {
+        "handle" : "e59",
+        "label" : ")",
+        "selector" : "link[)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        729.5
+      ],
+      [
+        93.06666564941406,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "pyproject.toml, (File)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e60",
+        "label" : "pyproject.toml, (File)",
+        "selector" : "link[pyproject.toml, (File)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        729.5
+      ],
+      [
+        343.8833312988281,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Build Jev Ultrafast browser agent and real-web demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e61",
+        "label" : "Build Jev Ultrafast browser agent and real-web demo",
+        "selector" : "link[Build Jev Ultrafast browser agent and real-web demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        162,
+        770.5
+      ],
+      [
+        45.06666564941406,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "uv.lock, (File)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e62",
+        "label" : "uv.lock, (File)",
+        "selector" : "link[uv.lock, (File)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        496.79998779296875,
+        770.5
+      ],
+      [
+        343.8833312988281,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Build Jev Ultrafast browser agent and real-web demo",
+    "ref" : {
+      "dom" : {
+        "handle" : "e63",
+        "label" : "Build Jev Ultrafast browser agent and real-web demo",
+        "selector" : "link[Build Jev Ultrafast browser agent and real-web demo]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1087,
+        280
+      ],
+      [
+        118.33332824707031,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "browser-use.com",
+    "ref" : {
+      "dom" : {
+        "handle" : "e64",
+        "label" : "browser-use.com",
+        "selector" : "link[browser-use.com]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1063,
+        313
+      ],
+      [
+        76.53334045410156,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Readme",
+    "ref" : {
+      "dom" : {
+        "handle" : "e65",
+        "label" : "Readme",
+        "selector" : "link[Readme]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1063,
+        342
+      ],
+      [
+        97.61666870117188,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "MIT license",
+    "ref" : {
+      "dom" : {
+        "handle" : "e66",
+        "label" : "MIT license",
+        "selector" : "link[MIT license]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1063,
+        371
+      ],
+      [
+        72.06666564941406,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Activity",
+    "ref" : {
+      "dom" : {
+        "handle" : "e67",
+        "label" : "Activity",
+        "selector" : "link[Activity]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1063,
+        400
+      ],
+      [
+        144.26666259765625,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Custom properties",
+    "ref" : {
+      "dom" : {
+        "handle" : "e68",
+        "label" : "Custom properties",
+        "selector" : "link[Custom properties]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1063,
+        487
+      ],
+      [
+        87.86666870117188,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "646 forks",
+    "ref" : {
+      "dom" : {
+        "handle" : "e69",
+        "label" : "646 forks",
+        "selector" : "link[646 forks]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1063,
+        516
+      ],
+      [
+        112.83332824707031,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Report repository",
+    "ref" : {
+      "dom" : {
+        "handle" : "e70",
+        "label" : "Report repository",
+        "selector" : "link[Report repository]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1063,
+        568
+      ],
+      [
+        67.85000610351562,
+        24
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Releases",
+    "ref" : {
+      "dom" : {
+        "handle" : "e71",
+        "label" : "Releases",
+        "selector" : "link[Releases]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1063,
+        655
+      ],
+      [
+        96.21665954589844,
+        24
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Contributors",
+    "ref" : {
+      "dom" : {
+        "handle" : "e72",
+        "label" : "Contributors",
+        "selector" : "link[Contributors]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1063,
+        691
+      ],
+      [
+        32,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "@gregpr07",
+    "ref" : {
+      "dom" : {
+        "handle" : "e73",
+        "label" : "@gregpr07",
+        "selector" : "link[@gregpr07]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1103,
+        698.5
+      ],
+      [
+        151.4166717529297,
+        17
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "gregpr07Gregor Žunič",
+    "ref" : {
+      "dom" : {
+        "handle" : "e74",
+        "label" : "gregpr07Gregor Žunič",
+        "selector" : "link[gregpr07Gregor Žunič]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  }
+]

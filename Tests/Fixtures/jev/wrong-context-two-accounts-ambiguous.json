@@ -1,0 +1,29 @@
+{
+  "name": "wrong-context-two-accounts-ambiguous",
+  "provenance": "jev-questions.md 2.5, case 4 of 4 — THE DELIBERATELY AMBIGUOUS ONE. Two accounts on screen at once, which is what a switcher looks like mid-transition. Section 7 requires an ambiguous fixture per question because a question that only ever sees easy inputs has never been tested at its threshold. No expectation is asserted: this fixture exists to report variance, and a straddle here is information, not a failure.",
+  "state": {
+    "task": "go to my company email and send an email to ahammadnafiz86@gmail.com",
+    "plan_step": {
+      "kind": "click",
+      "target": "the company account in the switcher",
+      "payload": null
+    },
+    "last_action": {
+      "kind": "click",
+      "target": "account switcher",
+      "payload": null
+    },
+    "screen_before": "<header> personal.nafiz@gmail.com",
+    "screen_now": "<menu> Switch account\n<menuitem> nafiz@company.com\n<menuitem> personal.nafiz@gmail.com",
+    "recent_history": [
+      "click account switcher"
+    ],
+    "candidates": {
+      "e0": "nafiz@company.com",
+      "e1": "personal.nafiz@gmail.com"
+    },
+    "task_context": "the company mailbox for nafiz@company.com",
+    "expected_target": "e0"
+  },
+  "expect": {}
+}

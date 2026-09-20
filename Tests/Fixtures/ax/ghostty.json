@@ -1,0 +1,27 @@
+[
+  {
+    "bounds" : [
+      [
+        0,
+        73
+      ],
+      [
+        1470,
+        883
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "nafiz-2.local: open-agent",
+    "ref" : {
+      "ax" : {
+        "label" : "nafiz-2.local: open-agent",
+        "path" : [
+
+        ],
+        "role" : "AXWindow"
+      }
+    },
+    "role" : "AXWindow"
+  }
+]

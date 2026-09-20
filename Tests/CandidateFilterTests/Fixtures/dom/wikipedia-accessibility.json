@@ -1,0 +1,1298 @@
+[
+  {
+    "bounds" : [
+      [
+        266,
+        17
+      ],
+      [
+        404.316650390625,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Search Wikipedia",
+    "ref" : {
+      "dom" : {
+        "handle" : "e1",
+        "label" : "Search Wikipedia",
+        "selector" : "searchbox[Search Wikipedia]",
+        "submitLabel" : "Search"
+      }
+    },
+    "role" : "searchbox"
+  },
+  {
+    "bounds" : [
+      [
+        669.316650390625,
+        17
+      ],
+      [
+        70.68333435058594,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Search",
+    "ref" : {
+      "dom" : {
+        "handle" : "e2",
+        "label" : "Search",
+        "selector" : "button[Search]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        1211.816650390625,
+        25.75
+      ],
+      [
+        45.133331298828125,
+        14.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Donate",
+    "ref" : {
+      "dom" : {
+        "handle" : "e3",
+        "label" : "Donate",
+        "selector" : "link[Donate]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1264.949951171875,
+        25.75
+      ],
+      [
+        94.91667175292969,
+        14.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Create account",
+    "ref" : {
+      "dom" : {
+        "handle" : "e4",
+        "label" : "Create account",
+        "selector" : "link[Create account]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1367.86669921875,
+        25.75
+      ],
+      [
+        38.133331298828125,
+        14.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Log in",
+    "ref" : {
+      "dom" : {
+        "handle" : "e5",
+        "label" : "Log in",
+        "selector" : "link[Log in]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        106.05000305175781
+      ],
+      [
+        1334,
+        64
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Wiki Loves Monuments: Photograph a monument, help Wikipedia and win! Learn more",
+    "ref" : {
+      "dom" : {
+        "handle" : "e6",
+        "label" : "Wiki Loves Monuments: Photograph a monument, help Wikipedia and win! Learn more",
+        "selector" : "link[Wiki Loves Monuments: Photograph a monument, help Wikipedia and win! Learn more]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        132.5500030517578,
+        257.8500061035156
+      ],
+      [
+        40.25,
+        23
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Hide Contents",
+    "ref" : {
+      "dom" : {
+        "handle" : "e7",
+        "label" : "Hide Contents",
+        "selector" : "button[Hide Contents]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        294.3999938964844
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "(Top)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e8",
+        "label" : "(Top)",
+        "selector" : "link[(Top)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        320.8999938964844
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "1 Legislation",
+    "ref" : {
+      "dom" : {
+        "handle" : "e9",
+        "label" : "1 Legislation",
+        "selector" : "link[1 Legislation]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        37,
+        321.8999938964844
+      ],
+      [
+        22,
+        22
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Toggle Legislation subsection",
+    "ref" : {
+      "dom" : {
+        "handle" : "e10",
+        "label" : "Toggle Legislation subsection",
+        "selector" : "button[Toggle Legislation subsection]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        347.3999938964844
+      ],
+      [
+        164,
+        41
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "2 Assistive technology and adaptive technology",
+    "ref" : {
+      "dom" : {
+        "handle" : "e11",
+        "label" : "2 Assistive technology and adaptive technology",
+        "selector" : "link[2 Assistive technology and adaptive technology]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        388.3999938964844
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "3 Employment",
+    "ref" : {
+      "dom" : {
+        "handle" : "e12",
+        "label" : "3 Employment",
+        "selector" : "link[3 Employment]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        37,
+        389.3999938964844
+      ],
+      [
+        22,
+        22
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Toggle Employment subsection",
+    "ref" : {
+      "dom" : {
+        "handle" : "e13",
+        "label" : "Toggle Employment subsection",
+        "selector" : "button[Toggle Employment subsection]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        414.8999938964844
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "4 Transportation",
+    "ref" : {
+      "dom" : {
+        "handle" : "e14",
+        "label" : "4 Transportation",
+        "selector" : "link[4 Transportation]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        37,
+        415.8999938964844
+      ],
+      [
+        22,
+        22
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Toggle Transportation subsection",
+    "ref" : {
+      "dom" : {
+        "handle" : "e15",
+        "label" : "Toggle Transportation subsection",
+        "selector" : "button[Toggle Transportation subsection]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        441.3999938964844
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "5 Public space",
+    "ref" : {
+      "dom" : {
+        "handle" : "e16",
+        "label" : "5 Public space",
+        "selector" : "link[5 Public space]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        467.8999938964844
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "6 Housing",
+    "ref" : {
+      "dom" : {
+        "handle" : "e17",
+        "label" : "6 Housing",
+        "selector" : "link[6 Housing]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        37,
+        468.8999938964844
+      ],
+      [
+        22,
+        22
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Toggle Housing subsection",
+    "ref" : {
+      "dom" : {
+        "handle" : "e18",
+        "label" : "Toggle Housing subsection",
+        "selector" : "button[Toggle Housing subsection]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        494.3999938964844
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "7 Voting",
+    "ref" : {
+      "dom" : {
+        "handle" : "e19",
+        "label" : "7 Voting",
+        "selector" : "link[7 Voting]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        520.9000244140625
+      ],
+      [
+        164,
+        55.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "8 Disability, information technology (IT) and telecommunications",
+    "ref" : {
+      "dom" : {
+        "handle" : "e20",
+        "label" : "8 Disability, information technology (IT) and telecommunications",
+        "selector" : "link[8 Disability, information technology (IT) and telecommunications]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        37,
+        521.9000244140625
+      ],
+      [
+        22,
+        22
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Toggle Disability, information technology (IT) and telecommunications subsection",
+    "ref" : {
+      "dom" : {
+        "handle" : "e21",
+        "label" : "Toggle Disability, information technology (IT) and telecommunications subsection",
+        "selector" : "button[Toggle Disability, information technology (IT) and telecommunications subsection]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        576.4000244140625
+      ],
+      [
+        164,
+        41
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "9 Education and accessibility for students",
+    "ref" : {
+      "dom" : {
+        "handle" : "e22",
+        "label" : "9 Education and accessibility for students",
+        "selector" : "link[9 Education and accessibility for students]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        37,
+        577.4000244140625
+      ],
+      [
+        22,
+        22
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Toggle Education and accessibility for students subsection",
+    "ref" : {
+      "dom" : {
+        "handle" : "e23",
+        "label" : "Toggle Education and accessibility for students subsection",
+        "selector" : "button[Toggle Education and accessibility for students subsection]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        617.4000244140625
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "10 See also",
+    "ref" : {
+      "dom" : {
+        "handle" : "e24",
+        "label" : "10 See also",
+        "selector" : "link[10 See also]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        643.9000244140625
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "11 References",
+    "ref" : {
+      "dom" : {
+        "handle" : "e25",
+        "label" : "11 References",
+        "selector" : "link[11 References]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        60,
+        670.4000244140625
+      ],
+      [
+        164,
+        26.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "12 External links",
+    "ref" : {
+      "dom" : {
+        "handle" : "e26",
+        "label" : "12 External links",
+        "selector" : "link[12 External links]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        264,
+        251.6666717529297
+      ],
+      [
+        38.899993896484375,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Article",
+    "ref" : {
+      "dom" : {
+        "handle" : "e27",
+        "label" : "Article",
+        "selector" : "link[Article]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        318.8999938964844,
+        251.6666717529297
+      ],
+      [
+        24.916671752929688,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Talk",
+    "ref" : {
+      "dom" : {
+        "handle" : "e28",
+        "label" : "Talk",
+        "selector" : "link[Talk]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        993.2000122070312,
+        251.6666717529297
+      ],
+      [
+        33.4666748046875,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Read",
+    "ref" : {
+      "dom" : {
+        "handle" : "e29",
+        "label" : "Read",
+        "selector" : "link[Read]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1042.6666259765625,
+        251.6666717529297
+      ],
+      [
+        24.116668701171875,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Edit",
+    "ref" : {
+      "dom" : {
+        "handle" : "e30",
+        "label" : "Edit",
+        "selector" : "link[Edit]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1082.7833251953125,
+        251.6666717529297
+      ],
+      [
+        75.21665954589844,
+        32
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "View history",
+    "ref" : {
+      "dom" : {
+        "handle" : "e31",
+        "label" : "View history",
+        "selector" : "link[View history]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1322.0166015625,
+        257.8500061035156
+      ],
+      [
+        40.25,
+        23
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Hide Appearance",
+    "ref" : {
+      "dom" : {
+        "handle" : "e32",
+        "label" : "Hide Appearance",
+        "selector" : "button[Hide Appearance]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "button"
+  },
+  {
+    "bounds" : [
+      [
+        769.9500122070312,
+        336.16668701171875
+      ],
+      [
+        118.28334045410156,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Universal design",
+    "ref" : {
+      "dom" : {
+        "handle" : "e33",
+        "label" : "Universal design",
+        "selector" : "link[Universal design]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        388.33331298828125,
+        362.16668701171875
+      ],
+      [
+        121.83334350585938,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Web accessibility",
+    "ref" : {
+      "dom" : {
+        "handle" : "e34",
+        "label" : "Web accessibility",
+        "selector" : "link[Web accessibility]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        813.4500122070312,
+        362.16668701171875
+      ],
+      [
+        165.40000915527344,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Accessibility (transport)",
+    "ref" : {
+      "dom" : {
+        "handle" : "e35",
+        "label" : "Accessibility (transport)",
+        "selector" : "link[Accessibility (transport)]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        289.6000061035156,
+        388.16668701171875
+      ],
+      [
+        144.04998779296875,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Accessibility relation",
+    "ref" : {
+      "dom" : {
+        "handle" : "e36",
+        "label" : "Accessibility relation",
+        "selector" : "link[Accessibility relation]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        767.86669921875,
+        388.16668701171875
+      ],
+      [
+        260.91668701171875,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Agenda-setting theory § Accessibility",
+    "ref" : {
+      "dom" : {
+        "handle" : "e37",
+        "label" : "Agenda-setting theory § Accessibility",
+        "selector" : "link[Agenda-setting theory § Accessibility]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        595.9000244140625,
+        414.16668701171875
+      ],
+      [
+        160.33334350585938,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Wikipedia:Accessibility",
+    "ref" : {
+      "dom" : {
+        "handle" : "e38",
+        "label" : "Wikipedia:Accessibility",
+        "selector" : "link[Wikipedia:Accessibility]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        931,
+        452.41668701171875
+      ],
+      [
+        258,
+        197
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Panel on an elevator showing the floor buttons with Braille markings",
+    "ref" : {
+      "dom" : {
+        "handle" : "e39",
+        "label" : "Panel on an elevator showing the floor buttons with Braille markings",
+        "selector" : "link[Panel on an elevator showing the floor buttons with Braille markings]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        931,
+        725.816650390625
+      ],
+      [
+        258,
+        222
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "A woman with a baby carriage uses a platform lift to access a station above street level",
+    "ref" : {
+      "dom" : {
+        "handle" : "e40",
+        "label" : "A woman with a baby carriage uses a platform lift to access a station above street level",
+        "selector" : "link[A woman with a baby carriage uses a platform lift to access a station above street level]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        336.95001220703125,
+        474.16668701171875
+      ],
+      [
+        59.600006103515625,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "disabled",
+    "ref" : {
+      "dom" : {
+        "handle" : "e41",
+        "label" : "disabled",
+        "selector" : "link[disabled]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        453.5,
+        471.23333740234375
+      ],
+      [
+        14.216659545898438,
+        13
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "[1]",
+    "ref" : {
+      "dom" : {
+        "handle" : "e42",
+        "label" : "[1]",
+        "selector" : "link[[1]]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        467.16668701171875,
+        526.1666870117188
+      ],
+      [
+        143.1999969482422,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "assistive technology",
+    "ref" : {
+      "dom" : {
+        "handle" : "e43",
+        "label" : "assistive technology",
+        "selector" : "link[assistive technology]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        783.8333129882812,
+        526.1666870117188
+      ],
+      [
+        106.75,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "screen readers",
+    "ref" : {
+      "dom" : {
+        "handle" : "e44",
+        "label" : "screen readers",
+        "selector" : "link[screen readers]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        264,
+        549.2333374023438
+      ],
+      [
+        14.216659545898438,
+        13
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "[2]",
+    "ref" : {
+      "dom" : {
+        "handle" : "e45",
+        "label" : "[2]",
+        "selector" : "link[[2]]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        451.73333740234375,
+        646.1666870117188
+      ],
+      [
+        143.1999969482422,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "assistive technology",
+    "ref" : {
+      "dom" : {
+        "handle" : "e46",
+        "label" : "assistive technology",
+        "selector" : "link[assistive technology]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        550.4166870117188,
+        669.2333374023438
+      ],
+      [
+        14.216659545898438,
+        13
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "[3]",
+    "ref" : {
+      "dom" : {
+        "handle" : "e47",
+        "label" : "[3]",
+        "selector" : "link[[3]]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        564.63330078125,
+        669.2333374023438
+      ],
+      [
+        14.2166748046875,
+        13
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "[4]",
+    "ref" : {
+      "dom" : {
+        "handle" : "e48",
+        "label" : "[4]",
+        "selector" : "link[[4]]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        578.8499755859375,
+        669.2333374023438
+      ],
+      [
+        14.216659545898438,
+        13
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "[5]",
+    "ref" : {
+      "dom" : {
+        "handle" : "e49",
+        "label" : "[5]",
+        "selector" : "link[[5]]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        593.066650390625,
+        669.2333374023438
+      ],
+      [
+        14.2166748046875,
+        13
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "[6]",
+    "ref" : {
+      "dom" : {
+        "handle" : "e50",
+        "label" : "[6]",
+        "selector" : "link[[6]]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        607.2833251953125,
+        669.2333374023438
+      ],
+      [
+        14.216659545898438,
+        13
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "[7]",
+    "ref" : {
+      "dom" : {
+        "handle" : "e51",
+        "label" : "[7]",
+        "selector" : "link[[7]]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        332.48333740234375,
+        698.1666870117188
+      ],
+      [
+        88.05000305175781,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "digital divide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e52",
+        "label" : "digital divide",
+        "selector" : "link[digital divide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        443.66668701171875,
+        698.1666870117188
+      ],
+      [
+        122.75,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "knowledge divide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e53",
+        "label" : "knowledge divide",
+        "selector" : "link[knowledge divide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        540.61669921875,
+        740.1666870117188
+      ],
+      [
+        57.21665954589844,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "usability",
+    "ref" : {
+      "dom" : {
+        "handle" : "e54",
+        "label" : "usability",
+        "selector" : "link[usability]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  }
+]

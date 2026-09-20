@@ -1,0 +1,34 @@
+{
+  "name": "navigate-hit-login-wall",
+  "provenance": "jev-questions.md 2.2 row 4. THE most useful row in that document: the original wording asked 'did the action succeed' and got 0.54, sitting dead on its threshold, because the navigation DID succeed. `blocked` rescued it independently at 0.95. Only `blocked` is scored here — `progressed` is deliberately not, because this is the case where it is ambiguous and scoring it would re-import the bug.",
+  "state": {
+    "task": "post an update to my account",
+    "plan_step": {
+      "kind": "click",
+      "target": "the compose button",
+      "payload": null
+    },
+    "last_action": {
+      "kind": "navigate",
+      "target": "address bar",
+      "payload": "https://example.com/home"
+    },
+    "screen_before": "<a> Home\n<a> Explore",
+    "screen_now": "<h1> Sign in to continue\n<input> Email\n<input> Password\n<button> Sign in\n<a> Forgot password?",
+    "recent_history": [
+      "navigate example.com/home"
+    ],
+    "candidates": {
+      "e0": "Sign in",
+      "e1": "Email",
+      "e2": "Password",
+      "e3": "Forgot password?"
+    },
+    "task_context": "",
+    "expected_target": null
+  },
+  "expect": {
+    "blocked": "above",
+    "task_done": "below"
+  }
+}

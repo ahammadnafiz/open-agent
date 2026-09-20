@@ -63,7 +63,7 @@ public struct StepContext: Encodable, Sendable, Equatable {
   }
 }
 
-public struct PlanStepDTO: Encodable, Sendable, Equatable {
+public struct PlanStepDTO: Codable, Sendable, Equatable {
   public let kind: String
   public let target: String
   public let payload: String?
@@ -79,7 +79,7 @@ public struct PlanStepDTO: Encodable, Sendable, Equatable {
   }
 }
 
-public struct ActionDTO: Encodable, Sendable, Equatable {
+public struct ActionDTO: Codable, Sendable, Equatable {
   public let kind: String
   public let target: String
   public let payload: String?

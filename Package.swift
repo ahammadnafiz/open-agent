@@ -22,7 +22,12 @@ let package = Package(
 
         // Unit + fixture tests. swift-testing, not XCTest.
         .testTarget(name: "SafetyTests", dependencies: ["Harness"]),
-        .testTarget(name: "CandidateFilterTests", dependencies: ["Harness"]),
+        .testTarget(
+      name: "CandidateFilterTests", dependencies: ["Harness"],
+      // The S7 fixtures are real captures, so the assertion is about real pages
+      // rather than about the comparison operator.
+      resources: [.copy("Fixtures")]
+    ),
         .testTarget(name: "JudgmentTests", dependencies: ["Harness"]),
         .testTarget(name: "LoopTests", dependencies: ["Harness"]),
     .testTarget(name: "PerceptionTests", dependencies: ["Harness"]),

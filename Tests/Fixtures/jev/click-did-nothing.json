@@ -1,0 +1,36 @@
+{
+  "name": "click-did-nothing",
+  "provenance": "jev-questions.md 2.2 row 2: progressed 0.03, unchanged 0.84. The no-op that rung 0 of the recovery ladder exists for.",
+  "state": {
+    "task": "reply to the most recent message and send it",
+    "plan_step": {
+      "kind": "click",
+      "target": "the reply button",
+      "payload": null
+    },
+    "last_action": {
+      "kind": "click",
+      "target": "Reply",
+      "payload": null
+    },
+    "screen_before": "<AXButton> New mail\n<AXButton> Archive\n<AXButton> Reply\n<AXStaticText> Inbox",
+    "screen_now": "<AXButton> New mail\n<AXButton> Archive\n<AXButton> Reply\n<AXStaticText> Inbox",
+    "recent_history": [
+      "openApp Mail",
+      "click Reply"
+    ],
+    "candidates": {
+      "e0": "New mail",
+      "e1": "Archive",
+      "e2": "Reply"
+    },
+    "task_context": "",
+    "expected_target": null
+  },
+  "expect": {
+    "progressed": "below",
+    "unchanged": "above",
+    "blocked": "below",
+    "task_done": "below"
+  }
+}

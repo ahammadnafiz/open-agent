@@ -1,0 +1,39 @@
+{
+  "name": "compose-modal-opened",
+  "provenance": "jev-questions.md 2.2 row 1: progressed 0.97, unchanged 0.03 Fixture corrected 2026-09-20: plan_step said 'click the reply button' while screen_now was already the compose window, so `sufficient` correctly answered 0.28 five times out of five. The question was fine; the label was wrong. This is the §2.2 lesson applied to a fixture instead of a question.",
+  "state": {
+    "task": "reply to the most recent message and send it",
+    "plan_step": {
+      "kind": "type",
+      "target": "the message body field",
+      "payload": "I'll get back to you tomorrow."
+    },
+    "last_action": {
+      "kind": "click",
+      "target": "Reply",
+      "payload": null
+    },
+    "screen_before": "<AXButton> New mail\n<AXButton> Archive\n<AXButton> Reply\n<AXStaticText> Inbox",
+    "screen_now": "<AXWindow> New Message\n<AXTextField> To\n<AXTextField> Subject\n<AXTextArea> Body\n<AXButton> Send",
+    "recent_history": [
+      "openApp Mail",
+      "click Reply"
+    ],
+    "candidates": {
+      "e0": "Send",
+      "e1": "To",
+      "e2": "Body",
+      "e3": "Subject"
+    },
+    "task_context": "",
+    "expected_target": "e2"
+  },
+  "expect": {
+    "progressed": "above",
+    "unchanged": "below",
+    "blocked": "below",
+    "task_done": "below",
+    "looping": "below",
+    "sufficient": "above"
+  }
+}

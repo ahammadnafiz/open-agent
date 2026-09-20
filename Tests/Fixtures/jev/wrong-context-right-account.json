@@ -1,0 +1,33 @@
+{
+  "name": "wrong-context-right-account",
+  "provenance": "jev-questions.md 2.5, case 1 of 4: the right account is visibly shown.",
+  "state": {
+    "task": "go to my company email and send an email to ahammadnafiz86@gmail.com",
+    "plan_step": {
+      "kind": "click",
+      "target": "the compose button",
+      "payload": null
+    },
+    "last_action": {
+      "kind": "navigate",
+      "target": "address bar",
+      "payload": "https://mail.company.com"
+    },
+    "screen_before": "<a> Home",
+    "screen_now": "<header> nafiz@company.com\n<button> Compose\n<a> Inbox\n<a> Sent",
+    "recent_history": [
+      "navigate mail.company.com"
+    ],
+    "candidates": {
+      "e0": "Compose",
+      "e1": "Inbox",
+      "e2": "Sent"
+    },
+    "task_context": "the company mailbox for nafiz@company.com",
+    "expected_target": null
+  },
+  "expect": {
+    "wrong_context": "below",
+    "blocked": "below"
+  }
+}

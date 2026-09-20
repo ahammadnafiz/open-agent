@@ -1,0 +1,32 @@
+{
+  "name": "wrong-context-different-account",
+  "provenance": "jev-questions.md 2.5, case 2 of 4: a DIFFERENT account is visibly shown. This is the traced real failure — every other verification question answers correctly while the agent composes from the wrong inbox.",
+  "state": {
+    "task": "go to my company email and send an email to ahammadnafiz86@gmail.com",
+    "plan_step": {
+      "kind": "click",
+      "target": "the compose button",
+      "payload": null
+    },
+    "last_action": {
+      "kind": "navigate",
+      "target": "address bar",
+      "payload": "https://mail.company.com"
+    },
+    "screen_before": "<a> Home",
+    "screen_now": "<header> personal.nafiz@gmail.com\n<button> Compose\n<a> Inbox\n<a> Sent",
+    "recent_history": [
+      "navigate mail.company.com"
+    ],
+    "candidates": {
+      "e0": "Compose",
+      "e1": "Inbox",
+      "e2": "Sent"
+    },
+    "task_context": "the company mailbox for nafiz@company.com",
+    "expected_target": null
+  },
+  "expect": {
+    "wrong_context": "above"
+  }
+}

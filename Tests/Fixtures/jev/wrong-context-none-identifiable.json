@@ -1,0 +1,31 @@
+{
+  "name": "wrong-context-none-identifiable",
+  "provenance": "jev-questions.md 2.5, case 3 of 4: no account identifiable anywhere. `false` must absorb 'cannot tell' — most screens never display a badge, and a question that fires on all of them gets its threshold raised until it never fires at all.",
+  "state": {
+    "task": "go to my company email and send an email to ahammadnafiz86@gmail.com",
+    "plan_step": {
+      "kind": "click",
+      "target": "the compose button",
+      "payload": null
+    },
+    "last_action": {
+      "kind": "click",
+      "target": "Compose",
+      "payload": null
+    },
+    "screen_before": "<a> Home",
+    "screen_now": "<button> Compose\n<a> Inbox\n<a> Sent\n<a> Drafts",
+    "recent_history": [
+      "navigate mail.company.com"
+    ],
+    "candidates": {
+      "e0": "Compose",
+      "e1": "Inbox"
+    },
+    "task_context": "the company mailbox for nafiz@company.com",
+    "expected_target": null
+  },
+  "expect": {
+    "wrong_context": "below"
+  }
+}

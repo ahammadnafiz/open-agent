@@ -1,0 +1,37 @@
+{
+  "name": "same-action-four-times",
+  "provenance": "jev-questions.md 2.2 row 6: looping 0.95, unchanged 0.91",
+  "state": {
+    "task": "open the settings panel",
+    "plan_step": {
+      "kind": "click",
+      "target": "the settings button",
+      "payload": null
+    },
+    "last_action": {
+      "kind": "click",
+      "target": "Settings",
+      "payload": null
+    },
+    "screen_before": "<AXButton> New mail\n<AXButton> Archive\n<AXButton> Reply\n<AXStaticText> Inbox",
+    "screen_now": "<AXButton> New mail\n<AXButton> Archive\n<AXButton> Reply\n<AXStaticText> Inbox",
+    "recent_history": [
+      "click Settings",
+      "click Settings",
+      "click Settings",
+      "click Settings"
+    ],
+    "candidates": {
+      "e0": "New mail",
+      "e1": "Archive",
+      "e2": "Reply"
+    },
+    "task_context": "",
+    "expected_target": null
+  },
+  "expect": {
+    "looping": "above",
+    "unchanged": "above",
+    "progressed": "below"
+  }
+}

