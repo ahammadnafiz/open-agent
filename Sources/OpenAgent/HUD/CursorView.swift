@@ -47,12 +47,40 @@ final class OverlayState {
   /// Open Question Q9 — this needs watching on a real terminal or canvas before
   /// it is believed.
   var showsCursor = true
+
+  /// Degrees the arrow banks into its travel, positive clockwise.
+  ///
+  /// Apple's guidance is to hint in the direction of the gesture — humans
+  /// predict a final state from a trajectory, so the in-between frames should
+  /// point at the outcome rather than merely interpolate toward it. Set from
+  /// the heading in `CursorOverlay.move`, and returned to zero on arrival so
+  /// the pointer reads as settled rather than permanently tilted.
+  var lean: Double = 0
+
+  /// Where the trailing dot is, which is not where the cursor is.
+  ///
+  /// Driven to the same destination on a slower spring, so the gap between them
+  /// opens while travelling and closes on arrival. That gap is how speed is
+  /// drawn — with a shape, not a gradient.
+  var companion: CGPoint = .zero
 }
 
 // MARK: - The cursor itself
 
-/// The macOS arrow, drawn rather than screenshotted so it stays crisp at any
-/// scale and can be tinted.
+/// The arrow, drawn as flat geometry.
+///
+/// **No gradients, no blur, no glow.** Apple's own pointer is a flat white fill
+/// with a hard dark outline, and the reason is not taste: this thing is drawn
+/// over *every* application, so it has to stay legible on a white page, a black
+/// terminal and a photograph without knowing which it is on. A blurred halo
+/// solves that by smearing luminance, which reads as a rendering artefact —
+/// software that looks broken rather than deliberate. A hard outline solves it
+/// with a shape.
+///
+/// Every coordinate below is on a 12-unit grid so the silhouette holds at any
+/// size. The proportions are the system arrow's, because familiarity is the
+/// point: people already know what this shape means, and an agent that invents
+/// its own pointer spends the user's attention teaching them a new one.
 private struct ArrowGlyph: Shape {
   func path(in rect: CGRect) -> Path {
     let s = rect.width / 12.0
@@ -69,38 +97,71 @@ private struct ArrowGlyph: Shape {
   }
 }
 
+/// The agent's pointer, and the dot that follows it.
+///
+/// The arrow is the system arrow: flat white, hard dark outline, nothing else.
+/// People already know what that shape means, and an agent that invents its own
+/// pointer spends the user's attention teaching them a new one. It stays the
+/// same on a white page, a black terminal and a photograph, because the outline
+/// is a shape rather than a luminance trick.
+///
+/// **The dot is the whole idea.** It is one flat circle in the intent colour,
+/// and it trails the arrow on a slower spring — so when the pointer sets off
+/// the dot is behind it, and when the pointer stops the dot catches up and
+/// settles. Nothing is drawn to represent motion; the motion *is* the
+/// difference between two springs.
+///
+/// It earns its place three times over, which is the test for whether an
+/// element should exist at all:
+///
+/// - It says whose cursor this is, instantly and without a legend.
+/// - It carries the intent colour, so an irreversible step is legible before
+///   you have read the chip.
+/// - Its lag encodes speed. A long sweep stretches the gap; a short hop barely
+///   opens it. That is the same information a motion blur carries, drawn with a
+///   shape instead of a gradient.
 private struct AgentCursor: View {
   let intent: CursorIntent
   let isPressing: Bool
+  /// Degrees, positive clockwise. Set from the direction of travel.
+  let lean: Double
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    ZStack(alignment: .topLeading) {
-      // A tinted halo is what separates the agent's pointer from the
-      // user's own. The arrow stays white so it still reads as a cursor.
-      Circle()
-        .fill(intent.tint.opacity(0.22))
-        .frame(width: 30, height: 30)
-        .blur(radius: 8)
-        .offset(x: -9, y: -8)
+    ArrowGlyph()
+      .fill(.white)
+      .overlay(ArrowGlyph().stroke(Color(white: 0.08), lineWidth: 1.4))
+      .frame(width: 19, height: 29)
+      // A hairline shadow, not a glow: enough to separate the outline from a
+      // background that happens to be the same near-black, and no more.
+      .shadow(color: .black.opacity(0.3), radius: 1.5, x: 0, y: 1)
+      .rotationEffect(.degrees(reduceMotion ? 0 : lean), anchor: .topLeading)
+      .scaleEffect(isPressing ? 0.86 : 1.0, anchor: .topLeading)
+      .animation(
+        reduceMotion ? .easeOut(duration: 0.12) : .spring(duration: 0.32, bounce: 0.28),
+        value: lean
+      )
+      .animation(
+        reduceMotion ? .easeOut(duration: 0.1) : .spring(duration: 0.18, bounce: 0.34),
+        value: isPressing
+      )
+  }
+}
 
-      ArrowGlyph()
-        .fill(.white)
-        .overlay(ArrowGlyph().stroke(.black.opacity(0.85), lineWidth: 1.1))
-        .frame(width: 19, height: 29)
-        .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
-    }
-    .scaleEffect(isPressing ? 0.88 : 1.0, anchor: .topLeading)
-    // The press keeps a little bounce even under the house style, because a
-    // press IS a momentum interaction — something physically went down and came
-    // back up. Under reduced motion it becomes a plain scale with no overshoot.
-    .animation(
-      reduceMotion
-        ? .easeOut(duration: 0.1)
-        : .spring(duration: 0.18, bounce: 0.3),
-      value: isPressing
-    )
+/// The trailing dot. Drawn beneath the arrow, at its own position.
+private struct CompanionDot: View {
+  let intent: CursorIntent
+  let isPressing: Bool
+
+  var body: some View {
+    Circle()
+      .fill(intent.tint)
+      .frame(width: 7, height: 7)
+      // Squashes on the press, so the dot reacts to the click rather than
+      // sitting through it. Feedback belongs on the causal event.
+      .scaleEffect(isPressing ? 1.5 : 1.0)
+      .animation(.spring(duration: 0.22, bounce: 0.4), value: isPressing)
   }
 }
 
@@ -162,17 +223,11 @@ private struct NarrationChip: View {
     .padding(.horizontal, 11)
     .padding(.vertical, 6)
     .background(.regularMaterial, in: Capsule())
-    // A bright top edge is light catching the material — the cue that makes a
+    // A bright hairline is light catching the material — the cue that makes a
     // translucent surface read as a real one rather than a tinted rectangle.
-    .overlay(
-      Capsule().strokeBorder(
-        LinearGradient(
-          colors: [.white.opacity(0.22), .white.opacity(0.06)],
-          startPoint: .top, endPoint: .bottom
-        ),
-        lineWidth: 0.5
-      )
-    )
+    // A flat stroke, not a gradient: the whole overlay is drawn from solid
+    // shapes, and one gradient in the set is the thing that looks out of place.
+    .overlay(Capsule().strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
     .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
     .fixedSize()
   }
@@ -204,8 +259,11 @@ struct CursorOverlayView: View {
   /// Flips the chip to the left of the cursor near a screen edge, so the
   /// narration never runs off the display it is describing.
   private func chipOffset(in size: CGSize) -> CGSize {
+    // Clear of the arrow, which is 29pt tall measured from its tip. At the old
+    // 26pt the chip crossed the glyph and the pointer read as being behind a
+    // label.
     let nearRight = state.cursor.x > size.width - 260
-    return CGSize(width: nearRight ? -18 : 22, height: 26)
+    return CGSize(width: nearRight ? -24 : 30, height: 40)
   }
 
   var body: some View {
@@ -223,14 +281,25 @@ struct CursorOverlayView: View {
           .allowsHitTesting(false)
 
         if state.showsCursor {
-          AgentCursor(intent: state.intent, isPressing: state.isPressing)
-            .position(state.cursor)
+          // Beneath the arrow, so the arrow's tip — the thing that says exactly
+          // where the click lands — is never obscured by its own companion.
+          CompanionDot(intent: state.intent, isPressing: state.isPressing)
+            .position(state.companion)
         }
 
         NarrationChip(verb: state.verb, label: state.label, intent: state.intent)
           .position(state.cursor)
           .offset(chipOffset(in: geo.size))
           .opacity(state.verb.isEmpty ? 0 : 1)
+
+        // Drawn last, so nothing can cover it. The arrow's tip is the only
+        // thing on screen that says exactly where the click will land, and a
+        // label sitting on top of it is worse than no label — it is the overlay
+        // obscuring the one fact it exists to communicate.
+        if state.showsCursor {
+          AgentCursor(intent: state.intent, isPressing: state.isPressing, lean: state.lean)
+            .position(state.cursor)
+        }
       }
       .opacity(state.isVisible ? 1 : 0)
       .animation(.easeInOut(duration: 0.2), value: state.isVisible)

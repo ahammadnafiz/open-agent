@@ -34,6 +34,13 @@ public final class CursorOverlay {
   /// `Constants.HUD`.
   public var speedScale: Double = 1.0
 
+  /// How far the arrow banks into its travel, in degrees.
+  ///
+  /// Small on purpose. The arrow's hotspot is its tip, and a tilt large enough
+  /// to be obvious is a tilt large enough to make people doubt where the click
+  /// will land — the one thing this overlay exists to remove doubt about.
+  static let maxLeanDegrees: Double = 9
+
   /// Honours System Settings > Accessibility > Display > Reduce motion.
   ///
   /// Reduced motion does not mean no feedback — it means a gentler,
@@ -205,17 +212,43 @@ public final class CursorOverlay {
     // and it is a pause, not a movement.
     try? await Task.sleep(for: .seconds(Constants.HUD.anticipationSeconds))
 
+    // Bank into the turn. Humans predict a final state from a trajectory, so
+    // the in-between frames should point at the outcome rather than merely
+    // interpolate toward it — the pointer says where it is going while it is
+    // still going there.
+    //
+    // Horizontal component only: a cursor that pitches on vertical travel reads
+    // as unstable rather than purposeful.
+    let horizontal = destination.x - state.cursor.x
+    let lean = max(-Self.maxLeanDegrees, min(Self.maxLeanDegrees, horizontal / 40))
+
     // The drawn cursor still travels when it is hidden: the chip and the ripple
     // are positioned from `state.cursor`, so leaving it behind would strand the
     // narration at the previous target.
-    // Critically damped. Apple's own guidance is to add bounce only when the
-    // gesture itself carried momentum — a flick, a throw, a drag release.
-    // Nothing threw this cursor: the agent decided where to go. Overshoot here
-    // would read as playfulness on a step that might be about to send an email.
+    //
+    // Position is critically damped. Overshooting the element you are about to
+    // click reads as imprecision, and this pointer is about to act on whatever
+    // it lands on. The scale settle in `AgentCursor` is where the life goes:
+    // accuracy in position, life in scale.
     withAnimation(.spring(duration: travel, bounce: 0)) {
       state.cursor = destination
+      state.lean = lean
+    }
+    // The dot runs the same distance on a longer, softer spring. It is behind
+    // the arrow for the whole journey and catches up after it stops, which is
+    // what makes the pair read as one thing moving rather than two things
+    // moving together.
+    // 1.28, not 1.55. At the wider ratio the gap mid-sweep grew big enough that
+    // the dot stopped reading as a follower and started reading as an unrelated
+    // mark on screen — the lag has to be visible and tethered, not just visible.
+    withAnimation(.spring(duration: travel * 1.28, bounce: 0.22)) {
+      state.companion = CGPoint(x: destination.x + 7, y: destination.y + 13)
     }
     try? await Task.sleep(for: .seconds(travel))
+
+    // Level off on arrival, so the pointer reads as settled rather than
+    // permanently tilted.
+    withAnimation(.spring(duration: 0.28, bounce: 0.2)) { state.lean = 0 }
   }
 
   /// The press animation. Purely visual — the actual event is dispatched by an
@@ -241,6 +274,8 @@ public final class CursorOverlay {
     state.intent = .routine
     state.verb = verb
     state.label = label
+    state.lean = 0
+    state.companion = CGPoint(x: state.cursor.x + 7, y: state.cursor.y + 13)
     withAnimation(.spring(duration: Constants.HUD.anticipationSeconds, bounce: 0)) {
       state.target = nil
     }
