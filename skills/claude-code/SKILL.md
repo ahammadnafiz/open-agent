@@ -153,9 +153,10 @@ button were indistinguishable. The loop now takes one more look when the plan
 runs out, and answers one of three ways:
 
 - `completed` — the plan finished **and** the screen shows the task done.
-- `unverified` — every step dispatched, and the end screen cannot say whether
-  it worked.
-- `needs_plan` — the last step never dispatched, so the route is the problem.
+- `unverified` — every step dispatched, the screen visibly moved, and the end
+  state is not on it.
+- `needs_plan` — the last step never dispatched, **or** it dispatched and moved
+  nothing. Either way the route is the problem.
 
 ### `unverified` is not failure, and not success
 
@@ -164,6 +165,17 @@ whether the screen *shows* the task complete, which for a publish is a different
 question from whether it succeeded. Measured: a Facebook post that had plainly
 gone up scored `task_done 0.02`, because the feed the agent lands on shows
 neither the post nor its text — 72 candidates, none of them containing it.
+
+**It is not the same as a publish that missed.** A publish that worked closes
+its composer; one that pressed the wrong thing leaves it open. That difference
+is `progressed`, and the reason carries it:
+
+- `the last step took effect (progressed 0.59) but the screen does not show the
+  task done (task_done 0.17)` — the action landed. On a send or a publish this
+  is what success looks like from here.
+- `the last step dispatched and changed nothing (progressed 0.04 …)` — that is
+  a `needs_plan`, and it is the real failure. It does not hide inside
+  `unverified`.
 
 So when you see it:
 

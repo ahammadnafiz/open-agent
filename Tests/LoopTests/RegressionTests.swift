@@ -792,7 +792,10 @@ struct FinalVerificationTests {
   /// work already done.
   @Test("every step ran but the screen cannot confirm it — that is its own answer")
   func aDispatchedPlanThatCannotBeConfirmed() async {
-    let judge = ScriptedJudge([Make.verdict(progressed: 0.11, taskDone: 0.05)])
+    // The publish shape: the composer closed, so the screen plainly moved, but
+    // the end state is not on it. Measured on Facebook: progressed 0.59
+    // against task_done 0.17.
+    let judge = ScriptedJudge([Make.verdict(progressed: 0.97, taskDone: 0.05)])
 
     let outcome = await Make.loop(
       plan: Make.plan([.click]), judge: judge, settleTimeout: .zero
@@ -800,6 +803,24 @@ struct FinalVerificationTests {
 
     #expect(outcome.status == .unverified, "it was reported as a routing problem")
     #expect(outcome.reason.contains("task_done"), "the reason was \(outcome.reason)")
+    // The discriminating number has to be in the reason, or a post that went up
+    // and a post that missed its button read the same to a host.
+    #expect(outcome.reason.contains("progressed"), "the reason was \(outcome.reason)")
+  }
+
+  /// **A publish that missed its button must not hide inside `unverified`.**
+  /// One that worked closes its composer; one that missed leaves it open, so
+  /// the screen not moving is the failure showing itself.
+  @Test("a last step that dispatched and moved nothing is not unverifiable")
+  func aDispatchedStepThatChangedNothing() async {
+    let judge = ScriptedJudge([Make.verdict(progressed: 0.11, taskDone: 0.05)])
+
+    let outcome = await Make.loop(
+      plan: Make.plan([.click]), judge: judge, settleTimeout: .zero
+    ).run()
+
+    #expect(outcome.status == .needsPlan)
+    #expect(outcome.reason.contains("changed nothing"), "the reason was \(outcome.reason)")
   }
 
   /// When nothing landed, the route really is the problem.

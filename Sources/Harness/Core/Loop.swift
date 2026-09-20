@@ -750,10 +750,27 @@ public actor AgentLoop {
     // done, and it is what sent one host off to read the page over a raw
     // websocket to find out the truth.
     if steps.last?.result.dispatched == true {
+      // **Whether the action took effect is a different question from whether
+      // the end state is on screen, and only the second one is unanswerable
+      // after a publish.** `progressed` answers the first, and routing on
+      // `task_done` alone was throwing it away — so a post that went up and a
+      // post that missed its button came back identical. They are not: a
+      // publish that worked closes its composer, and one that missed leaves it
+      // open. Measured on the Facebook publish that did work: task_done 0.17
+      // against progressed 0.59.
+      if verdict.progressed >= Constants.Jev.progressed {
+        return result(
+          .unverified, since: started,
+          reason: "the last step took effect (progressed \(fmt(verdict.progressed))) "
+            + "but the screen does not show the task done "
+            + "(task_done \(fmt(verdict.taskDone)))")
+      }
+      // Dispatched, and the screen did not move. That is the failure the
+      // `unverified` answer must not be allowed to hide.
       return result(
-        .unverified, since: started,
-        reason: "every step ran; the screen does not show the outcome "
-          + "(task_done \(fmt(verdict.taskDone)))")
+        .needsPlan, since: started,
+        reason: "\(exhausted); the last step dispatched and changed nothing "
+          + "(progressed \(fmt(verdict.progressed)) task_done \(fmt(verdict.taskDone)))")
     }
 
     // Nothing landed, so the route really is the problem.

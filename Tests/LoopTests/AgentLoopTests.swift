@@ -40,10 +40,11 @@ struct AgentLoopTests {
       plan: Make.plan([.click]), judge: judge, executor: executor
     ).run()
 
-    // The single plan step ran — once, not retried — then the plan was
-    // exhausted with the screen unable to confirm the outcome.
+    // The single plan step ran — once, not retried. The verdict's progressed
+    // is 0.01, so the exhaustion check reads it as a step that dispatched and
+    // moved nothing, which is a route problem rather than an unverifiable one.
     #expect(await executor.executed.count == 1)
-    #expect(result.status == .unverified)
+    #expect(result.status == .needsPlan)
   }
 
   /// SPEC.md § S2 — verification catches an induced failure on the *next*
