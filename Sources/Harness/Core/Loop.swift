@@ -1070,6 +1070,7 @@ public actor AgentLoop {
   ) async -> LoopResult {
     budget.chargeEscalation()
     var screenshotPath: String?
+    var captureFailure: String?
 
     if let capture, let candidates {
       let url =
@@ -1082,14 +1083,25 @@ public actor AgentLoop {
         )
         screenshotPath = captured.path
       } catch {
-        // An escalation without pixels is still actionable — the host
-        // gets the element list and can answer `none`.
+        // An escalation without pixels is still actionable — the host gets the
+        // element list and can answer `none`.
+        //
+        // **But it has to be told.** `needs_eyes` is the one status whose whole
+        // instruction to the host is "look at the screenshot", and a `nil`
+        // screenshot with a `reason` that talks about selection confidence
+        // reads as a bug in the host, not as a missing capture. A stderr
+        // warning does not reach it: `docs/host-contract.md` says never to
+        // parse the prose on stderr, so a failure that is only logged there is
+        // a failure the host cannot see. It goes in `reason`, which is part of
+        // the JSON contract.
         Log.warn("capture failed, escalating without a screenshot: \(error)")
+        captureFailure = "\(error)"
       }
     }
 
     return result(
-      .needsEyes, since: started, reason: reason,
+      .needsEyes, since: started,
+      reason: captureFailure.map { "\(reason) — no screenshot: \($0)" } ?? reason,
       candidates: candidates?.criteria, screenshot: screenshotPath
     )
   }

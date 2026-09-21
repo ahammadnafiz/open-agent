@@ -27,35 +27,11 @@ public struct ScreenCapture: ScreenCapturing {
       throw ExecutionError.screenRecordingNotGranted
     }
 
-    let content = try await SCShareableContent.excludingDesktopWindows(
-      false, onScreenWindowsOnly: true
-    )
-    // Largest on-screen window belonging to the target process. Same rule as
-    // `WindowGuard`: never simply the first, which for Finder is the desktop.
-    guard
-      let window = content.windows
-        .filter({ $0.owningApplication?.processID == pid && $0.isOnScreen })
-        .max(by: { $0.frame.area < $1.frame.area })
-    else {
-      throw ExecutionError.windowNotVisible
-    }
-
-    let configuration = SCStreamConfiguration()
-    // Native Retina scale, never downscaled. Measured: at 1x, recall of known
-    // UI labels was 21/34 and missed the entire menu bar; at 2x, 34/34.
     let scale = Constants.OCR.downscale ? 1 : Constants.OCR.retinaScale
-    configuration.width = Int(window.frame.width) * scale
-    configuration.height = Int(window.frame.height) * scale
-    configuration.showsCursor = false
-    configuration.captureResolution = .best
-
-    let filter = SCContentFilter(desktopIndependentWindow: window)
-    let image = try await SCScreenshotManager.captureImage(
-      contentFilter: filter, configuration: configuration
-    )
+    let (image, origin) = try await WindowCapture.retrying(pid: pid)
 
     let marked = try MarkRenderer.draw(
-      candidates: candidates, on: image, windowOrigin: window.frame.origin, scale: CGFloat(scale)
+      candidates: candidates, on: image, windowOrigin: origin, scale: CGFloat(scale)
     )
 
     try FileManager.default.createDirectory(
@@ -68,6 +44,64 @@ public struct ScreenCapture: ScreenCapturing {
     // carries this or the step is unreplayable — ADR 0007.
     let hash = SHA256.hash(data: data).compactMap { String(format: "%02x", $0) }.joined()
     return (url.path, String(hash.prefix(Constants.OCR.frameHashLength)))
+  }
+}
+
+/// One window, captured, retrying the failures that are not answers.
+///
+/// **A single attempt is not a valid observation.** `-3811 SCStreamError`
+/// occurs on windows that captured successfully a moment earlier, and
+/// `SCShareableContent` intermittently omits a window that is plainly on
+/// screen — the same lesson `AXSource` records about `AXWindows`.
+///
+/// The OCR tier learned this and hardened its own capture; the escalation
+/// capture did not, and the difference is exactly the reported defect. A
+/// `needs_eyes` came back with no screenshot at all on the first try and with
+/// one on the second, leaving the host to resolve the target from candidate
+/// text — which a host with no candidate list cannot do.
+///
+/// Shared rather than copied, because the copy without the retry is the bug.
+enum WindowCapture {
+
+  /// - Returns: the captured image and the window's origin on screen.
+  static func retrying(pid: pid_t) async throws -> (CGImage, CGPoint) {
+    var lastError: (any Error)?
+    for attempt in 0..<Constants.OCR.captureRetries {
+      do {
+        let content = try await SCShareableContent.excludingDesktopWindows(
+          false, onScreenWindowsOnly: true
+        )
+        // Largest on-screen window belonging to the target process. Same rule
+        // as `WindowGuard`: never simply the first, which for Finder is the
+        // desktop.
+        guard
+          let window = content.windows
+            .filter({ $0.owningApplication?.processID == pid && $0.isOnScreen })
+            .max(by: { $0.frame.area < $1.frame.area })
+        else { throw ExecutionError.windowNotVisible }
+
+        let configuration = SCStreamConfiguration()
+        // Native Retina scale, never downscaled. Measured: at 1x, recall of
+        // known UI labels was 21/34 and missed the entire menu bar; at 2x, 34/34.
+        let scale = Constants.OCR.downscale ? 1 : Constants.OCR.retinaScale
+        configuration.width = Int(window.frame.width) * scale
+        configuration.height = Int(window.frame.height) * scale
+        configuration.showsCursor = false
+        configuration.captureResolution = .best
+
+        let image = try await SCScreenshotManager.captureImage(
+          contentFilter: SCContentFilter(desktopIndependentWindow: window),
+          configuration: configuration
+        )
+        return (image, window.frame.origin)
+      } catch {
+        lastError = error
+        if attempt < Constants.OCR.captureRetries - 1 {
+          try? await Task.sleep(for: Constants.OCR.captureRetryDelay)
+        }
+      }
+    }
+    throw lastError ?? ExecutionError.windowNotVisible
   }
 }
 

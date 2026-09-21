@@ -396,3 +396,15 @@ actor ActedSource: ElementSource {
   func landed() { acted = true }
   func observe() async throws -> [Element] { acted ? after : before }
 }
+
+/// A capture that never succeeds — the intermittent Screen Recording failure,
+/// made deterministic.
+struct FailingCapture: ScreenCapturing {
+  static let message = "the window vanished between the decision and the capture"
+
+  func captureWithMarks(
+    pid: pid_t, candidates: [Element], to url: URL
+  ) async throws -> (path: String, frameHash: String) {
+    throw ExecutionError.graphicsFailed(stage: Self.message)
+  }
+}

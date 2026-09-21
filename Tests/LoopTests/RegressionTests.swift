@@ -1190,4 +1190,37 @@ struct StateVisibilityTests {
       afterTyping?.candidates.values.contains("Message") == true,
       "the field lost its identity to the text typed into it")
   }
+
+  // MARK: - An escalation with no pixels and no explanation
+
+  /// **`needs_eyes` means "look at the screenshot".** When capture failed the
+  /// loop logged a warning to stderr and returned that status with a `nil`
+  /// screenshot and a `reason` talking about selection confidence — so the one
+  /// instruction the status carries was impossible to follow and nothing said
+  /// why. `docs/host-contract.md` says never to parse the prose on stderr, so
+  /// a failure that is only logged there is a failure the host cannot see.
+  ///
+  /// Observed live: the first escalation of a run came back with no screenshot
+  /// key at all and the second succeeded. The host recovered by resolving the
+  /// target from candidate text; a host with no candidate list would have had
+  /// nothing at all to go on.
+  ///
+  /// Degrading to a blind escalation is right. Doing it quietly is not.
+  @Test("an escalation that lost its screenshot says so")
+  func blindEscalationExplainsItself() async {
+    // Under the selection floor, which is what routes to vision.
+    let judge = ScriptedJudge([Make.verdict(confidence: 0.30)])
+
+    let result = await Make.loop(
+      plan: Make.plan([.click]),
+      judge: judge,
+      capture: FailingCapture()
+    ).run()
+
+    #expect(result.status == .needsEyes)
+    #expect(result.screenshot == nil, "the capture was supposed to fail")
+    #expect(
+      result.reason.contains(FailingCapture.message),
+      "the host was handed a vision escalation with no pixels and no reason: \(result.reason)")
+  }
 }

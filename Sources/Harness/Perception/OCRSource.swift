@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import ScreenCaptureKit
 import Vision
 
 /// Tier 3 — screen capture plus on-device OCR.
@@ -119,40 +118,9 @@ public struct OCRSource: Sendable {
 
   /// Captures the target window, retrying a transient failure.
   ///
-  /// `-3811 SCStreamError` occurs even on windows that captured successfully a
-  /// moment earlier, so a single attempt is not a valid observation.
+  /// The retry rule itself lives in `WindowCapture` and is shared with the
+  /// escalation capture, which was missing it.
   private func capture() async throws -> (CGImage, CGPoint) {
-    var lastError: (any Error)?
-    for attempt in 0..<Constants.OCR.captureRetries {
-      do {
-        let content = try await SCShareableContent.excludingDesktopWindows(
-          false, onScreenWindowsOnly: true
-        )
-        guard
-          let window = content.windows
-            .filter({ $0.owningApplication?.processID == pid && $0.isOnScreen })
-            .max(by: { $0.frame.area < $1.frame.area })
-        else { throw ExecutionError.windowNotVisible }
-
-        let configuration = SCStreamConfiguration()
-        let scale = Constants.OCR.downscale ? 1 : Constants.OCR.retinaScale
-        configuration.width = Int(window.frame.width) * scale
-        configuration.height = Int(window.frame.height) * scale
-        configuration.showsCursor = false
-        configuration.captureResolution = .best
-
-        let image = try await SCScreenshotManager.captureImage(
-          contentFilter: SCContentFilter(desktopIndependentWindow: window),
-          configuration: configuration
-        )
-        return (image, window.frame.origin)
-      } catch {
-        lastError = error
-        if attempt < Constants.OCR.captureRetries - 1 {
-          try? await Task.sleep(for: Constants.OCR.captureRetryDelay)
-        }
-      }
-    }
-    throw lastError ?? ExecutionError.windowNotVisible
+    try await WindowCapture.retrying(pid: pid)
   }
 }
