@@ -109,7 +109,19 @@ public struct AXExecutor: Executor {
         role: "native", wanted: "navigate (ADR 0006: browser work is deferred)"
       )
 
-    case .click, .scroll, .select,
+    case .scroll:
+      // **AXPress is not a scroll, and pressing the thing you wanted to
+      // scroll past is worse than not scrolling at all.** `scroll` sat in the
+      // branch below and dispatched a press at its target, so the verb
+      // silently meant "click" everywhere it was planned. Enumerated and
+      // refused rather than defaulted, exactly as `navigate` is: a native
+      // scroll needs an HID wheel event against a verified window, and that
+      // is a change with its own reversibility review, not a line here.
+      throw ExecutionError.actionUnavailable(
+        role: "native", wanted: "scroll (no AX action scrolls; a press is not a substitute)"
+      )
+
+    case .click, .select,
       .publish, .send, .delete, .purchase:
       let element = try resolveRequired(action)
       try perform(preferredActions: Self.pressLike, on: element)

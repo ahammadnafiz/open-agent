@@ -1134,3 +1134,104 @@ struct TargetGuardOrderingTests {
       "the click point has to describe where the element ended up")
   }
 }
+
+
+/// **A scroll dispatched a click.** `scroll` shared the branch that handles
+/// `click` in both executors, so the verb sent `pointerDown`/`pointerUp` at
+/// its target. On a list — the one place anyone plans a scroll — that presses
+/// the first row and navigates away from the page the plan was about, and the
+/// next observation answers honestly about somewhere else entirely.
+@Suite("A scroll is not a click")
+struct ScrollIsNotAClickTests {
+
+  static func point() -> String {
+    #"""
+    {"result":{"type":"object","value":[
+      [{"type":"string","value":"x"},{"type":"number","value":10.0}],
+      [{"type":"string","value":"y"},{"type":"number","value":20.0}]]}}
+    """#
+  }
+
+  static let action = Action(
+    kind: .scroll,
+    target: .dom(handle: "e5", selector: "list[Issues]", label: "Issues", submitLabel: ""),
+    payload: nil,
+    rationale: "see the rest of the list")
+
+  @Test("the browser tier sends a wheel, never a pointer press")
+  func scrollUsesTheWheel() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      scrollOK(1),  // session.new
+      scrollOK(2, scrollOneContext),  // resolveContext
+      scrollOK(3, Self.point()),  // validate
+      scrollOK(4),  // the scroll itself
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    let executor = BiDiExecutor(client: client, source: BiDiSource(client: client))
+
+    let result = try await executor.execute(Self.action)
+    #expect(result.dispatched)
+
+    let dispatched = await transport.sent.filter { $0.contains("performActions") }
+    let sent = try #require(dispatched.first)
+    #expect(sent.contains("wheel"), "a scroll is a wheel action")
+    #expect(!sent.contains("pointerDown"), "pressing the target is the bug, not the fallback")
+  }
+
+  /// The pixel tier resolves every kind to a click at the bbox centre, so a
+  /// scroll that escalated down the ladder would press the target after the
+  /// browser tier had refused to. It is enumerated and refused instead.
+  @Test("the pixel tier refuses rather than clicking")
+  func capturedRefusesScroll() async throws {
+    let executor = CapturedExecutor(
+      pid: 0, appName: "Zen", frameHash: { "hash" })
+    let scroll = Action(
+      kind: .scroll,
+      target: .captured(
+        bbox: CGRect(x: 0, y: 0, width: 80, height: 30), label: "Issues",
+        provenance: .detectorBox),
+      payload: nil,
+      rationale: "see the rest of the list")
+
+    await #expect(throws: ExecutionError.self) {
+      _ = try await executor.execute(scroll)
+    }
+  }
+}
+
+private func scrollOK(_ id: Int, _ result: String = "{}") -> String {
+  #"{"type":"success","id":\#(id),"result":\#(result)}"#
+}
+
+private let scrollOneContext = #"{"contexts":[{"context":"ctx-1","url":"about:blank"}]}"#
+
+
+/// **"Zen is not running" was said about a browser that was running, driving a
+/// page, and listening on its debug port** — every window of it was on another
+/// Space. The on-screen window list is the only thing `pid(forApp:)` consulted,
+/// so an app that was merely elsewhere was indistinguishable from an app that
+/// was absent, and the next hour of debugging went to name matching.
+@Suite("Not running is not the same as not here")
+struct WindowDiagnosisTests {
+
+  @Test("the full window list is a superset of the on-screen one")
+  func fullListIsWider() {
+    let onScreen = WindowGuard.windows()
+    let everywhere = WindowGuard.windows(onScreenOnly: false)
+    #expect(everywhere.count >= onScreen.count)
+    for window in onScreen {
+      #expect(
+        everywhere.contains { $0.windowID == window.windowID },
+        "an on-screen window must also appear in the unfiltered list")
+    }
+  }
+
+  /// A name nothing owns is the one case that is still `appNotRunning`.
+  @Test("an app with no window anywhere is reported as not running")
+  func absentAppIsNotRunning() {
+    #expect(throws: PerceptionError.self) {
+      _ = try WindowGuard.pid(forApp: "NoSuchApplication_\(UUID().uuidString)")
+    }
+  }
+}

@@ -9,6 +9,12 @@ public struct LoopResult: Sendable {
   public let candidates: [String: String]?
   public let screenshot: String?
   public let history: [String]
+  /// What the last observed screen said, for tiers that can read prose.
+  ///
+  /// The history says what the agent did; this says what it was looking at
+  /// when it stopped. Without it a run can report `completed` on a page of
+  /// text and hand the host nothing but the labels of the buttons beside it.
+  public let pageText: String
   public let reason: String
   public let steps: [Step]
 }
@@ -60,6 +66,12 @@ public actor AgentLoop {
   private var planIndex: Int
   private var stepIndex: Int
   private var screenBefore = ""
+  /// The prose of the most recent observation, carried out in `LoopResult`.
+  ///
+  /// Taken from the same observation the verdict was formed on, not re-read
+  /// when the result is built — "what the screen said when it was judged" is
+  /// the honest claim, and a second read could answer about a different page.
+  private var latestPageText = ""
   private var lastAction: Action?
   /// The plan index of `lastAction`.
   ///
@@ -224,6 +236,7 @@ public actor AgentLoop {
       }
 
       let screenNow = candidates.describe()
+      latestPageText = await source.pageText()
 
       let observeMilliseconds = observeStarted.milliseconds()
 
@@ -1136,6 +1149,7 @@ public actor AgentLoop {
       candidates: candidates,
       screenshot: screenshot,
       history: history,
+      pageText: latestPageText,
       reason: reason,
       steps: steps
     )

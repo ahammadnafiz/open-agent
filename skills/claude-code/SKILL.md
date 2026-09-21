@@ -21,6 +21,7 @@ open-agent run "<the user's task>" --plan plan.json [--app "Mail"] [--context "<
 open-agent resume <session> --eyes <n> | --eyes none
 open-agent resume <session> --plan plan.json
 open-agent observe --app "Mail"
+open-agent observe --browser --url "https://github.com/owner/repo/issues"
 ```
 
 Every invocation prints **one JSON object** to stdout and exits. Logs go to
@@ -90,8 +91,25 @@ So plan the route a person would take:
   that makes the next one legible.
 - **Name each target the way the app names it.** Selection compares your words
   against the app's own label, so `Message...` matches and `Message` does not.
-  `open-agent observe --app "Mail"` (or `--browser`) prints the real names when
-  you are unsure — one call, no cost, and cheaper than a screenshot round trip.
+  `open-agent observe --app "Mail"` (or `--browser --url <site>`) prints the
+  real names when you are unsure — one call, no cost, and cheaper than a
+  screenshot round trip.
+
+**To read a page rather than act on it, use `observe --browser --url <site>`
+and read the `text` field.** `candidates` answers "what can I press"; `text` is
+the page's own prose, up to 6000 characters. A run's final JSON carries the
+same field. Do not plan a `read` step expecting it to hand you anything — a
+`read` executes as nothing, and a plan Jev judges already done completes
+without dispatching at all.
+
+**Pass `--url`.** Without it the tab is a guess: the browser cannot say which
+tab the person is looking at, and an `observe` that lands on the wrong one
+still reports `completed`. Check the address in `reason` against the one you
+asked for.
+
+**`scroll` scrolls one viewport down, and only in the browser.** The native
+and pixel tiers refuse it rather than pressing the target, which is what they
+used to do.
 
 Each extra step is one Jev call: about $0.0002 and two seconds. That is the
 whole price of a run that reads as deliberate rather than teleported.

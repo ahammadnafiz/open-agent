@@ -340,6 +340,15 @@ public enum Constants {
     /// a wait that competes with the task's own ceiling.
     public static let waitDuration: Duration = .milliseconds(300)
 
+    /// How far one `scroll` action moves the page, in CSS pixels.
+    ///
+    /// `ActionKind.scroll` carries neither a distance nor a direction — the
+    /// enum is closed and the payload is reserved for text — so the amount is
+    /// a constant here rather than a number a planner could put in the audit
+    /// log without anyone having approved it. About one default viewport,
+    /// which is what "scroll down to see the rest" means to a person.
+    public static let scrollDelta = 700
+
     /// How long to let the screen catch up after an action, before judging it.
     ///
     /// **An application is not finished when the call returns.** A click

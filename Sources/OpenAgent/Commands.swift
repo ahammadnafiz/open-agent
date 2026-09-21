@@ -121,7 +121,7 @@ enum Commands {
 
   static func observe(_ options: CLI.Options) async {
     if options.browser {
-      await observeBrowser()
+      await observeBrowser(url: options.url)
       return
     }
     let appName = options.app ?? frontmostAppName()
@@ -141,20 +141,40 @@ enum Commands {
     }
   }
 
-  static func observeBrowser() async {
+  /// - Parameter url: the site this observation is about. **Pass it.**
+  ///
+  /// `tab()` resolves in three preferences and only the first of them —
+  /// "the tab already showing this site" — can name a page. The second finds
+  /// a tab this agent opened, and the third gives up and returns whatever
+  /// `resolveContext()` guessed at connect time: the first loaded tab in a
+  /// named container, chosen because containers are where a signed-in user
+  /// actually browses, not because anyone asked about it.
+  ///
+  /// So `observe --browser` with no url answered about an unrelated tab and
+  /// reported `completed` doing it. Measured: a run navigated Zen to
+  /// `github.com/pacifio/atlas/issues`, and the `observe` that followed
+  /// returned twenty-one candidates from a `claude.ai` tab in the same
+  /// browser — "Send message", "Model: Opus 5 Medium" — with no indication
+  /// that it was looking somewhere else. The url is now reported back for
+  /// exactly that reason: a host that asked about one page and was handed
+  /// another can see it in the response instead of inferring it from the
+  /// labels.
+  static func observeBrowser(url: String?) async {
     do {
       let (client, source) = try await browserSession()
-      // The same tab a run would work in. Observing whichever tab `getTree`
-      // happened to return answered about a page nobody asked about.
-      _ = try await client.tab()
+      // The same tab a run would work in.
+      _ = try await client.tab(for: url)
       let candidates = try CandidateFilter.reduce(try await source.observe())
+      let text = await source.pageText()
+      let page = await source.pageURL()
       await client.close()
       emit(
         HostResponse(
           session: "-", status: .completed, step: 0,
           elapsedMilliseconds: 0, costUSD: 0,
           candidates: candidates.criteria,
-          reason: "observed \(candidates.count) candidates in the browser"
+          text: text.isEmpty ? nil : text,
+          reason: "observed \(candidates.count) candidates on \(page)"
         )
       )
     } catch {
@@ -323,6 +343,7 @@ enum Commands {
         screenshot: result.screenshot,
         candidates: result.candidates,
         history: result.history,
+        text: result.pageText.isEmpty ? nil : result.pageText,
         reason: result.reason
       )
     )
@@ -542,7 +563,8 @@ enum Commands {
         + "freshly built executable is untrusted even in a granted terminal. "
         + "Add it in System Settings → Privacy & Security → Accessibility."
     case PerceptionError.appNotRunning(let name):
-      return "\(name) is not running, or has no on-screen window."
+      return "\(name) is not running, or has no windows open at all. "
+        + "An app with a window on another Space reports differently."
     case PerceptionError.windowNotOnScreen(let name):
       return "\(name) has no window on the current Space. A minimized or off-Space window "
         + "observes as empty rather than as an error, so this stops instead of guessing."

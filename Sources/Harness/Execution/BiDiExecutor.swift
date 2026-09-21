@@ -64,7 +64,18 @@ public struct BiDiExecutor: Executor {
       try await type(text, into: handle)
       return ExecutionResult(dispatched: true, via: .bidi)
 
-    case .click, .scroll, .focus, .select, .publish, .send, .delete, .purchase:
+    case .scroll:
+      // **A scroll is not a click.** Bundled into the branch below, `scroll`
+      // dispatched a `pointerDown`/`pointerUp` at the target — so a plan that
+      // asked to see further down a list of issues pressed the first one
+      // instead, navigated away, and the next observation answered about
+      // somewhere else entirely. The wheel is what the verb means.
+      let handle = try Self.handle(action)
+      let point = try await validate(handle)
+      try await client.performActions([Self.scrollSequence(at: point)])
+      return ExecutionResult(dispatched: true, via: .bidi)
+
+    case .click, .focus, .select, .publish, .send, .delete, .purchase:
       let handle = try Self.handle(action)
       let point = try await validate(handle)
       try await client.performActions([Self.clickSequence(at: point)])
@@ -258,6 +269,26 @@ public struct BiDiExecutor: Executor {
         ["type": "pointerMove", "x": Int(point.x), "y": Int(point.y)],
         ["type": "pointerDown", "button": 0],
         ["type": "pointerUp", "button": 0],
+      ],
+    ]
+  }
+
+  /// One wheel notch down, anchored on the target.
+  ///
+  /// A fixed delta rather than a payload: `ActionKind` carries no distance and
+  /// no direction, and inventing either here would put a number in the audit
+  /// log that the plan never authorised. Roughly a screen of a default
+  /// viewport, which is what "scroll down to see more" means in practice.
+  private static func scrollSequence(at point: CGPoint) -> [String: Any] {
+    [
+      "type": "wheel",
+      "id": "openAgentWheel",
+      "actions": [
+        [
+          "type": "scroll", "x": Int(point.x), "y": Int(point.y),
+          "deltaX": 0, "deltaY": Constants.Execution.scrollDelta,
+          "origin": "viewport",
+        ]
       ],
     ]
   }

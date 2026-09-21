@@ -302,3 +302,65 @@ struct CookieScopeTests {
     #expect(BiDiClient.cookieReaches(host: "localhost", domain: "localhost"))
   }
 }
+
+
+/// **The page text was collected, decoded, and read by nothing.**
+/// `SnapshotScript` walks the text nodes and ships up to `TEXT_LIMIT`
+/// characters; `BiDiSnapshot` has decoded them into `text` since it was
+/// written; and a repo-wide search for a reader found none. So an agent that
+/// could open a page of issues and press any button on it could not report
+/// what a single issue said — candidates are affordances, and only a link
+/// contributes its own text.
+@Suite("What the page says reaches the host")
+struct PageTextTests {
+
+  /// A source that has prose to offer, held the way the loop holds one.
+  struct TalkativeSource: ElementSource {
+    let kind: SourceKind = .bidi
+    func observe() async throws -> [Element] { [] }
+    func pageText() async -> String { "13 issues, and here is what they say" }
+  }
+
+  /// A source with nothing to say, to prove the default still applies.
+  struct SilentSource: ElementSource {
+    let kind: SourceKind = .ax
+    func observe() async throws -> [Element] { [] }
+  }
+
+  @Test("the snapshot's text survives decoding")
+  func decodesText() {
+    let raw: [String: Any] = ["url": "https://example.com", "text": "Bug: the wheel clicks"]
+    #expect(BiDiSnapshot(raw).text == "Bug: the wheel clicks")
+  }
+
+  /// **Through the existential, which is the whole point.** `readiness()` was
+  /// written as an extension member only, the loop holds its source as
+  /// `any ElementSource`, and every call dispatched statically to the default
+  /// `""` — the browser tier's answer was computed and never heard. This
+  /// asserts `pageText()` is a protocol *requirement*, not a second copy of
+  /// that bug.
+  @Test("a tier's own answer is heard through any ElementSource")
+  func dispatchesDynamically() async {
+    let talkative: any ElementSource = TalkativeSource()
+    #expect(await talkative.pageText() == "13 issues, and here is what they say")
+
+    let silent: any ElementSource = SilentSource()
+    #expect(await silent.pageText() == "")
+  }
+
+  /// The host reads one JSON object per invocation. Prose that never reaches
+  /// it is prose the host has to go and get some other way, which is the
+  /// position `observe` left every caller in.
+  @Test("page text is carried in the response, and omitted when there is none")
+  func encodesText() throws {
+    let spoken = HostResponse(
+      session: "-", status: .completed, step: 0, elapsedMilliseconds: 0,
+      costUSD: 0, text: "Issue 1: the wheel clicks", reason: "observed")
+    #expect(try spoken.encoded().contains("\"text\":\"Issue 1: the wheel clicks\""))
+
+    let silent = HostResponse(
+      session: "-", status: .completed, step: 0, elapsedMilliseconds: 0,
+      costUSD: 0, reason: "observed")
+    #expect(!(try silent.encoded().contains("\"text\"")))
+  }
+}

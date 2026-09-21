@@ -50,6 +50,14 @@ public struct HostResponse: Codable, Sendable {
   /// `id → label`. Keys are `e`-prefixed, matching `act --target e17`.
   public let candidates: [String: String]?
   public let history: [String]
+  /// What the page said, when the tier driving it can read prose.
+  ///
+  /// **Candidates are affordances, not content.** `e7: "Copy"` tells a host
+  /// what it may press and nothing about what is written on the screen, so a
+  /// run that lands on a list of issues reports that it arrived and cannot
+  /// say what it found. Browser tiers fill this; the accessibility tier
+  /// leaves it nil rather than inventing one.
+  public let text: String?
   /// One line naming the probability that caused this status, so a human
   /// reading a log months later can tell which gate fired.
   public let reason: String
@@ -57,7 +65,7 @@ public struct HostResponse: Codable, Sendable {
   public init(
     session: String, status: HostStatus, step: Int, elapsedMilliseconds: Int,
     costUSD: Double, screenshot: String? = nil, candidates: [String: String]? = nil,
-    history: [String] = [], reason: String
+    history: [String] = [], text: String? = nil, reason: String
   ) {
     self.session = session
     self.status = status
@@ -67,11 +75,12 @@ public struct HostResponse: Codable, Sendable {
     self.screenshot = screenshot
     self.candidates = candidates
     self.history = history
+    self.text = text
     self.reason = reason
   }
 
   private enum CodingKeys: String, CodingKey {
-    case session, status, step, screenshot, candidates, history, reason
+    case session, status, step, screenshot, candidates, history, text, reason
     case elapsedMilliseconds = "elapsed_ms"
     case costUSD = "cost_usd"
   }

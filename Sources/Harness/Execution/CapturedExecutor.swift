@@ -53,6 +53,17 @@ public struct CapturedExecutor: Executor {
       throw ExecutionError.ocrLineNotActionable
     }
 
+    // This tier switches on nothing — every kind becomes a click at the
+    // bbox centre. For `scroll` that is not an approximation, it is the
+    // opposite action: the page stays where it is and whatever was under the
+    // target gets pressed. Refused here so a BiDi scroll that failed cannot
+    // escalate down the ladder into a click.
+    guard action.kind != .scroll else {
+      throw ExecutionError.actionUnavailable(
+        role: "captured", wanted: "scroll (this tier can only click a point)"
+      )
+    }
+
     // Since ADR 0007, Screen Recording gates EXECUTION at these tiers, not
     // just observation — the bounds being acted on came from pixels.
     guard CGPreflightScreenCaptureAccess() else {

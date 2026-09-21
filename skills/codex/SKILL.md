@@ -24,6 +24,7 @@ open-agent run "<the user's task>" --plan plan.json [--app "Mail"] [--context "<
 open-agent resume <session> --eyes <n> | --eyes none
 open-agent resume <session> --plan plan.json
 open-agent observe --app "Mail"
+open-agent observe --browser --url "https://github.com/owner/repo/issues"
 ```
 
 Every invocation prints **one JSON object** to stdout and exits. Logs go to

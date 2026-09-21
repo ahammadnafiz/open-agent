@@ -167,6 +167,21 @@ public protocol ElementSource: Sendable {
   /// measured in hundreds of milliseconds, and it would be paid every step to
   /// be told nothing.
   var reportsReadiness: Bool { get }
+
+  /// What the screen *says*, as opposed to what can be pressed on it.
+  ///
+  /// **A requirement, not an extension member** — for exactly the reason
+  /// `readiness()` is one. The loop holds its source as `any ElementSource`,
+  /// so a method that exists only in an extension dispatches statically to the
+  /// default and the browser tier's answer is never heard. This codebase has
+  /// already written that bug twice.
+  ///
+  /// Candidates answer "what can I do here". They cannot answer "what does it
+  /// say" — a link contributes its own text and nothing else does, so a list
+  /// of issue titles arrives and the issues themselves do not. The page text
+  /// was being collected by the snapshot and dropped on the floor; this is the
+  /// wire it was missing. Tiers with no prose to offer return empty.
+  func pageText() async -> String
 }
 
 extension ElementSource {
@@ -189,6 +204,8 @@ extension ElementSource {
 extension ElementSource {
   public func readiness() async -> String { "" }
   public var reportsReadiness: Bool { false }
+  /// Sources that read a tree of controls, not a document, have no prose.
+  public func pageText() async -> String { "" }
 }
 
 extension ElementSource {

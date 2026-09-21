@@ -37,7 +37,7 @@ it. `Budget.maxEscalations` is the ceiling that keeps it honest.
 open-agent run "<task>" --plan plan.json
 open-agent resume <session> --eyes <n> | --eyes none
 open-agent resume <session> --plan plan.json
-open-agent observe [--app <name> | --browser]
+open-agent observe [--app <name> | --browser [--url <site>]]
 open-agent act --session <s> --kind <kind> --target <id>
 open-agent overlay [--loop] [--speed <n>] [--at x,y …]
 ```
@@ -46,6 +46,16 @@ Each invocation prints **one JSON object** to stdout and exits. Exit code 0
 means a status the host can act on; non-zero means the invocation itself was
 malformed. The host never parses prose, and nothing but JSON goes to stdout —
 logs go to stderr.
+
+**`observe --browser` takes `--url`, and a host that omits it is guessing.**
+The browser exposes no notion of "the tab the person is looking at", and BiDi
+context ids do not survive the process that learned them — so without a site to
+match on, the tab falls back to the first loaded one in a named container.
+Measured: a run navigated to a repository's issues, and the `observe` after it
+reported twenty-one candidates from an unrelated tab in the same browser, with
+`completed` and no hint that it had answered about somewhere else. The `reason`
+now names the address that was actually read, so a mismatch is visible in the
+response rather than inferred from the labels.
 
 `run` and `resume` carry session state on disk between invocations rather than
 holding a process open. A coding agent's tool calls are separate processes with
@@ -77,9 +87,23 @@ The only field the host branches on.
   "screenshot": "/…/s_01J…/step-07.png",
   "candidates": { "1": "New mail", "2": "Archive", "…": "…" },
   "history": ["click New mail", "click To", "type ahammad…"],
+  "text": "Inbox 3 unread …",
   "reason": "sufficient 0.41 — the target is not in the element list"
 }
 ```
+
+**`candidates` says what can be pressed; `text` says what it says.** They are
+different questions and only the first was ever answered. A candidate list of
+a page of issues carries the issue *titles*, because a title is a link and a
+link contributes its own text — and carries nothing at all about their state,
+their labels, or their bodies. The browser tier walks the page's text nodes on
+every snapshot and had always thrown the result away, so a host asking "what
+does this page say" had to open the page itself.
+
+The field is present when the tier driving the run can read prose, and absent
+otherwise — the accessibility tier walks a tree of controls, not a document,
+and leaves it out rather than inventing one. It is capped at 6000 characters
+(`TEXT_LIMIT` in `SnapshotScript`).
 
 ### 3.1 `needs_eyes`
 

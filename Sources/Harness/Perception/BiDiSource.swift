@@ -173,6 +173,22 @@ public actor BiDiSource: ElementSource {
 
   public nonisolated var reportsReadiness: Bool { true }
 
+  /// The page's visible text, as the last snapshot read it.
+  ///
+  /// `SnapshotScript` has walked the text nodes and shipped up to
+  /// `TEXT_LIMIT` characters since it was written, `BiDiSnapshot` has decoded
+  /// them into `text` just as long, and nothing in the process ever read the
+  /// field — so an agent that could open a page of issues could not say what
+  /// a single one of them was. This is the reader.
+  public func pageText() async -> String { latest?.text ?? "" }
+
+  /// The address the last snapshot was taken at.
+  ///
+  /// Reported back so a host that named a site can tell whether it got it.
+  /// `tab()` falls through to a guess when it cannot match one, and a guess
+  /// that is never stated reads exactly like an answer.
+  public func pageURL() async -> String { latest?.url ?? "" }
+
   public func readiness() async -> String {
     // **A document that says it is still loading is not settled, however still
     // it looks.** Instagram's inbox parks at ~507 nodes with `readyState:

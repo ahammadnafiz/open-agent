@@ -24,6 +24,16 @@ enum CLI {
     var session: String?
     var planPath: String?
     var app: String?
+    /// Which page `observe --browser` is about.
+    ///
+    /// **Without it, `observe --browser` reads a tab nobody named.** `tab()`
+    /// given no url cannot match on a site and cannot find the tab an earlier
+    /// run drove — its context id died with that process — so it falls back to
+    /// `resolveContext()`, which picks the first loaded tab in a named
+    /// container. Measured: a run navigated to a repository's issues, and the
+    /// `observe` that followed reported on an unrelated tab, confidently and
+    /// with `completed`.
+    var url: String?
     var kind: String?
     var target: String?
     var eyes: String?
@@ -95,6 +105,9 @@ enum CLI {
       case "--app":
         options.app = next()
         index += 1
+      case "--url":
+        options.url = next()
+        index += 1
       case "--kind":
         options.kind = next()
         index += 1
@@ -164,7 +177,7 @@ enum CLI {
       open-agent resume <session> --eyes <n> --label "the send icon"
       open-agent resume <session> --eyes none
       open-agent resume <session> --plan plan.json
-      open-agent observe --app <name> | --browser
+      open-agent observe --app <name> | --browser [--url <site>]
       open-agent act --session <s> --kind <kind> --target e17 [--payload "text"]
 
       open-agent overlay                         scripted walkthrough, once

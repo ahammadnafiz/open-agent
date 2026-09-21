@@ -30,8 +30,15 @@ public enum WindowGuard {
   }
 
   /// Every window the window server currently lists, excluding desktop elements.
-  public static func windows() -> [WindowInfo] {
-    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+  ///
+  /// - Parameter onScreenOnly: the default, and what every caller acting on a
+  ///   window wants. Pass `false` only to tell "this app has no window here"
+  ///   apart from "this app is not running" — a minimized or off-Space window
+  ///   is absent from the on-screen list and present in the full one, and
+  ///   those two need different sentences.
+  public static func windows(onScreenOnly: Bool = true) -> [WindowInfo] {
+    var options: CGWindowListOption = [.excludeDesktopElements]
+    if onScreenOnly { options.insert(.optionOnScreenOnly) }
     guard let raw = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
       return []
     }
@@ -87,7 +94,21 @@ public enum WindowGuard {
       $0.layer == 0 && normalized(appName: $0.ownerName) == wanted
     }
     guard let best = matches.max(by: { $0.bounds.area < $1.bounds.area }) else {
-      throw PerceptionError.appNotRunning(name)
+      // **"Not running" and "running, but not here" are different problems
+      // with different fixes, and one message for both sent a debugging
+      // session after the wrong one.** Zen was running, listening on its
+      // debug port and driving a page, with every window on another Space —
+      // and `observe --app "Zen"` said it was not running. The next hour went
+      // on case-sensitivity and name matching, neither of which was involved.
+      //
+      // The full window list answers it: a layer-0 window that exists but is
+      // not on screen means the app is up and somewhere else.
+      let elsewhere = windows(onScreenOnly: false).contains {
+        $0.layer == 0 && normalized(appName: $0.ownerName) == wanted
+      }
+      throw elsewhere
+        ? PerceptionError.windowNotOnScreen(app: name)
+        : PerceptionError.appNotRunning(name)
     }
     return best.ownerPID
   }
