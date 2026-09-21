@@ -184,7 +184,7 @@ enum Make {
   static func loop(
     plan: Plan,
     judge: ScriptedJudge,
-    executor: RecordingExecutor = RecordingExecutor(),
+    executor: any ExecutorProviding = RecordingExecutor(),
     hud: any HUDBridge = HeadlessHUD(),
     elements: [Element] = [Make.element(), Make.element(label: "Home", path: [1])],
     taskContext: String = "",
@@ -263,4 +263,31 @@ actor SpinningSource: ElementSource {
 
   /// Complete, and busy, forever.
   func readiness() async -> String { "busy:2573" }
+}
+
+/// A page that never finishes arriving.
+///
+/// `readiness()` answers `loading` forever, which is what a site with a
+/// permanent progress indicator looks like to the loop. Used to prove that a
+/// step which is about to replace the page does not wait for it.
+actor NeverReadySource: ElementSource {
+  nonisolated let kind: SourceKind = .bidi
+  nonisolated var reportsReadiness: Bool { true }
+  private let elements: [Element]
+
+  init(elements: [Element] = [Make.element()]) { self.elements = elements }
+
+  func observe() async throws -> [Element] { elements }
+  func readiness() async -> String { "loading" }
+}
+
+/// Dispatches nothing, so the step never reaches `settle`. Lets a test time a
+/// single phase of the loop without the settle window dominating it.
+actor InertExecutor: Executor, ExecutorProviding {
+  nonisolated func executor(for ref: ElementRef?, kind: ActionKind) throws -> any Executor {
+    self
+  }
+  func execute(_ action: Action) async throws -> ExecutionResult {
+    ExecutionResult(dispatched: false, via: .bidi)
+  }
 }

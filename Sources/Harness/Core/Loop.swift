@@ -196,7 +196,7 @@ public actor AgentLoop {
       // *"without waiting for the whole loading of the site, the cursor moved
       // — first load, understand, then do things."*
       let readyStarted = ContinuousClock.now
-      await waitUntilReady()
+      await waitUntilReady(before: planStep.kind)
       let readyMilliseconds = readyStarted.milliseconds()
 
       // ── OBSERVE ──────────────────────────────────────────────────
@@ -529,7 +529,16 @@ public actor AgentLoop {
   /// change to wait for; the only question is whether what is on screen is
   /// finished. A source that cannot answer is not asked, so the accessibility
   /// tier pays nothing for this.
-  private func waitUntilReady() async {
+  ///
+  /// - Parameter kind: what this step is about to do. **You do not need a page
+  ///   to be ready in order to leave it.** `navigate` and `openApp` replace the
+  ///   screen outright, so waiting for the current one to finish arriving buys
+  ///   nothing and is paid before every navigation — measured at `ready=649ms`
+  ///   on the first step of an x.com run, spent watching a page the very next
+  ///   action threw away. X keeps a `role="progressbar"` in its document
+  ///   permanently, so that wait was the full `busyGrace` every time.
+  private func waitUntilReady(before kind: ActionKind) async {
+    guard kind != .navigate, kind != .openApp else { return }
     guard source.reportsReadiness else { return }
     // A site just navigated to gets the load budget. A page the agent has
     // already been working in gets a fraction of it: it is loaded, and what

@@ -893,3 +893,57 @@ struct RetryTargetsTheFailedStepTests {
     #expect(typedTwice < 2, "the message was typed more than once")
   }
 }
+
+/// **You do not need a page to be ready in order to leave it.**
+@Suite("A navigation does not wait for the page it replaces")
+struct NavigationSkipsReadinessTests {
+
+  /// `waitUntilReady` ran before every step, including the ones whose whole
+  /// job is to throw the current screen away. On a site that reports itself
+  /// permanently unfinished — x.com keeps a `role="progressbar"` in the
+  /// document at all times — that was the full readiness budget spent watching
+  /// a page the very next action discarded. Measured on the first step of a
+  /// real run: `ready=649ms`, every time.
+  ///
+  /// The source here answers `loading` forever, so any wait at all runs to its
+  /// ceiling. The executor dispatches nothing, which keeps `settle` out of the
+  /// measurement — this is timing one phase, not the loop.
+  @Test("navigate does not pay the readiness budget")
+  func navigateSkipsReadiness() async {
+    let judge = ScriptedJudge([Make.verdict(), Make.verdict()])
+    let started = ContinuousClock.now
+
+    _ = await Make.loop(
+      plan: Make.plan([.navigate]),
+      judge: judge,
+      executor: InertExecutor(),
+      settleTimeout: .seconds(1.5),
+      source: NeverReadySource()
+    ).run()
+
+    #expect(
+      started.duration(to: ContinuousClock.now) < .seconds(0.5),
+      "a step that replaces the screen waited for the screen it was replacing")
+  }
+
+  /// The other half of the contract: a step that acts on what is already there
+  /// still waits. Removing the wait for everything would be a different bug —
+  /// the one `waitUntilReady` was added to fix.
+  @Test("a click still waits for the page to be ready")
+  func clickStillWaits() async {
+    let judge = ScriptedJudge([Make.verdict(), Make.verdict()])
+    let started = ContinuousClock.now
+
+    _ = await Make.loop(
+      plan: Make.plan([.click]),
+      judge: judge,
+      executor: InertExecutor(),
+      settleTimeout: .seconds(1.5),
+      source: NeverReadySource()
+    ).run()
+
+    #expect(
+      started.duration(to: ContinuousClock.now) > .seconds(1),
+      "a page that never reports itself ready should still be waited for")
+  }
+}
