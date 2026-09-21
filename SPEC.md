@@ -154,6 +154,15 @@ every account that browser is signed into. The boundary that protects you is the
 deterministic gate — `publish`, `send`, `delete` and `purchase` show a window
 with the exact payload and wait for a human — not the profile.
 
+**The browser is borrowed, not kept — ADR 0013.** The debug port is a property
+of the process, so while it lives your browser reports itself as automated:
+`navigator.webdriver` is true, the URL bar says so, and sites start putting bot
+walls in front of *you*. A run that ends for good therefore quits the browser and
+reopens it without the port, and the saved session brings the tabs back. A run
+that ends in `needs_eyes` or `needs_plan` keeps it, because you are resuming into
+that tab. `open-agent release` does it on demand, for the endings only the host
+can see.
+
 Native targets have the equivalent prerequisite and it is cheaper: Accessibility
 permission is granted **per binary**, so the shipped `.app` and the `Probe`
 binary each need their own grant. Screen Recording is a third grant, and since

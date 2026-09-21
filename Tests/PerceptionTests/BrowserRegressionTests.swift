@@ -717,7 +717,9 @@ struct BrowserLaunchRegressionTests {
       launch: { _, _, _ in
         journal.record("launch")
         return 4242
-      }
+      },
+      restoreLaunch: { _ in journal.record("restore") },
+      waitForLaunch: { _, _ in true }
     )
   }
 
@@ -888,7 +890,9 @@ struct BrowserNamingTests {
       binaryExists: { _ in true },
       quit: { name in quitTarget.record(name) },
       waitForExit: { _, _ in },
-      launch: { _, _, _ in 4242 }
+      launch: { _, _, _ in 4242 },
+      restoreLaunch: { _ in },
+      waitForLaunch: { _, _ in true }
     )
 
     _ = try await BrowserLauncher.ensureDrivable(

@@ -32,6 +32,23 @@ public enum HostStatus: String, Codable, Sendable, CaseIterable {
   case unverified
   case failed
   case budgetExhausted = "budget_exhausted"
+
+  /// Whether this status is an ending, as `blocked` is documented to be above.
+  ///
+  /// **The decision behind handing the browser back** — ADR 0013. `needsEyes`
+  /// and `needsPlan` are the two callbacks that exist so the host can come
+  /// back, and a browser restarted between one and its resume throws away the
+  /// tab the resume is for. Everything else is an ending.
+  ///
+  /// The switch is exhaustive on purpose. A seventh case is already an "ask
+  /// first" boundary above, and whoever adds one has to say here whether it
+  /// gives the browser back.
+  public var isTerminal: Bool {
+    switch self {
+    case .needsEyes, .needsPlan: false
+    case .blocked, .completed, .unverified, .failed, .budgetExhausted: true
+    }
+  }
 }
 
 /// The single JSON object printed to stdout per invocation.

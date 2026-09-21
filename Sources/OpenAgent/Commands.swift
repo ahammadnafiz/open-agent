@@ -54,7 +54,7 @@ enum Commands {
       waitingFor: nil, candidates: nil
     )
     try? session.save()
-    await drive(&session, resumeState: nil)
+    await drive(&session, resumeState: nil, keepBrowser: options.keepBrowser)
   }
 
   // MARK: - resume
@@ -107,7 +107,9 @@ enum Commands {
       Log.info("resuming with host-selected mark \(index)")
     }
 
-    await drive(&session, resumeState: session.state, pendingEyes: pendingEyes)
+    await drive(
+      &session, resumeState: session.state, pendingEyes: pendingEyes,
+      keepBrowser: options.keepBrowser)
   }
 
   // MARK: - observe
@@ -116,8 +118,49 @@ enum Commands {
     switch options.verb {
     case .observe: await observe(options)
     case .act: await act(options)
+    case .release: await release()
     default: fail("unreachable verb")
     }
+  }
+
+  // MARK: - release
+
+  /// Hands the browser back on demand.
+  ///
+  /// **`run` does this on its own when a task ends for good, so this verb is
+  /// for the endings `run` cannot see.** An `observe --browser` is the plain
+  /// one: it leaves the browser under remote control on purpose, because the
+  /// host almost always observes in order to *then* run, and restarting between
+  /// the two would throw away the tab it just read. When the host observes and
+  /// then stops, only the host knows that.
+  ///
+  /// Safe to call at any time, including when no browser is running — it reports
+  /// what it found rather than failing on a browser that was already the user's.
+  static func release() async {
+    // **Three outcomes, not two.** Reporting a failed hand-back as `completed`
+    // with "nothing to hand back" told the host the opposite of what happened,
+    // and put the only true account on stderr — which the contract forbids the
+    // host from reading. The failure is precisely the state the user must know
+    // about: their browser is still flagged.
+    let status: HostStatus
+    let reason: String
+    switch await BrowserLauncher.release() {
+    case .handedBack:
+      status = .completed
+      reason = "browser handed back: reopened without a debug port, tabs restored"
+    case .nothingToHandBack:
+      status = .completed
+      reason = "nothing to hand back — no browser was under remote control"
+    case .failed(let why):
+      status = .failed
+      reason = why
+    }
+    emit(
+      HostResponse(
+        session: "-", status: status, step: 0,
+        elapsedMilliseconds: 0, costUSD: 0, reason: reason
+      )
+    )
   }
 
   static func observe(_ options: CLI.Options) async {
@@ -250,11 +293,15 @@ enum Commands {
 
   // MARK: - Driving the loop
 
+  /// - Parameter keepBrowser: leave the browser under remote control even when
+  ///   the task ends for good. For a host with more work queued behind this
+  ///   one — ADR 0013.
   @MainActor
   private static func drive(
     _ session: inout Session,
     resumeState: AgentLoop.LoopState?,
-    pendingEyes: EyesAnswer? = nil
+    pendingEyes: EyesAnswer? = nil,
+    keepBrowser: Bool = false
   ) async {
     let jev: JevClient
     do {
@@ -322,6 +369,9 @@ enum Commands {
         bidiExecutor = BiDiExecutor(client: client, source: browserSource)
       } catch {
         await bidiClient?.close()
+        // Same reasoning as above: the port may already be open even though the
+        // run never started. `release` no-ops when it is not. ADR 0013.
+        await BrowserLauncher.release()
         fail(describe(error))
       }
     } else {
@@ -358,10 +408,32 @@ enum Commands {
 
     let result = await loop.run()
     await bidiClient?.close()
+
     session.state = await loop.state()
     session.waitingFor = result.status
     session.candidates = result.candidates
     try? session.save()
+
+    // Closing the BiDi client leaves the browser under remote control; only the
+    // process ending clears that. Hand it back — ADR 0013.
+    //
+    // **After the session is saved, before the response is emitted.** The
+    // restart costs 5–7s (`Constants.Browser.launchTimeout`), and a process
+    // killed during it must not take the run's state with it — so the durable
+    // write comes first. Emitting first would be worse the other way: a host
+    // that reads the response may launch its next invocation immediately, and
+    // that one would attach to a browser this one is midway through quitting.
+    if bidiClient != nil, result.status.isTerminal, !keepBrowser {
+      await BrowserLauncher.release()
+    }
+    if bidiClient != nil, result.status.isTerminal, keepBrowser {
+      // Set once and forgotten, this flag reproduces the defect ADR 0013 fixes:
+      // the browser stays flagged and the user meets bot walls on their own
+      // machine with nothing to connect it to. So it says so, every time.
+      Log.warn(
+        "--keep-browser: the browser is still under remote control. "
+          + "Run `open-agent release` when you are done with it.")
+    }
 
     emit(
       HostResponse(

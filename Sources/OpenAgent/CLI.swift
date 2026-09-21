@@ -11,7 +11,7 @@ import Harness
 enum CLI {
 
   enum Verb: String, CaseIterable {
-    case run, resume, observe, act, overlay, help
+    case run, resume, observe, act, overlay, release, help
   }
 
   struct Options {
@@ -53,6 +53,14 @@ enum CLI {
     /// its own profile — it cannot attach to one you already have open, because
     /// the debug port is set at process start. ADR 0002.
     var browser = false
+    /// Leave the browser under remote control when this run ends.
+    ///
+    /// **For a host with another task queued behind this one.** A released
+    /// browser has to be relaunched with the debug port to be drivable again,
+    /// and that cold start is 5–7s — worth paying once at the end of the work,
+    /// not between every task in a batch. The last invocation of a batch omits
+    /// it, and the user gets their browser back then.
+    var keepBrowser = false
 
     // overlay-only
     var loop = false
@@ -73,6 +81,7 @@ enum CLI {
     case "observe": options.verb = .observe
     case "act": options.verb = .act
     case "overlay": options.verb = .overlay
+    case "release": options.verb = .release
     case "--help", "-h", "help":
       options.helpRequested = true
       return options
@@ -138,6 +147,7 @@ enum CLI {
         index += 1
       case "--verbose": options.verbose = true
       case "--browser": options.browser = true
+      case "--keep-browser": options.keepBrowser = true
       case "--loop": options.loop = true
       case "--speed":
         if let value = next().flatMap(Double.init) { options.speed = max(0.1, min(value, 5)) }
@@ -179,11 +189,13 @@ enum CLI {
 
       open-agent run "<task>" [--plan plan.json] [--app <name> | --browser]
                               [--url <site>] [--context "<instance>"]
+                              [--keep-browser]
       open-agent resume <session> --eyes <n> --label "the send icon"
       open-agent resume <session> --eyes none
       open-agent resume <session> --plan plan.json
       open-agent observe --app <name> | --browser [--url <site>]
       open-agent act --session <s> --kind <kind> --target e17 [--payload "text"]
+      open-agent release                         give the browser back, now
 
       open-agent overlay                         scripted walkthrough, once
       open-agent overlay --loop                  repeat until Ctrl-C
@@ -197,6 +209,15 @@ enum CLI {
 
     Approval is not part of this interface. An irreversible action shows a native
     sheet and blocks until a human clicks it. There is no flag that answers it.
+
+    The browser is borrowed, not kept. A `--browser` run drives your own profile
+    through a debug port, which makes the browser report itself as automated for
+    as long as that process lives — a robot icon in the URL bar, and bot walls on
+    ordinary sites. A run that ends for good hands it back: the browser quits and
+    reopens without the port, and Gecko restores the tabs. A run that ends in
+    needs_eyes or needs_plan keeps it, because you are coming back to that tab.
+    Pass --keep-browser to hold it across a batch of tasks, and `release` to give
+    it back by hand — after an `observe`, say, or when a batch is done.
 
     Credentials: TYPESAFE_API_KEY in the environment, or the key on its own in
     ~/.config/open-agent/credentials (the vendor is TypeSafe; Jev is the model).

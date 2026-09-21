@@ -34,18 +34,60 @@ it. `Budget.maxEscalations` is the ceiling that keeps it honest.
 ## 2. The verbs
 
 ```bash
-open-agent run "<task>" --plan plan.json [--url <site>]
+open-agent run "<task>" --plan plan.json [--url <site>] [--keep-browser]
 open-agent resume <session> --eyes <n> | --eyes none
 open-agent resume <session> --plan plan.json
 open-agent observe [--app <name> | --browser [--url <site>]]
 open-agent act --session <s> --kind <kind> --target <id>
 open-agent overlay [--loop] [--speed <n>] [--at x,y …]
+open-agent release
 ```
 
 Each invocation prints **one JSON object** to stdout and exits. Exit code 0
 means a status the host can act on; non-zero means the invocation itself was
 malformed. The host never parses prose, and nothing but JSON goes to stdout —
 logs go to stderr.
+
+### 2.1 The browser is borrowed, not kept
+
+A `--browser` run drives **the user's own profile** — ADR 0011 — through a debug
+port opened at process start. Gecko treats that port as a property of the
+process: `navigator.webdriver` stays true for its whole life, the URL bar carries
+a robot icon and a "Browser is under remote control" notification, and bot
+detection on ordinary sites starts challenging the user. There is no runtime
+switch that undoes any of it; the port is a startup flag (ADR 0002), so **only
+the process ending clears it.**
+
+Measured 2026-09-21: a run ended at 13:16 and left its browser up. At 14:11 the
+user could not read openai.com on their own machine — Cloudflare was serving
+them "Verify you are human" — and nothing connected that to a run that had
+finished an hour earlier.
+
+So the agent hands the browser back. `run` and `resume` do it on their own when
+the status **ends the session** — `completed`, `failed`, `blocked`, `unverified`,
+`budget_exhausted` — by quitting the browser gracefully and reopening it with no
+debug port. The quit is the same one ADR 0011 already performs, so Gecko saves
+the session and the tabs come back.
+
+It does **not** happen on `needs_eyes` or `needs_plan`. Those are the two
+callbacks that exist so the host can resume, and a browser restarted between one
+and its resume discards the tab the run was working in.
+
+| Situation | Who hands the browser back |
+|---|---|
+| `run`/`resume` ends `completed`, `failed`, `blocked`, `unverified`, `budget_exhausted` | the agent, automatically |
+| `run`/`resume` ends `needs_eyes` or `needs_plan` | nobody — you are coming back |
+| `observe --browser`, then the host stops | **the host**, with `release` |
+| several tasks in a row | the host: `--keep-browser` on all but the last |
+
+`--keep-browser` suppresses the automatic hand-back. Use it when another task is
+queued behind this one: a released browser must be relaunched with the port to be
+drivable again, and that cold start is 5–7s — worth paying once at the end of the
+work rather than between every task.
+
+`release` is safe to call at any time and is idempotent. With nothing under
+remote control it reports `completed` with `"nothing to hand back"` and touches
+nothing, so a host may call it blindly on its way out.
 
 **`observe --browser` takes `--url`, and a host that omits it is guessing.**
 The browser exposes no notion of "the tab the person is looking at", and BiDi

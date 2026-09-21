@@ -22,10 +22,28 @@ open-agent resume <session> --eyes <n> | --eyes none
 open-agent resume <session> --plan plan.json
 open-agent observe --app "Mail"
 open-agent observe --browser --url "https://github.com/owner/repo/issues"
+open-agent release
 ```
 
 Every invocation prints **one JSON object** to stdout and exits. Logs go to
 stderr. Never parse the prose on stderr; never infer state from it.
+
+**When you use `--browser`, give the browser back before you stop.** A browser
+task drives the user's own Zen through a debug port, and for as long as that
+process lives their browser reports itself as automated: a robot icon in the URL
+bar, and "Verify you are human" walls on ordinary sites. A `run` that ends
+`completed`, `failed`, `blocked`, `unverified` or `budget_exhausted` hands it
+back on its own. Nothing else does — so after an `observe --browser` that you do
+not follow with a run, call `open-agent release`. It is idempotent and costs
+nothing when there is nothing to hand back, so call it rather than working out
+whether you need to.
+
+**Running several browser tasks in a row?** Pass `--keep-browser` on all but the
+last. Reopening the browser for each one costs a 5–7s cold start, and the flag
+holds it across the batch. It is an opt-out from the hand-back above, so a run
+that exits still holding it warns you to call `release` — do that when the batch
+is done, or the user is left with a browser that walls them out of their own
+sites.
 
 ## Step 1 — Ask before you plan
 

@@ -62,6 +62,18 @@ public enum BrowserLauncher {
     public var waitForExit: @Sendable (String, Duration) async throws -> Void
     /// Returns the pid of the browser it started.
     public var launch: @Sendable (String, String, Int) throws -> Int32
+    /// Reopens the browser the way a person does, by application name and with
+    /// no debug port. Deliberately *not* `launch` with the flags left off:
+    /// this is the ordinary launch that hands the browser back, and the two
+    /// must not be one function that a boolean could get backwards.
+    public var restoreLaunch: @Sendable (String) throws -> Void
+    /// Whether a browser process came back within the deadline.
+    ///
+    /// The mirror of `waitForExit`, and it exists for one case: a relaunch
+    /// issued while the old process was still quitting is swallowed, and the
+    /// only way to know is to look afterwards. Reports rather than throws —
+    /// "it did not come back" is an answer `release` acts on, not an error.
+    public var waitForLaunch: @Sendable (String, Duration) async -> Bool
 
     public init(
       isListening: @escaping @Sendable (Int) -> Bool,
@@ -69,7 +81,9 @@ public enum BrowserLauncher {
       binaryExists: @escaping @Sendable (String) -> Bool,
       quit: @escaping @Sendable (String) throws -> Void,
       waitForExit: @escaping @Sendable (String, Duration) async throws -> Void,
-      launch: @escaping @Sendable (String, String, Int) throws -> Int32
+      launch: @escaping @Sendable (String, String, Int) throws -> Int32,
+      restoreLaunch: @escaping @Sendable (String) throws -> Void,
+      waitForLaunch: @escaping @Sendable (String, Duration) async -> Bool
     ) {
       self.isListening = isListening
       self.runningBrowsers = runningBrowsers
@@ -77,6 +91,8 @@ public enum BrowserLauncher {
       self.quit = quit
       self.waitForExit = waitForExit
       self.launch = launch
+      self.restoreLaunch = restoreLaunch
+      self.waitForLaunch = waitForLaunch
     }
 
     public static let live = Probes(
@@ -98,7 +114,9 @@ public enum BrowserLauncher {
         process.standardError = FileHandle.nullDevice
         do { try process.run() } catch { throw LaunchError.launchFailed("\(error)") }
         return process.processIdentifier
-      }
+      },
+      restoreLaunch: { try BrowserLauncher.restoreGracefully(applicationName: $0) },
+      waitForLaunch: { await BrowserLauncher.waitForLaunch(binary: $0, deadline: $1) }
     )
   }
 
@@ -219,6 +237,140 @@ public enum BrowserLauncher {
     )
   }
 
+  // MARK: - Giving it back
+
+  /// Ends remote control and reopens the browser as the user's own.
+  ///
+  /// **The agent borrows the browser; this is the half that returns it.**
+  /// `ensureDrivable` launches with `--remote-debugging-port`, and Gecko treats
+  /// that as a property of the process: `navigator.webdriver` is true for its
+  /// whole life, the URL bar carries a robot icon and a "Browser is under
+  /// remote control" notification, and there is no runtime switch to undo any
+  /// of it — the port is a startup flag, ADR 0002. So the flag outlived every
+  /// run that asked for it.
+  ///
+  /// What that cost, measured 2026-09-21: a run ended at 13:16 and its browser
+  /// was still up at 14:11, by which point openai.com was serving the user a
+  /// Cloudflare "Verify you are human" wall on their own machine. The banner and
+  /// the wall are one cause wearing two hats — bot detection reads
+  /// `navigator.webdriver` — so hiding the banner would have left the wall. Only
+  /// the process ending clears it, which means a quit and a plain relaunch.
+  ///
+  /// The quit is the graceful one `ensureDrivable` already uses, so Gecko writes
+  /// its session and the tabs come back.
+  ///
+  /// What a hand-back did, which is three outcomes and not two.
+  ///
+  /// **A `Bool` conflated "there was nothing to do" with "I tried and could
+  /// not".** The `release` verb reported the second as the first — `completed`,
+  /// with the reason *"no browser was under remote control"* — while the only
+  /// truthful account went to stderr, which `docs/host-contract.md` forbids the
+  /// host from reading. A host cannot act on a failure it is told did not
+  /// happen, and this is exactly the state the user has to know about: their
+  /// browser is still flagged.
+  public enum Outcome: Sendable, Equatable {
+    /// Quit and reopened without a debug port.
+    case handedBack
+    /// Nothing was under remote control. Already the user's.
+    case nothingToHandBack
+    /// The hand-back was attempted and did not complete. Carries the sentence a
+    /// human needs to finish it themselves.
+    case failed(String)
+  }
+
+  /// Ends remote control and reopens the browser as the user's own.
+  ///
+  /// - Returns: what happened. **Never throws.** This runs after the work is
+  ///   done and reported, and a browser that will not reopen is not a reason to
+  ///   call a finished task failed.
+  @discardableResult
+  public static func release(
+    binary: String = Constants.Browser.zenBinary,
+    profileOverride: String? = nil,
+    port: Int = Constants.Browser.bidiPort,
+    probes: Probes = .live
+  ) async -> Outcome {
+    let profile = BrowserProfile.active(override: profileOverride)
+    let browser = appName(of: binary)
+
+    // On the dedicated profile the agent runs its own second copy and the
+    // user's browser was never flagged, so there is nothing of theirs to give
+    // back. Quitting anyway would be actively wrong: `tell application "Zen" to
+    // quit` is app-wide, not profile-scoped, so tidying up the agent's process
+    // would close the window the user is reading.
+    guard profile != Constants.Browser.dedicatedProfilePath else {
+      Log.debug("release: dedicated profile, the user's browser was never driven")
+      return .nothingToHandBack
+    }
+
+    // Nothing answering on the port means nothing is under remote control.
+    // A host may call this blindly, and twice in a row must not cost a second
+    // restart of a browser that is already clean.
+    guard probes.isListening(port) else {
+      Log.debug("release: nothing listening on port \(port), nothing to hand back")
+      return .nothingToHandBack
+    }
+
+    Log.info("handing \(browser) back: quitting the remote-controlled process")
+
+    // Before the quit is asked for, bailing out is free — the browser is
+    // untouched and still the user's, flagged but present.
+    do {
+      try probes.quit(browser)
+    } catch {
+      return failure(
+        "could not ask \(browser) to quit (\(error)). It is still under remote control — "
+          + "quit it and reopen it to clear that.")
+    }
+
+    // **Past this line the browser is going to exit, so it MUST be reopened.**
+    // The first version treated a slow quit as a reason to give up: the wait
+    // threw at 8s, the catch returned, and nothing relaunched — so a browser
+    // that took nine seconds to save its session exited into an empty desktop.
+    // That is the failure the wait was added to prevent, arriving through the
+    // wait itself. A timeout here is late, not fatal.
+    do {
+      try await probes.waitForExit(binary, Constants.Browser.quitTimeout)
+    } catch {
+      Log.warn("\(browser) is taking longer than \(Constants.Browser.quitTimeout) to quit")
+    }
+
+    do {
+      try probes.restoreLaunch(browser)
+    } catch {
+      return failure(
+        "\(browser) was quit but would not reopen (\(error)). Open it yourself — "
+          + "its tabs are saved and will come back.")
+    }
+
+    // **A relaunch issued while the old process was still quitting is
+    // swallowed**, and nothing says so at the time: `open` succeeds, the dying
+    // process takes the app slot with it, and the desktop ends up empty. The
+    // only way to know is to look afterwards, so this looks.
+    if await probes.waitForLaunch(binary, Constants.Browser.launchTimeout) {
+      Log.info("\(browser) reopened without a debug port; the session restores its tabs")
+      return .handedBack
+    }
+
+    Log.warn("\(browser) did not come back — the relaunch raced its quit. Trying once more.")
+    do {
+      try probes.restoreLaunch(browser)
+    } catch {
+      return failure("\(browser) was quit and would not reopen (\(error)). Open it yourself.")
+    }
+    guard await probes.waitForLaunch(binary, Constants.Browser.launchTimeout) else {
+      return failure("\(browser) was quit and did not come back. Open it yourself.")
+    }
+    Log.info("\(browser) reopened without a debug port; the session restores its tabs")
+    return .handedBack
+  }
+
+  /// Logs the sentence and returns it, so the two never drift apart.
+  private static func failure(_ reason: String) -> Outcome {
+    Log.warn(reason)
+    return .failed(reason)
+  }
+
   /// `tell application "X" to quit` — the same thing ⌘Q does, so the session is
   /// saved and restored on the next launch.
   static func quitGracefully(applicationName: String) throws {
@@ -232,6 +384,67 @@ public enum BrowserLauncher {
     } catch {
       throw LaunchError.couldNotQuit(applicationName)
     }
+    // **A failed `osascript` used to report success**, and the cost was paid by
+    // the wait that follows: nothing had been asked to quit, so the full
+    // `quitTimeout` elapsed before anything said so. Telling the truth here
+    // turns eight silent seconds into one accurate error.
+    //
+    // Quitting an application that is not running is not a failure — osascript
+    // exits 0 for it — so this only fires on a real one.
+    guard process.terminationStatus == 0 else {
+      throw LaunchError.couldNotQuit(
+        "\(applicationName) (osascript exited \(process.terminationStatus))")
+    }
+  }
+
+  /// `open -a X` — the launch a person's own double-click performs.
+  ///
+  /// **Not `Process` on the binary, the way `launch` does it.** That spawns the
+  /// browser as a child of this short-lived CLI, with our environment and our
+  /// session; `open` hands the request to LaunchServices, which starts it as a
+  /// normal foreground application exactly as the Dock would. The browser being
+  /// given back has to be indistinguishable from one the user started, and the
+  /// launch path is part of what makes it so.
+  ///
+  /// No arguments beyond the name. Every flag here is one the user did not ask
+  /// for, and the profile needs no naming — opened plainly, the browser goes to
+  /// the same default it always does.
+  static func restoreGracefully(applicationName: String) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    process.arguments = ["-a", applicationName]
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    do {
+      try process.run()
+      process.waitUntilExit()
+    } catch {
+      throw LaunchError.launchFailed("could not run open -a \(applicationName): \(error)")
+    }
+    // `open` returns non-zero when it could not start the application at all.
+    // Letting that pass silently would report a hand-back that never happened.
+    //
+    // The two failures carry different text on purpose: one means `open` never
+    // ran, the other means it ran and refused, and a single shared payload made
+    // them indistinguishable in the one place a human reads them.
+    guard process.terminationStatus == 0 else {
+      throw LaunchError.launchFailed(
+        "open -a \(applicationName) exited \(process.terminationStatus)")
+    }
+  }
+
+  /// Polls until a browser process exists, or the deadline passes.
+  ///
+  /// The mirror of `waitForExit`, and it reports rather than throwing: "it did
+  /// not come back" is a state `release` acts on by trying again, not an error
+  /// to unwind.
+  static func waitForLaunch(binary: String, deadline: Duration) async -> Bool {
+    let end = ContinuousClock.now + deadline
+    while ContinuousClock.now < end {
+      if !runningBrowsers(binary: binary).isEmpty { return true }
+      try? await Task.sleep(for: .milliseconds(250))
+    }
+    return !runningBrowsers(binary: binary).isEmpty
   }
 
   static func waitForExit(binary: String, deadline: Duration) async throws {

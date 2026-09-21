@@ -15,7 +15,9 @@ case .help:
     // stdout stays JSON-only; the human-readable help goes to stderr with
     // the rest of the logs.
     FileHandle.standardError.write(Data((CLI.help + "\n").utf8))
-    Commands.fail("unknown verb '\(unknown)' — expected one of: run, resume, observe, act, overlay")
+    Commands.fail(
+      "unknown verb '\(unknown)' — expected one of: "
+        + "run, resume, observe, act, overlay, release")
   }
   // A human asked. Prose is the right answer, and there is no host to confuse.
   print(CLI.help)
@@ -29,7 +31,7 @@ case .overlay, .run, .resume:
   NSApplication.shared.setActivationPolicy(.accessory)  // no Dock icon, no menu bar
   NSApplication.shared.run()
 
-case .observe, .act:
+case .observe, .act, .release:
   // No pixels, no sheet, no run loop. `observe` in particular is the skill's
   // own smoke test and must work with nothing on screen.
   await Commands.runHeadless(options)
