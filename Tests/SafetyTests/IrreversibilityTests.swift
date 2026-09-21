@@ -54,7 +54,7 @@ struct IrreversibilityTests {
   /// **The one thing that must not rot.** No component may return
   /// `.reversible` for an action another component called `.irreversible`.
   ///
-  /// Exhaustive over `ActionKind` × denylist label. 14 × 24 = 336 cases.
+  /// Exhaustive over `ActionKind` × denylist label. 19 × 24 = 456 cases.
   @Test("every ActionKind with every denylist label classifies irreversible")
   func everyKindWithEveryDenylistLabel() {
     for kind in ActionKind.allCases {

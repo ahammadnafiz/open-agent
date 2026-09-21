@@ -8,6 +8,13 @@ public struct ConfirmationRequest: Sendable, Equatable {
   public let actionKind: ActionKind
   /// The element's own name, as the source or vision reported it.
   public let targetLabel: String
+  /// Where a `drag` lets go. `nil` for every other kind.
+  ///
+  /// **The sheet joins the two ends, not the caller.** It was briefly the
+  /// caller's job, and that put the guarantee in one call site while every
+  /// other one rendered "Move report.pdf" — a sentence someone approves without
+  /// knowing whether it was filed or thrown away.
+  public let destinationLabel: String?
   /// Verbatim. The text to be typed, the URL, the key.
   public let payload: String?
   /// One line explaining why this step is happening.
@@ -17,11 +24,13 @@ public struct ConfirmationRequest: Sendable, Equatable {
   public let riskMax: Double
 
   public init(
-    actionKind: ActionKind, targetLabel: String, payload: String?,
+    actionKind: ActionKind, targetLabel: String, destinationLabel: String? = nil,
+    payload: String?,
     rationale: String, becauseIrreversible: Bool, riskMax: Double
   ) {
     self.actionKind = actionKind
     self.targetLabel = targetLabel
+    self.destinationLabel = destinationLabel
     self.payload = payload
     self.rationale = rationale
     self.becauseIrreversible = becauseIrreversible
@@ -35,6 +44,10 @@ public struct ConfirmationRequest: Sendable, Equatable {
   /// which will activate **Send**".
   public var headline: String {
     switch actionKind {
+    case .drag:
+      // **Both ends, always.** The destination is the half that decides whether
+      // this was filing something or throwing it away.
+      "Move \(targetLabel) onto \(destinationLabel ?? "an unnamed target")"
     case .pressKey where payload == Key.enter.rawValue && !targetLabel.isEmpty:
       "Press Enter, which will activate \(targetLabel)"
     case .pressKey:

@@ -262,14 +262,37 @@ enum Commands {
         fail("no candidate \(targetID) — `observe` first; ids are only valid for one observation")
       }
 
+      // A drag names both ends or it does not run. Resolved before the gate,
+      // because the destination is an input to it — dropping onto Trash is a
+      // delete, and the classifier cannot see that from the thing being moved.
+      // `act` has no sheet, and `drag` is irreversible by default — so it is
+      // refused here before anything is resolved, with the reason said plainly
+      // rather than left to the generic gate message below.
+      if kind == .drag {
+        fail("drag is irreversible by default and `act` has no confirmation sheet — "
+          + "run it through `open-agent run`, where the sheet can be shown")
+      }
+      var destination: Element?
+      if Action.needsDestination(kind) {
+        guard let toID = options.to else {
+          fail("--kind \(kind.rawValue) requires --to, e.g. --to e9 — it moves something, "
+            + "and where it lands is the half that decides whether that was destructive")
+        }
+        guard let resolved = candidates.element(forID: toID) else {
+          fail("no candidate \(toID) for --to — `observe` first; ids last one observation")
+        }
+        destination = resolved
+      }
+
       let action = Action(
-        kind: kind, target: element.ref, payload: options.payload,
+        kind: kind, target: element.ref, destination: destination?.ref,
+        payload: options.payload,
         rationale: "single step from the CLI"
       )
 
       // The gate runs here exactly as it does inside the loop. `act` is a
       // debugging verb; it is NOT a way around the confirmation boundary.
-      let effective = Irreversibility.classify(action, target: element)
+      let effective = Irreversibility.classify(action, target: element, destination: destination)
       if Irreversibility.requiresConfirmation(effective, riskMax: 0) {
         fail(
           "\(action.summary) classifies as \(effective) and needs a human at the sheet — "

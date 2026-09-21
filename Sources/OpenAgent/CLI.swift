@@ -41,6 +41,12 @@ enum CLI {
     var url: String?
     var kind: String?
     var target: String?
+    /// `act --kind drag`: the candidate id to let go on.
+    ///
+    /// An id and not a name, because `act` runs against an observation the
+    /// host is already holding — unlike a plan step, which is written before
+    /// the screen exists and therefore names its destination.
+    var to: String?
     var eyes: String?
     /// Text for `act --kind type`. Separate from `--eyes`, which carries a
     /// vision mark index and means something entirely different.
@@ -127,6 +133,9 @@ enum CLI {
         index += 1
       case "--target":
         options.target = next()
+        index += 1
+      case "--to":
+        options.to = next()
         index += 1
       case "--eyes":
         options.eyes = next()

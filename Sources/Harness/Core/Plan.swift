@@ -43,11 +43,18 @@ public struct Plan: Codable, Sendable, Equatable {
 public struct PlanStep: Codable, Sendable, Equatable {
   public let kind: ActionKind
   public let target: String
+  /// Where a `drag` lets go, named the way `target` is. Required for `drag`
+  /// and meaningless for everything else.
+  ///
+  /// A name and not an id: the plan is written before the screen is observed,
+  /// so it cannot know what `e17` will turn out to be — the same reason
+  /// `target` is a name.
+  public let destination: String?
   public let payload: String?
-  /// The planner's own claim. One of five inputs to `Irreversibility.classify`,
+  /// The planner's own claim. One of six inputs to `Irreversibility.classify`,
   /// and it can only ever raise the result — so a host that declares too much
   /// costs an extra confirmation, and one that declares too little is caught by
-  /// the other four. See ADR 0001.
+  /// the other five. See ADR 0001.
   public let declaredIrreversible: Bool
 
   /// Whether a step of this kind names an on-screen element.
@@ -74,16 +81,18 @@ public struct PlanStep: Codable, Sendable, Equatable {
   }
 
   public init(
-    kind: ActionKind, target: String, payload: String?, declaredIrreversible: Bool = false
+    kind: ActionKind, target: String, destination: String? = nil, payload: String?,
+    declaredIrreversible: Bool = false
   ) {
     self.kind = kind
     self.target = target
+    self.destination = destination
     self.payload = payload
     self.declaredIrreversible = declaredIrreversible
   }
 
   private enum CodingKeys: String, CodingKey {
-    case kind, target, payload
+    case kind, target, destination, payload
     case declaredIrreversible = "declared_irreversible"
   }
 
@@ -91,6 +100,7 @@ public struct PlanStep: Codable, Sendable, Equatable {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     kind = try c.decode(ActionKind.self, forKey: .kind)
     target = try c.decode(String.self, forKey: .target)
+    destination = try c.decodeIfPresent(String.self, forKey: .destination)
     payload = try c.decodeIfPresent(String.self, forKey: .payload)
     // Absent means "not declared", which is the weaker claim. A host that
     // omits the field must not accidentally assert irreversibility.

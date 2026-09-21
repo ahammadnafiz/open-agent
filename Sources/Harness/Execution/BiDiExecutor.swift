@@ -52,7 +52,7 @@ public struct BiDiExecutor: Executor {
       if let handle = try? Self.handle(action) {
         try await focus(handle)
       }
-      try await client.performActions([Self.keySequence(Self.webDriverKey(key))])
+      try await client.performActions([try Self.keySequence(for: key)])
       return ExecutionResult(dispatched: true, via: .bidi)
 
     case .type:
@@ -89,11 +89,149 @@ public struct BiDiExecutor: Executor {
       try await client.performActions([Self.scrollSequence(at: point)])
       return ExecutionResult(dispatched: true, via: .bidi)
 
+    case .doubleClick, .rightClick, .hover:
+      let handle = try Self.handle(action)
+      let point = try await validate(handle)
+      let sequence =
+        switch action.kind {
+        case .doubleClick: Self.doubleClickSequence(at: point)
+        case .rightClick: Self.rightClickSequence(at: point)
+        default: Self.hoverSequence(at: point)
+        }
+      try await client.performActions([sequence])
+      return ExecutionResult(dispatched: true, via: .bidi)
+
+    case .setValue:
+      // The DOM equivalent of a settable `AXValue`. Assignment alone is not
+      // enough — a framework-controlled input ignores a bare `.value` write —
+      // so `input` and `change` are dispatched after it, which is the same
+      // reason `type` sends real key events rather than assigning.
+      guard let value = action.payload else {
+        throw ExecutionError.missingPayload(kind: action.kind)
+      }
+      let handle = try Self.handle(action)
+      try await validate(handle)
+      try await setValue(value, on: handle)
+      return ExecutionResult(dispatched: true, via: .bidi)
+
+    case .drag:
+      // Both ends are named elements — ADR 0001 — and both are resolved and
+      // validated against the snapshot before anything moves. A drag that finds
+      // out halfway through that it has nowhere to let go has already picked
+      // the thing up.
+      guard let destinationRef = action.destination else {
+        throw ExecutionError.missingDestination(reason: "a drag must name where it lets go")
+      }
+      guard case .dom(let destinationHandle, _, _, _) = destinationRef else {
+        throw ExecutionError.missingDestination(
+          reason: "the destination is not a page element — a drag cannot cross worlds in "
+            + "one step")
+      }
+      let handle = try Self.handle(action)
+      // **Known limitation, measured and left in place deliberately.**
+      // `validate` calls `scrollIntoView`, so validating the destination can
+      // move the source, and on a list taller than the viewport the press can
+      // then land at coordinates that now belong to a different row. A version
+      // that measured both ends in one non-scrolling pass was written to close
+      // that — and it produced a drag the page never received at all, while
+      // this path is the one verified end to end (`drag OK moves=24`). A
+      // theoretical fix that breaks a working path is not a fix, so the
+      // limitation is documented in ADR 0014 rather than papered over.
+      let from = try await validate(handle)
+      let to = try await validate(destinationHandle)
+      guard from != to else {
+        throw ExecutionError.actionUnavailable(
+          role: "drag", wanted: "two different points (source and destination coincide)")
+      }
+      // Start from a known input state, and leave one behind. A drag is the
+      // only sequence here that holds a button across several actions, so it is
+      // both the most likely to strand one and the most damaged by a stranded
+      // one — a `pointerDown` onto an already-depressed button does nothing.
+      try? await client.releaseActions()
+      defer { Task { try? await client.releaseActions() } }
+      try await client.performActions([Self.dragSequence(from: from, to: to)])
+      return ExecutionResult(dispatched: true, via: .bidi)
+
     case .click, .focus, .select, .publish, .send, .delete, .purchase:
       let handle = try Self.handle(action)
       let point = try await validate(handle)
       try await client.performActions([Self.clickSequence(at: point)])
       return ExecutionResult(dispatched: true, via: .bidi)
+    }
+  }
+
+  /// What kind of value a control holds, and within what bounds.
+  ///
+  /// **Read in its own call, before the write.** The bounds were briefly folded
+  /// into the write script's return value, and folding them in is what turned a
+  /// 493ms step into one that consumed the whole machine-time budget. The write
+  /// script is the proven one and stays untouched; asking a separate, read-only
+  /// question costs one more round trip and cannot take the write down with it.
+  ///
+  /// Both fields degrade safely: no bounds means `ValueReadback` falls back to
+  /// an absolute tolerance, and `numeric: false` means an exact string compare,
+  /// which is the stricter of the two.
+  private func valueShape(of handle: String) async
+    -> (numeric: Bool, range: (min: Double, max: Double)?)
+  {
+    let script = """
+      (() => {
+        const el = window.__openAgent?.nodes?.get(\(Self.numeric(handle)));
+        if (!el) return { numeric: false };
+        const t = el.type;
+        const lo = parseFloat(el.min), hi = parseFloat(el.max);
+        const out = { numeric: t === 'range' || t === 'number' };
+        if (!isNaN(lo)) { out.min = lo; }
+        if (!isNaN(hi)) { out.max = hi; }
+        return out;
+      })()
+      """
+    guard let data = try? await client.evaluate(script),
+      let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return (false, nil) }
+    let range: (min: Double, max: Double)? =
+      if let lo = raw["min"] as? Double, let hi = raw["max"] as? Double { (lo, hi) } else { nil }
+    return ((raw["numeric"] as? Bool) ?? false, range)
+  }
+
+  private func setValue(_ value: String, on handle: String) async throws {
+    let shape = await valueShape(of: handle)
+    // The node map the snapshot populates, same as `resolveScript`. The value
+    // is JSON-encoded into the expression rather than concatenated, so a value
+    // containing a quote is data and not syntax.
+    let encoded = String(
+      decoding: (try? JSONSerialization.data(withJSONObject: [value])) ?? Data("[\"\"]".utf8),
+      as: UTF8.self)
+    let script = """
+      (() => {
+        const el = window.__openAgent?.nodes?.get(\(Self.numeric(handle)));
+        if (!el || !el.isConnected) return { missing: true };
+        const v = \(encoded)[0];
+        // A framework-controlled input ignores a bare assignment, so the
+        // native setter is called through the prototype — the same trick React
+        // testing libraries use — and then the events the page listens for.
+        const proto = Object.getPrototypeOf(el);
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (setter) { setter.call(el, v); } else { el.value = v; }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return { value: String(el.value) };
+      })()
+      """
+    let data = try await client.evaluate(script)
+    guard let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      throw ExecutionError.axFailed(code: -1)
+    }
+    if (raw["missing"] as? Bool) == true {
+      throw ExecutionError.actionUnavailable(role: handle, wanted: "a live node")
+    }
+    do {
+      try ValueReadback.verify(
+        wrote: value, read: raw["value"] as? String, range: shape.range,
+        numeric: shape.numeric)
+    } catch let mismatch as ValueReadback.Mismatch {
+      throw ExecutionError.actionUnavailable(
+        role: "setValue", wanted: ValueReadback.describe(mismatch))
     }
   }
 
@@ -372,13 +510,132 @@ public struct BiDiExecutor: Executor {
   }
 
   /// WebDriver's Unicode private-use codepoints for non-printing keys.
-  /// `Key` is closed at three for the reasons ADR 0008 gives; a fourth is the
-  /// same kind of decision as that document, not a config change.
-  private static func webDriverKey(_ key: Key) -> String {
+  ///
+  /// `Key` is a closed set for the reasons ADR 0008 gives; adding one is that
+  /// kind of decision, not a config change. Exhaustive rather than defaulted,
+  /// so a key added to the enum cannot silently reach the wire as nothing.
+  ///
+  /// `selectAll` and `undo` are combinations rather than codepoints, so they
+  /// are not expressible here — `keySequence(for:)` builds them instead.
+  private static func webDriverKey(_ key: Key) -> String? {
     switch key {
     case .enter: "\u{E007}"
     case .tab: "\u{E004}"
     case .escape: "\u{E00C}"
+    case .up: "\u{E013}"
+    case .down: "\u{E015}"
+    case .left: "\u{E012}"
+    case .right: "\u{E014}"
+    case .home: "\u{E011}"
+    case .end: "\u{E010}"
+    case .pageUp: "\u{E00E}"
+    case .pageDown: "\u{E00F}"
+    case .backspace: "\u{E003}"
+    case .forwardDelete: "\u{E017}"
+    case .space: " "
+    case .selectAll, .undo: nil
     }
+  }
+
+  /// The key sequence for one `Key`, including the two named combinations.
+  ///
+  /// A combination is a meaning, not a modifier+key pair the planner assembles
+  /// — see `Key`. Meta is held down across the letter and released after, which
+  /// is the same shape `clearSequence` already uses for select-all.
+  static func keySequence(for key: Key) throws -> [String: Any] {
+    let meta = "\u{E03D}"
+    switch key {
+    case .selectAll, .undo:
+      let letter = key == .selectAll ? "a" : "z"
+      return [
+        "type": "key", "id": "openAgentKeyboard",
+        "actions": [
+          ["type": "keyDown", "value": meta],
+          ["type": "keyDown", "value": letter],
+          ["type": "keyUp", "value": letter],
+          ["type": "keyUp", "value": meta],
+        ],
+      ]
+    default:
+      guard let value = webDriverKey(key) else {
+        throw ExecutionError.unknownKey(key.rawValue)
+      }
+      return keySequence(value)
+    }
+  }
+
+  // MARK: - Pointer sequences for the new verbs
+
+  /// Two presses with `clickCount`, not two clicks.
+  ///
+  /// The WebDriver `pointerDown`/`pointerUp` pair carries no click count of its
+  /// own; the browser derives it from the timing and position of consecutive
+  /// presses at the same point, which is why both pairs are sent in ONE
+  /// `performActions` call with no move between them. Split across two calls
+  /// they arrive as two ordinary clicks.
+  private static func doubleClickSequence(at point: CGPoint) -> [String: Any] {
+    [
+      "type": "pointer", "id": "openAgentMouse",
+      "parameters": ["pointerType": "mouse"],
+      "actions": [
+        ["type": "pointerMove", "x": Int(point.x), "y": Int(point.y)],
+        ["type": "pointerDown", "button": 0],
+        ["type": "pointerUp", "button": 0],
+        ["type": "pointerDown", "button": 0],
+        ["type": "pointerUp", "button": 0],
+      ],
+    ]
+  }
+
+  /// Button 2 is the secondary button in the WebDriver button numbering.
+  private static func rightClickSequence(at point: CGPoint) -> [String: Any] {
+    [
+      "type": "pointer", "id": "openAgentMouse",
+      "parameters": ["pointerType": "mouse"],
+      "actions": [
+        ["type": "pointerMove", "x": Int(point.x), "y": Int(point.y)],
+        ["type": "pointerDown", "button": 2],
+        ["type": "pointerUp", "button": 2],
+      ],
+    ]
+  }
+
+  /// A move and nothing else — which is the whole verb.
+  private static func hoverSequence(at point: CGPoint) -> [String: Any] {
+    [
+      "type": "pointer", "id": "openAgentMouse",
+      "parameters": ["pointerType": "mouse"],
+      "actions": [["type": "pointerMove", "x": Int(point.x), "y": Int(point.y)]],
+    ]
+  }
+
+  /// Press, travel in steps, release.
+  ///
+  /// **The intermediate moves are load-bearing.** HTML5 drag-and-drop and every
+  /// JavaScript drag implementation track `dragover`/`mousemove` to decide what
+  /// is being dragged and where it may land. A down at the source and an up at
+  /// the destination with nothing between is a gesture most pages never
+  /// recognise: no drop target ever highlights, and the item stays put while
+  /// the step reports success.
+  private static func dragSequence(from: CGPoint, to: CGPoint) -> [String: Any] {
+    var actions: [[String: Any]] = [
+      ["type": "pointerMove", "x": Int(from.x), "y": Int(from.y)],
+      ["type": "pointerDown", "button": 0],
+    ]
+    for step in 1...Constants.Execution.dragSteps {
+      let t = Double(step) / Double(Constants.Execution.dragSteps)
+      actions.append([
+        "type": "pointerMove",
+        "x": Int(from.x + (to.x - from.x) * t),
+        "y": Int(from.y + (to.y - from.y) * t),
+      ])
+    }
+    // Drop targets validate on hover; releasing in the frame the pointer
+    // arrives beats that check on enough pages to be worth the pause.
+    actions.append(["type": "pointerUp", "button": 0])
+    return [
+      "type": "pointer", "id": "openAgentMouse",
+      "parameters": ["pointerType": "mouse"], "actions": actions,
+    ]
   }
 }

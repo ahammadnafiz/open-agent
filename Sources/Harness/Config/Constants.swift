@@ -246,7 +246,7 @@ public enum Constants {
     /// `ActionKind.isIrreversibleByDefault` — the enum is the source of truth;
     /// this exists so the list is visible in the file humans review.
     public static let irreversibleKinds: Set<String> = [
-      "publish", "send", "delete", "purchase",
+      "publish", "send", "delete", "purchase", "drag",
     ]
 
     /// Element labels that force irreversible classification regardless of
@@ -348,6 +348,42 @@ public enum Constants {
     /// log without anyone having approved it. About one default viewport,
     /// which is what "scroll down to see the rest" means to a person.
     public static let scrollDelta = 700
+
+    /// Intermediate moves in a drag, and the pacing between them.
+    ///
+    /// **A drag is not a teleport, and the moves are load-bearing.** HTML5
+    /// drag-and-drop and every JavaScript drag implementation track the moves
+    /// between press and release to decide what is being dragged and whether a
+    /// drop is allowed. A `pointerDown` at the source followed by a
+    /// `pointerUp` at the destination, with nothing in between, is a gesture
+    /// most pages and most native toolkits never recognise as a drag at all:
+    /// no drop target highlights, the item stays exactly where it was, and the
+    /// step reports success.
+    ///
+    /// Behaviour, not a hardware fact, which is why these live here and the
+    /// keycodes in `KeySynthesis` do not.
+    public static let dragSteps = 24
+    public static let dragStepMilliseconds = 8
+
+    /// Pause after pressing, and again before releasing.
+    ///
+    /// Drop targets validate on hover. Releasing in the same frame the pointer
+    /// arrives loses that race on enough applications to be worth the
+    /// milliseconds.
+    public static let dragHoldMilliseconds = 60
+
+    /// Gap between the two presses of a double click.
+    ///
+    /// Must stay below the system double-click interval (500ms by default, and
+    /// user-adjustable down to ~250ms in Trackpad settings) or the pair is read
+    /// as two separate clicks — which is not a slower double click, it is a
+    /// different gesture. 60ms leaves headroom at the fastest setting.
+    ///
+    /// **Its own value, deliberately not shared with `dragHoldMilliseconds`.**
+    /// The two were briefly the same number and the coupling was invisible:
+    /// raising the drop-target hover past the double-click interval would have
+    /// silently turned `doubleClick` into two clicks.
+    public static let doubleClickGapMilliseconds = 60
 
     /// How long to let the screen catch up after an action, before judging it.
     ///

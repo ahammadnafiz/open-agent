@@ -9,8 +9,33 @@ import Foundation
 public enum ActionKind: String, Codable, Sendable, CaseIterable {
   // Reversible
   case openApp, navigate, click, type, pressKey, scroll, focus, select, read, wait
+  // Reversible — pointer verbs that name one element, exactly as `click` does.
+  //
+  // Foley, Wallace & Chan (1984) decompose graphical interaction into select,
+  // position, orient, path, quantify and text entry. The original set covered
+  // *select* and *text entry*, and *quantify* only through the wheel. These
+  // four finish the discrete half: a double press, a secondary press, a
+  // pointer that arrives without pressing, and a value written straight to a
+  // control that owns one.
+  //
+  // `setValue` is the interesting one — it makes *quantify* expressible
+  // without a drag at all. A slider carries a settable `AXValue`, so "set zoom
+  // to 150%" names an element and a number rather than a pixel to drag to,
+  // which is the difference between an action that can be confirmed and one
+  // that cannot.
+  case doubleClick, rightClick, hover, setValue
   // Irreversible by default — always confirmed, never auto-executed
   case publish, send, delete, purchase
+  /// Position and path, the two Foley tasks a coordinate would have been
+  /// needed for — expressed as **two named elements** so ADR 0001 still holds.
+  ///
+  /// Irreversible by default, and alone among the pointer verbs in that. A
+  /// click that lands wrong selects the wrong thing and the screen says so; a
+  /// drag that lands wrong has already moved something, and where it came from
+  /// is not written anywhere the agent can read back. Dropping a file onto
+  /// Trash is a `delete` wearing a different verb, which is why the
+  /// *destination* is an input to `Irreversibility.classify` and not decoration.
+  case drag
 
   /// The planner-independent half of `Irreversibility.classify`.
   ///
@@ -19,23 +44,44 @@ public enum ActionKind: String, Codable, Sendable, CaseIterable {
   /// asserts the two never drift.
   public var isIrreversibleByDefault: Bool {
     switch self {
-    case .publish, .send, .delete, .purchase: true
+    case .publish, .send, .delete, .purchase, .drag: true
     default: false
     }
   }
 }
 
 /// Keys `pressKey` may send. Closed for the same reason `ActionKind` is —
-/// see ADR 0008. Arrow and editing keys are deliberately absent: an
-/// autocomplete suggestion is a clickable element tiers 1–2 already resolve.
+/// see ADR 0008.
 ///
 /// `enter` is the only key with an effect the denylist must reason about, and
 /// it is classified against the focused element's *implicit submission target*,
 /// not the field itself. A newline smuggled into `type`'s payload is not an
 /// acceptable substitute: the confirmation shows the payload verbatim and a
 /// trailing newline renders as nothing.
+///
+/// **Arrow and editing keys were originally excluded** on the grounds that "an
+/// autocomplete suggestion is a clickable element tiers 1–2 already resolve".
+/// That is true of autocomplete and false of everything where an arrow is the
+/// primary verb — a list the snapshot never collects, a canvas, a video
+/// scrubber, a native table. The reasoning held for the case it was written
+/// about and did not generalise, so the vocabulary is widened and the *gated*
+/// set is not: an arrow activates nothing, and gating it would teach people the
+/// confirmation sheet is noise.
+///
+/// **Clipboard keys are deliberately still absent.** `copy` and `paste` move
+/// content the confirmation cannot display, and an action whose payload is
+/// invisible breaks the one property every other action holds — that a human
+/// sees exactly what is about to happen. `type` already covers text entry and
+/// shows its payload verbatim.
 public enum Key: String, Codable, Sendable, CaseIterable {
   case enter, tab, escape
+  // Navigation
+  case up, down, left, right, home, end, pageUp, pageDown
+  // Editing
+  case backspace, forwardDelete, space
+  // Named combinations, not arbitrary modifier+key. A closed set of *meanings*
+  // stays reviewable; `cmd+shift+<anything>` does not.
+  case selectAll, undo
 }
 
 /// Where a `.captured` bounding box came from.
@@ -115,19 +161,41 @@ public enum ElementRef: Codable, Sendable, Hashable {
 /// One thing the agent does, resolved against a live screen.
 public struct Action: Codable, Sendable, Equatable {
   public let kind: ActionKind
-  /// `nil` only for `openApp`, `navigate` and `wait`.
+  /// `nil` only for `openApp`, `navigate` and `wait`. For `drag`, the thing
+  /// being moved.
   public let target: ElementRef?
-  /// Text to type, a url, an app name, or a `Key` raw value.
+  /// Where a `drag` lets go. `nil` for every other kind.
+  ///
+  /// **A second `ElementRef`, never a point.** This is the whole reason `drag`
+  /// can exist inside ADR 0001: a coordinate destination could not be shown in
+  /// a confirmation, matched by the denylist, or read back out of a log — and
+  /// "drag to (847,203)" is exactly the sentence the ADR was written to make
+  /// impossible. A drop target that nothing can name is not a drag this agent
+  /// performs.
+  public let destination: ElementRef?
+  /// Text to type, a url, an app name, a `Key` raw value, or the value
+  /// `setValue` writes.
   public let payload: String?
   /// One line, for the log and the confirmation.
   public let rationale: String
 
-  public init(kind: ActionKind, target: ElementRef?, payload: String?, rationale: String) {
+  public init(
+    kind: ActionKind, target: ElementRef?, destination: ElementRef? = nil,
+    payload: String?, rationale: String
+  ) {
     self.kind = kind
     self.target = target
+    self.destination = destination
     self.payload = payload
     self.rationale = rationale
   }
+
+  /// Kinds that name a second element. Only `drag` does.
+  ///
+  /// Required, not optional: an action that says "move this" without saying
+  /// where can neither be executed nor confirmed, and a half-named drag is the
+  /// shape a coordinate destination would sneak back in as.
+  public static func needsDestination(_ kind: ActionKind) -> Bool { kind == .drag }
 
   /// The `Key` this action sends, or `nil` if it is not a keystroke.
   ///
@@ -151,6 +219,19 @@ public struct Action: Codable, Sendable, Equatable {
 
   /// A one-line summary for `recent_history` and the step log.
   public var summary: String {
+    // A drag names both ends. A confirmation reading "drag report.pdf" with no
+    // destination is a confirmation of half the action — and the destination is
+    // the half that decides whether it was destructive.
+    if kind == .drag {
+      let from = target?.label ?? "?"
+      let to = destination?.label ?? "?"
+      return "drag \(from) → \(to)"
+    }
+    // `setValue` carries its value in the payload, and the value is the point:
+    // "setValue Zoom" says nothing a human can approve.
+    if kind == .setValue, let value = payload, !value.isEmpty {
+      return "setValue \(target?.label ?? "") = \(value)"
+    }
     let name = target?.label ?? payload ?? ""
     return name.isEmpty ? kind.rawValue : "\(kind.rawValue) \(name)"
   }

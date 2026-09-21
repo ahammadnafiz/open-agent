@@ -6,6 +6,14 @@ Date: 2026-09-20
 
 Accepted. Extends the closed set in [ADR 0001](./0001-irreversibility-is-upgrade-only.md).
 
+**Key vocabulary widened 2026-09-21** by
+[ADR 0014](./0014-the-action-set-is-foleys-discrete-half.md). The three-key set
+below was closed on the reasoning that "an autocomplete suggestion is a clickable
+element tiers 1–2 already resolve" — true of autocomplete, and false of anything
+where an arrow is the primary verb. `Key` now carries sixteen cases. Everything
+else in this document stands, including the part that matters most: `enter`
+remains the only key routed through the submit denylist.
+
 ## Context
 
 `ActionKind` is closed on purpose: `openApp, navigate, click, type, scroll,

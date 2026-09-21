@@ -38,7 +38,7 @@ open-agent run "<task>" --plan plan.json [--url <site>] [--keep-browser]
 open-agent resume <session> --eyes <n> | --eyes none
 open-agent resume <session> --plan plan.json
 open-agent observe [--app <name> | --browser [--url <site>]]
-open-agent act --session <s> --kind <kind> --target <id>
+open-agent act --session <s> --kind <kind> --target <id> [--to <id>]
 open-agent overlay [--loop] [--speed <n>] [--at x,y …]
 open-agent release
 ```
@@ -216,9 +216,57 @@ from the live screen through Jev, which is the whole reason a stale plan is
 survivable.
 
 `declaredIrreversible` is set only for steps that publish, send, delete or
-purchase. It is one of five inputs to `classify` and it can only ever raise the
+purchase. It is one of six inputs to `classify` and it can only ever raise the
 result, so a host that declares too much costs an extra confirmation and a host
-that declares too little is caught by the other four.
+that declares too little is caught by the other five.
+
+### 3.3 The verbs
+
+Nineteen kinds. Fourteen were the original set; five close the gap between what
+the agent could express and what a person actually does at a computer — see
+ADR 0014.
+
+| kind | names | reversible |
+|---|---|---|
+| `openApp`, `navigate`, `wait` | nothing on screen | yes |
+| `scroll` | nothing — a wheel names a point | yes |
+| `click`, `focus`, `select`, `read`, `type`, `pressKey` | one element | yes |
+| `doubleClick`, `rightClick`, `hover` | one element | yes |
+| `setValue` | one element + a value in `payload` | yes |
+| `drag` | **two** elements — `target` and `destination` | **no** |
+| `publish`, `send`, `delete`, `purchase` | one element | **no** |
+
+`setValue` writes straight to a control that owns a value — a slider, a stepper,
+a range input. Prefer it over dragging a slider: it names a number rather than a
+pixel, so the confirmation can describe it.
+
+**`drag` is the only kind with two endpoints, and both must be named.**
+
+```jsonc
+{ "kind": "drag", "target": "the report row", "destination": "the Archive folder" }
+```
+
+The destination is matched by **exact name** against the live element list, not
+selected through Jev: a drop target the screen cannot name unambiguously is not
+one the agent will guess at, because a drag that lands wrong has already moved
+something and nothing records where it came from. A `drag` with no
+`destination`, or one nothing matches, comes back `needs_plan` rather than
+being aimed at a guess.
+
+Where a drag lets go is the **sixth input to `classify`**. The thing being
+dragged is innocent — a file, a row, a card — and what makes the action
+destructive is where it lands, so dropping onto anything the denylist matches
+(`Trash`, `Delete`) classifies irreversible however harmless the source was.
+
+There is no verb for a drag to a bare coordinate, and there will not be. ADR
+0001: an identity is never a coordinate, because "drag to (847,203)" cannot be
+shown in a confirmation, matched by the denylist, or read back out of a log.
+
+`pressKey` accepts: `enter`, `tab`, `escape`, `up`, `down`, `left`, `right`,
+`home`, `end`, `pageUp`, `pageDown`, `backspace`, `forwardDelete`, `space`,
+`selectAll`, `undo`. `enter` remains the only one routed through the submit
+denylist. Clipboard keys are deliberately absent — they move content the
+confirmation cannot display.
 
 ---
 

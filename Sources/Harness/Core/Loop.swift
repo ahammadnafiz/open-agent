@@ -378,16 +378,49 @@ public actor AgentLoop {
         )
       }
 
+      // **A drag resolves both ends before it moves anything.** The
+      // destination is matched by exact name rather than sent through
+      // selection: the plan wrote it before the screen existed, and a drop
+      // target the screen cannot name unambiguously is not one this agent
+      // should guess at — a drag that lands in the wrong place has already
+      // moved something, and nothing records where it came from.
+      //
+      // Same reasoning as `uniqueMatch(named:)` above: a question with one
+      // answer is not a question worth a model call.
+      var destinationElement: Element?
+      if Action.needsDestination(planStep.kind) {
+        guard let named = planStep.destination, !named.isEmpty else {
+          return result(
+            .needsPlan, since: started,
+            reason: "a \(planStep.kind.rawValue) step needs a `destination` naming where to "
+              + "let go — it moves something, and where it lands is the half that matters",
+            candidates: candidates.criteria
+          )
+        }
+        guard let resolved = candidates.uniqueMatch(named: named) else {
+          return result(
+            .needsPlan, since: started,
+            reason: "nothing on screen is named exactly \(named), so there is no drop target — "
+              + "a drag will not be aimed at a guess",
+            candidates: candidates.criteria
+          )
+        }
+        destinationElement = resolved
+        Log.info("drag destination resolves to \(resolved.label)")
+      }
+
       let action = Action(
         kind: planStep.kind,
         target: element.ref,
+        destination: destinationElement?.ref,
         payload: planStep.payload,
         rationale: planStep.target
       )
 
       // ── GATE ── deterministic, no model result reaches it ─────────
       let effective = Irreversibility.classify(
-        action, target: element, declaredByPlanner: planStep.declaredIrreversible
+        action, target: element, destination: destinationElement,
+        declaredByPlanner: planStep.declaredIrreversible
       )
       var confirmed = false
       // The classification still happens and is still logged; only the stop is
@@ -400,6 +433,9 @@ public actor AgentLoop {
           ConfirmationRequest(
             actionKind: action.kind,
             targetLabel: element.label.isEmpty ? (element.visionLabel ?? "") : element.label,
+            destinationLabel: destinationElement.map {
+              $0.label.isEmpty ? ($0.visionLabel ?? "") : $0.label
+            },
             payload: action.payload,
             rationale: action.rationale,
             becauseIrreversible: effective == .irreversible,

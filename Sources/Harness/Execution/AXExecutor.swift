@@ -2,11 +2,16 @@ import ApplicationServices
 import CoreGraphics
 import Foundation
 
-/// Tier 2 execution. Dispatches to an element; moves no pointer.
+/// Tier 2 execution. Dispatches to an element.
 ///
-/// That last part matters for the overlay: tiers 1–2 move no system cursor at
-/// all, so the drawn cursor is the only thing on screen and there is no second
-/// arrow to explain — unlike `CapturedExecutor`, which posts a real event.
+/// **Mostly without moving a pointer.** `click`, `type`, `focus` and the gated
+/// kinds go through `AXPress` and move no system cursor at all, which is what
+/// lets the overlay draw the only arrow on screen. `doubleClick`, `rightClick`,
+/// `hover` and `drag` cannot: the accessibility API has no second press, no
+/// secondary press, no hover and no drag, so those four post real HID events —
+/// and therefore carry the same preconditions `CapturedExecutor` does, because
+/// a synthesized event lands on whatever is topmost at that point rather than
+/// on the element it was aimed at. SPEC.md § Boundaries.
 public struct AXExecutor: Executor {
   private let source: AXSource
 
@@ -121,12 +126,170 @@ public struct AXExecutor: Executor {
         role: "native", wanted: "scroll (no AX action scrolls; a press is not a substitute)"
       )
 
+    case .setValue:
+      // **Foley's *quantify* without a drag.** A slider, stepper or progress
+      // control carries a settable `AXValue`, so the value is written rather
+      // than dragged to — which is the difference between an action a
+      // confirmation can describe ("Zoom = 150") and one it cannot ("drag to
+      // (847,203)").
+      guard let value = action.payload else {
+        throw ExecutionError.missingPayload(kind: action.kind)
+      }
+      let element = try resolveRequired(action)
+      try Self.write(value: value, to: element)
+      return ExecutionResult(dispatched: true, via: .ax)
+
+    case .doubleClick, .rightClick, .hover:
+      // No AX action exists for any of these — `AXPress` is a single primary
+      // press and nothing else. They are synthesized at the HID layer against
+      // the element's own frame, which is `.captured`-style actuation reached
+      // from a named element, so the identity in the log is still the label.
+      let element = try resolveRequired(action)
+      let centre = try Self.pointerTarget(element, pid: source.pid, label: action.target?.label)
+      // **A hover must not take focus.** `settleFocus` raises the app *and*
+      // focuses the element, and focusing is a side effect nobody asked for
+      // from a verb whose whole meaning is "arrive without pressing" — it moves
+      // the caret out of whatever the user or an earlier step was typing into.
+      // Being frontmost is still required, or the event goes elsewhere.
+      let settled =
+        action.kind == .hover
+        ? Self.settleFrontmost(pid: source.pid)
+        : Self.settleFocus(element, pid: source.pid)
+      guard settled else { throw ExecutionError.focusNotAccepted }
+      switch action.kind {
+      case .doubleClick: try PointerSynthesis.doubleClick(at: centre)
+      case .rightClick: try PointerSynthesis.rightClick(at: centre)
+      default: try PointerSynthesis.move(to: centre)
+      }
+      return ExecutionResult(dispatched: true, via: .ax)
+
+    case .drag:
+      // Both ends are named elements — ADR 0001 — and both are resolved before
+      // anything moves. A drag that discovers halfway through that it has
+      // nowhere to let go has already picked the thing up.
+      let element = try resolveRequired(action)
+      guard let destinationRef = action.destination else {
+        throw ExecutionError.missingDestination(reason: "a drag must name where it lets go")
+      }
+      guard case .ax(let destinationPath, _, _) = destinationRef else {
+        throw ExecutionError.missingDestination(
+          reason: "the destination is not a native element — a drag cannot cross worlds in "
+            + "one step")
+      }
+      guard let destination = source.resolve(path: destinationPath) else {
+        throw ExecutionError.missingDestination(
+          reason: "the destination no longer resolves — observe again")
+      }
+      let from = try Self.pointerTarget(element, pid: source.pid, label: action.target?.label)
+      let to = try Self.pointerTarget(
+        destination, pid: source.pid, label: destinationRef.label)
+      // **A drag onto itself is a click wearing a drag's gate.** Zero-length
+      // travel presses and releases on the same element, which is exactly what
+      // `click` does — except it arrived through the irreversible-by-default
+      // path, so the audit log records a move that never happened.
+      guard from != to else {
+        throw ExecutionError.actionUnavailable(
+          role: "drag", wanted: "two different points (source and destination coincide)")
+      }
+      guard Self.settleFocus(element, pid: source.pid) else {
+        throw ExecutionError.focusNotAccepted
+      }
+      try PointerSynthesis.drag(from: from, to: to)
+      return ExecutionResult(dispatched: true, via: .ax)
+
     case .click, .select,
       .publish, .send, .delete, .purchase:
       let element = try resolveRequired(action)
       try perform(preferredActions: Self.pressLike, on: element)
       return ExecutionResult(dispatched: true, via: .ax)
     }
+  }
+
+  /// Writes a value and reads it back.
+  ///
+  /// **A refused write is the failure mode that matters here.** `AXUIElement`
+  /// returns `.success` for a set that the control then clamps, rounds or
+  /// ignores outright — a slider with a 0–100 range asked for 150 reports
+  /// success and sits at 100. Reporting `dispatched: true` on that is the same
+  /// class of lie `type` already learned not to tell, so the value is read back
+  /// and a control that disagrees fails the step.
+  ///
+  /// A control that reports no value at all is not evidence of failure, and is
+  /// left alone — the same rule `type` uses.
+  static func write(value: String, to element: AXUIElement) throws {
+    // **What the control already holds decides how to write, not whether the
+    // string happens to parse as a number.** Coercing on `Double(value)` turned
+    // `"007"` into 7 and `"0123"` into 123 in a text field, and the read-back
+    // then compared numerically and agreed with itself — a wrong value reported
+    // as a right one.
+    let numeric = Self.holdsNumber(element)
+    let wrote: AXError =
+      if numeric, let number = Double(value) {
+        AXUIElementSetAttributeValue(
+          element, kAXValueAttribute as CFString, number as CFTypeRef)
+      } else {
+        AXUIElementSetAttributeValue(
+          element, kAXValueAttribute as CFString, value as CFTypeRef)
+      }
+    guard wrote == .success else {
+      throw ExecutionError.axFailed(code: Int(wrote.rawValue))
+    }
+
+    do {
+      try ValueReadback.verify(
+        wrote: value, read: Self.numericOrStringValue(of: element),
+        range: Self.range(of: element), numeric: numeric)
+    } catch let mismatch as ValueReadback.Mismatch {
+      throw ExecutionError.actionUnavailable(
+        role: "setValue", wanted: ValueReadback.describe(mismatch))
+    }
+  }
+
+  /// Whether this control stores a number rather than text.
+  static func holdsNumber(_ element: AXUIElement) -> Bool {
+    AXPrimitives.copyValue(element, kAXValueAttribute as String) is NSNumber
+  }
+
+  /// The control's own bounds, when it publishes them. A slider that reports
+  /// 0…1 and one that reports 0…100 need very different tolerances, and only
+  /// the control can say which it is.
+  static func range(of element: AXUIElement) -> (min: Double, max: Double)? {
+    guard
+      let low = AXPrimitives.copyValue(element, kAXMinValueAttribute as String) as? NSNumber,
+      let high = AXPrimitives.copyValue(element, kAXMaxValueAttribute as String) as? NSNumber
+    else { return nil }
+    return (low.doubleValue, high.doubleValue)
+  }
+
+  /// A control's value as a string, whether it stores a number or text.
+  static func numericOrStringValue(of element: AXUIElement) -> String? {
+    guard let raw = AXPrimitives.copyValue(element, kAXValueAttribute as String) else {
+      return nil
+    }
+    if let text = raw as? String { return text }
+    if let number = raw as? NSNumber { return "\(number.doubleValue)" }
+    return nil
+  }
+
+  /// The point a synthesized event should be aimed at, once every precondition
+  /// for aiming one has been met.
+  ///
+  /// **SPEC.md § Boundaries, *Never*: "Synthesize a click without first raising
+  /// the target window and verifying it is on screen. The click lands on
+  /// whatever is topmost at that point."** `CapturedExecutor` has enforced this
+  /// since ADR 0007 and tier 2 never needed it, because tier 2 never posted a
+  /// pointer event. Four verbs now do, so the same check belongs here — an app
+  /// that is frontmost by `kAXFrontmost` can still have no window on this
+  /// Space, and the event then lands in whatever application does.
+  static func pointerTarget(_ element: AXUIElement, pid: pid_t, label: String?) throws -> CGPoint {
+    guard WindowGuard.hasVisibleWindow(pid: pid) else {
+      throw ExecutionError.windowNotVisible
+    }
+    guard let frame = AXPrimitives.frame(element), frame.width > 0, frame.height > 0 else {
+      throw ExecutionError.actionUnavailable(
+        role: "native", wanted: "a frame for \(label ?? "the target")")
+    }
+    return CGPoint(x: frame.midX, y: frame.midY)
   }
 
   /// Waits until an application has a window this process can actually see.
@@ -318,7 +481,31 @@ enum KeySynthesis {
     .enter: 36,  // kVK_Return
     .tab: 48,  // kVK_Tab
     .escape: 53,  // kVK_Escape
+    .up: 126, .down: 125, .left: 123, .right: 124,
+    .home: 115, .end: 119, .pageUp: 116, .pageDown: 121,
+    .backspace: 51,  // kVK_Delete — the key marked "delete" on an Apple keyboard
+    .forwardDelete: 117,  // kVK_ForwardDelete
+    .space: 49,
+    .selectAll: 0,  // kVK_ANSI_A, with command — see `modifiers`
+    .undo: 6,  // kVK_ANSI_Z, with command
   ]
+
+  /// Modifiers a named combination carries. Empty for a plain key.
+  ///
+  /// The vocabulary is a closed set of **meanings**, not of modifier+key
+  /// pairs: `selectAll` is reviewable in a way `cmd+shift+<anything>` is not,
+  /// and it keeps the enum something a human can read down and reason about.
+  private static let modifiers: [Key: CGEventFlags] = [
+    .selectAll: .maskCommand,
+    .undo: .maskCommand,
+  ]
+
+  /// Whether this key can actually be sent.
+  ///
+  /// Exists so a test can assert the enum and this table never drift. A key
+  /// that parses in a plan and has no keycode fails at the executor instead —
+  /// mid-run, on someone's screen, which is the worst place to discover it.
+  static func canSynthesize(_ key: Key) -> Bool { virtualKeys[key] != nil }
 
   static func press(_ key: Key) throws {
     guard let code = virtualKeys[key] else {
@@ -327,11 +514,16 @@ enum KeySynthesis {
     guard let source = CGEventSource(stateID: .hidSystemState) else {
       throw ExecutionError.graphicsFailed(stage: "CGEventSource")
     }
-    CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true)?
-      .post(tap: .cghidEventTap)
+    let flags = modifiers[key] ?? []
+    let down = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true)
+    let up = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false)
+    if !flags.isEmpty {
+      down?.flags = flags
+      up?.flags = flags
+    }
+    down?.post(tap: .cghidEventTap)
     usleep(Constants.Typing.keyHoldMicroseconds)
-    CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false)?
-      .post(tap: .cghidEventTap)
+    up?.post(tap: .cghidEventTap)
   }
 
   /// Types text as real key events.
@@ -361,5 +553,149 @@ enum KeySynthesis {
       up.post(tap: .cghidEventTap)
       usleep(Constants.Typing.keystrokeIntervalMicroseconds)
     }
+  }
+}
+
+/// CGEvent pointer synthesis.
+///
+/// **The accessibility API has no pointer.** `AXPress` is a single primary
+/// press and there is no AX equivalent of a second click, a secondary click, a
+/// hover or a drag — which is exactly why those four verbs did not exist. They
+/// are synthesized at the HID layer instead, always against a frame read from a
+/// named element, so the identity that reaches the log and the confirmation is
+/// still the label and never the point.
+///
+/// Sibling of `KeySynthesis`. **Its timings are NOT here**, unlike that enum's
+/// keycodes: an ANSI keycode decides nothing, while how long a drag hovers over
+/// a drop target before releasing decides whether the drop is accepted. That is
+/// behaviour, so it lives in `Constants.swift` where a human reviews it.
+enum PointerSynthesis {
+
+  /// Gap between the two presses of a double click.
+  ///
+  /// Below the system double-click interval or the pair is read as two separate
+  /// clicks — which is not a slower double click, it is a different gesture.
+  /// Gap between the two presses of a double click.
+  ///
+  /// **Its own constant, not the drag hold.** These were briefly the same
+  /// number, which coupled two unrelated things: raising the drop-target hover
+  /// past the system double-click interval would have silently turned
+  /// `doubleClick` into two ordinary clicks, and nothing would have said so.
+  private static var doubleClickGapMicroseconds: UInt32 {
+    UInt32(Constants.Execution.doubleClickGapMilliseconds) * 1_000
+  }
+
+  /// Pause after pressing and again before releasing, so a drop target that
+  /// validates on hover has a frame to do it in.
+  private static var dropHoverMicroseconds: UInt32 {
+    UInt32(Constants.Execution.dragHoldMilliseconds) * 1_000
+  }
+
+  /// Steps a drag is broken into.
+  ///
+  /// **A drag is not a teleport.** Applications track `mouseDragged` to decide
+  /// what is being dragged and where it may land; a down at the source followed
+  /// by an up at the destination, with nothing between, is a gesture most
+  /// toolkits never recognise as a drag at all — the drop target never
+  /// highlights, and the item is left where it started.
+  private static var dragSteps: Int { Constants.Execution.dragSteps }
+  private static var dragStepMicroseconds: UInt32 {
+    UInt32(Constants.Execution.dragStepMilliseconds) * 1_000
+  }
+
+  private static func event(_ type: CGEventType, _ point: CGPoint, _ button: CGMouseButton)
+    -> CGEvent?
+  {
+    CGEvent(
+      mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: button)
+  }
+
+  private static func post(_ type: CGEventType, _ point: CGPoint, _ button: CGMouseButton = .left)
+    throws
+  {
+    guard let e = event(type, point, button) else {
+      throw ExecutionError.graphicsFailed(stage: "CGEvent \(type.rawValue)")
+    }
+    e.post(tap: .cghidEventTap)
+  }
+
+  static func move(to point: CGPoint) throws {
+    try post(.mouseMoved, point)
+  }
+
+  /// **Every press in this file is paired with a release that survives a
+  /// throw.** `post` fails when the window server refuses an event, and a
+  /// failure between down and up leaves the physical button held down system
+  /// wide: from the user's point of view every subsequent mouse movement is a
+  /// drag, and only a real click gets them out of it. The agent breaking the
+  /// machine's pointer is a worse outcome than any step failing.
+  static func rightClick(at point: CGPoint) throws {
+    try post(.mouseMoved, point)
+    usleep(Constants.Typing.keyHoldMicroseconds)
+    try post(.rightMouseDown, point, .right)
+    var released = false
+    defer { if !released { try? post(.rightMouseUp, point, .right) } }
+    usleep(Constants.Typing.keyHoldMicroseconds)
+    try post(.rightMouseUp, point, .right)
+    released = true
+  }
+
+  /// Two presses, with `clickState` set.
+  ///
+  /// **The gap alone does not make a double click.** macOS reads the second
+  /// press as part of the same gesture only when the event carries
+  /// `clickState == 2`; without it a well-behaved application sees two ordinary
+  /// clicks however fast they arrive, and a file gets selected twice instead of
+  /// opened.
+  static func doubleClick(at point: CGPoint) throws {
+    try post(.mouseMoved, point)
+    usleep(Constants.Typing.keyHoldMicroseconds)
+
+    try post(.leftMouseDown, point)
+    var released = false
+    defer { if !released { try? post(.leftMouseUp, point) } }
+    usleep(Constants.Typing.keyHoldMicroseconds)
+    try post(.leftMouseUp, point)
+    released = true
+    usleep(doubleClickGapMicroseconds)
+
+    guard let down = event(.leftMouseDown, point, .left),
+      let up = event(.leftMouseUp, point, .left)
+    else { throw ExecutionError.graphicsFailed(stage: "CGEvent double click") }
+    down.setIntegerValueField(.mouseEventClickState, value: 2)
+    up.setIntegerValueField(.mouseEventClickState, value: 2)
+    down.post(tap: .cghidEventTap)
+    released = false
+    usleep(Constants.Typing.keyHoldMicroseconds)
+    up.post(tap: .cghidEventTap)
+    released = true
+  }
+
+  /// Press at `from`, travel, release at `to`.
+  static func drag(from: CGPoint, to: CGPoint) throws {
+    try post(.mouseMoved, from)
+    usleep(Constants.Typing.keyHoldMicroseconds)
+    try post(.leftMouseDown, from)
+    // The button is down from here. A throw anywhere in the travel below must
+    // still put it back up — see `rightClick`.
+    var released = false
+    defer { if !released { try? post(.leftMouseUp, to) } }
+    usleep(dropHoverMicroseconds)
+
+    for step in 1...dragSteps {
+      let t = Double(step) / Double(dragSteps)
+      let point = CGPoint(
+        x: from.x + (to.x - from.x) * t,
+        y: from.y + (to.y - from.y) * t)
+      try post(.leftMouseDragged, point)
+      usleep(dragStepMicroseconds)
+    }
+
+    // A pause on the target before letting go. Drop targets validate on hover,
+    // and releasing in the same frame the pointer arrives beats that check on
+    // enough applications to be worth the milliseconds.
+    usleep(dropHoverMicroseconds)
+    try post(.leftMouseUp, to)
+    released = true
   }
 }

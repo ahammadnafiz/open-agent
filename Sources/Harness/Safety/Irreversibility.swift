@@ -25,10 +25,11 @@ public enum Reversibility: Int, Comparable, Sendable, Codable, CaseIterable {
 ///   bySource ──┤   the label the source gave this element
 ///   byVision ──┼── max() ──► effective        upgrade-only, ADR 0001
 ///   bySubmit ──┤   what Enter would activate
-///   unnamed  ──┘   a captured target nothing could name
+///   unnamed  ──┤   a captured target nothing could name
+///   byDrop   ──┘   where a drag lets go
 /// ```
 ///
-/// The five inputs are independent; **all** of them must fail silently and
+/// The six inputs are independent; **all** of them must fail silently and
 /// simultaneously for an unconfirmed irreversible action to occur.
 ///
 /// Two of them accept model-derived and page-derived strings, and that is safe
@@ -43,12 +44,14 @@ public enum Irreversibility {
   ///   - action: carries `kind` (the planner-independent half) and, for
   ///     `pressKey`, which key.
   ///   - target: the resolved element, or `nil` for `openApp`/`navigate`/`wait`.
-  ///   - declaredByPlanner: the host's own claim from `PlanStep`. One of five
+  ///   - destination: where a `drag` lets go. `nil` for every other kind.
+  ///   - declaredByPlanner: the host's own claim from `PlanStep`. One of six
   ///     inputs and never the only one, so a host that declares too little is
-  ///     caught by the other four.
+  ///     caught by the other five.
   public static func classify(
     _ action: Action,
     target: Element?,
+    destination: Element? = nil,
     declaredByPlanner: Bool = false
   ) -> Reversibility {
 
@@ -91,7 +94,24 @@ public enum Irreversibility {
       Constants.Safety.confirmUnnamedCaptured && (target?.isCapturedWithNoLabel ?? false)
     )
 
-    return max(declared, max(bySource, max(byVision, max(bySubmit, unnamed))))
+    // 6. Where a drag lets go.
+    //
+    // **The thing being dragged is innocent; the destination is what makes the
+    // action destructive.** A file, a card, a row — none of them match the
+    // denylist, and before this input the classifier could not see the drop
+    // target at all. Dragging `report.pdf` onto `Trash` is a delete that no
+    // other input would have caught, because every one of them looks at the
+    // element being moved.
+    //
+    // Applied to every kind, not only `drag`. The moment a second verb carries
+    // a destination this is already correct, and an input that is only wired
+    // for one case is an input that silently is not wired for the next.
+    let byDrop = Reversibility.from(
+      LabelDenylist.matches(destination?.label) || LabelDenylist.matchesRole(destination?.role)
+    )
+
+    return max(
+      declared, max(bySource, max(byVision, max(bySubmit, max(unnamed, byDrop)))))
   }
 
   /// Whether this action needs a human at the sheet before it runs.

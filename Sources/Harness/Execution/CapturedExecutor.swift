@@ -64,6 +64,26 @@ public struct CapturedExecutor: Executor {
       )
     }
 
+    // **Same reasoning, for the verbs a point cannot express.** "Switches on
+    // nothing" is safe exactly while every kind means the same gesture, and
+    // stops being safe the moment one does not:
+    //
+    //   * `drag` carries a second element. One bbox cannot say where to let go,
+    //     so the destination is silently dropped and an irreversible-by-default
+    //     verb executes as an ordinary click — the audit log records a move
+    //     that never happened.
+    //   * `setValue` carries a value. There is nothing at a point to write it
+    //     to, so the payload is dropped and the control is pressed instead.
+    //
+    // Refused rather than approximated, exactly as `scroll` is, so a tier 1–2
+    // failure cannot escalate down the ladder into a different action.
+    guard action.kind != .drag, action.kind != .setValue else {
+      throw ExecutionError.actionUnavailable(
+        role: "captured",
+        wanted: "\(action.kind.rawValue) (this tier has one point and no second element "
+          + "or value to act with)")
+    }
+
     // Since ADR 0007, Screen Recording gates EXECUTION at these tiers, not
     // just observation — the bounds being acted on came from pixels.
     guard CGPreflightScreenCaptureAccess() else {
@@ -86,6 +106,23 @@ public struct CapturedExecutor: Executor {
     guard let source = CGEventSource(stateID: .hidSystemState) else {
       throw ExecutionError.graphicsFailed(stage: "CGEventSource")
     }
+    // `hover`, `doubleClick` and `rightClick` ARE expressible at a point, and
+    // are dispatched as themselves rather than flattened into a press — a
+    // hover that clicks is the same class of mistake as a scroll that clicks.
+    switch action.kind {
+    case .hover:
+      try PointerSynthesis.move(to: point)
+      return ExecutionResult(dispatched: true, via: .captured, frameHash: hash)
+    case .doubleClick:
+      try PointerSynthesis.doubleClick(at: point)
+      return ExecutionResult(dispatched: true, via: .captured, frameHash: hash)
+    case .rightClick:
+      try PointerSynthesis.rightClick(at: point)
+      return ExecutionResult(dispatched: true, via: .captured, frameHash: hash)
+    default:
+      break
+    }
+
     // Move first, then press. A press without a preceding move lands with
     // the pointer wherever the user last left it in some applications.
     CGEvent(

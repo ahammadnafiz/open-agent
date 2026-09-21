@@ -48,6 +48,27 @@ that exits still holding it warns you to call `release` — do that when the bat
 is done, or the user is left with a browser that walls them out of their own
 sites.
 
+**Nineteen action kinds.** Besides `click`/`type`/`scroll`/`pressKey`, you have
+`doubleClick`, `rightClick`, `hover`, `setValue` and `drag` — ADR 0014.
+
+- `setValue` writes to a slider, stepper or range input: `{"kind":"setValue",
+  "target":"the volume slider","payload":"73"}`. Prefer it over dragging a
+  slider; it names a number rather than a pixel.
+- `drag` is the only kind with two ends, and **both must be named**:
+  `{"kind":"drag","target":"the report row","destination":"the Archive folder"}`.
+  The destination is matched by exact name, so a drop target the screen cannot
+  name unambiguously comes back `needs_plan` rather than being guessed at.
+  `drag` is irreversible by default, and where it lets go is an input to the
+  safety gate — dropping onto Trash classifies as a delete.
+- `pressKey` now takes arrows, `home`/`end`, `pageUp`/`pageDown`, `backspace`,
+  `forwardDelete`, `space`, `selectAll` and `undo` as well as
+  `enter`/`tab`/`escape`. There are no clipboard keys: they move content the
+  confirmation cannot show you.
+
+There is no verb for dragging to a coordinate. If a task needs one — a timeline
+scrubber, freehand drawing on a canvas — say so and stop; it is out of scope by
+design, not a gap to work around.
+
 ## Step 1 — Ask before you plan
 
 The task will often name something only the user knows. "My supervisor", "the

@@ -935,6 +935,19 @@ public actor BiDiClient {
   /// `input.performActions`, not a synthetic `value` assignment: assigning
   /// `value` does not fire the listeners modern web applications depend on, so
   /// the field updates on screen and the application never learns about it.
+  /// Resets this context's input state: every button and key the session has
+  /// left logically depressed comes back up.
+  ///
+  /// **The wire equivalent of the `defer` that guarantees a released button in
+  /// `PointerSynthesis`.** WebDriver keeps input-source state per session, so a
+  /// sequence that fails between a `pointerDown` and its `pointerUp` leaves the
+  /// button down for every later call — and a `pointerDown` onto an
+  /// already-depressed button is a no-op. Failures compound silently instead of
+  /// being confined to the step that caused them.
+  public func releaseActions() async throws {
+    try await send("input.releaseActions", ["context": try context()])
+  }
+
   public func performActions(_ actions: [[String: Any]]) async throws {
     try await send(
       "input.performActions",

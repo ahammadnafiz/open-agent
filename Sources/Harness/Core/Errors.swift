@@ -63,6 +63,15 @@ public enum ExecutionError: Error, Equatable, Sendable {
   case focusNotAccepted
   /// An action arrived with no target where one is required.
   case missingTarget(kind: ActionKind)
+  /// A `drag` arrived with no destination, or with one this executor cannot
+  /// reach.
+  ///
+  /// Separate from `missingTarget` because the two are fixed differently and a
+  /// shared error hid the harder one: a `.ax` source with a `.dom` destination
+  /// is a drag *across worlds* — the case `ExecutorRegistry` explicitly
+  /// contemplates, "open Finder, drag a file into a page" — and reporting it as
+  /// a missing target sends a host looking for a target it already supplied.
+  case missingDestination(reason: String)
   /// An action arrived with no payload where one is required.
   case missingPayload(kind: ActionKind)
   /// `pressKey` carried something that is not a `Key`.
