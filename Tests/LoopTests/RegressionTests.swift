@@ -947,3 +947,64 @@ struct NavigationSkipsReadinessTests {
       "a page that never reports itself ready should still be waited for")
   }
 }
+
+/// **A clock on the page is not a page that is still loading.**
+@Suite("Stillness is about what can be acted on, not what it says")
+struct TickingLabelRegressionTests {
+
+  /// Settle compared `describe()`, which renders every candidate's label. On a
+  /// live page some label is always moving — a relative timestamp, a view
+  /// count, an unread badge, a video's remaining time — so the comparison
+  /// could never repeat and the page was never still.
+  ///
+  /// Measured on x.com's home timeline: 57 candidates, 56 byte-identical poll
+  /// after poll, and one video counting `0:15, 0:14, 0:13` once a second.
+  /// `growing=false`, `+1 -1`, `kept=56/57`, every poll, until the step hit the
+  /// full ten-second ceiling. Nothing was loading.
+  @Test("a page whose only change is a ticking label settles")
+  func aTickingLabelStillSettles() async {
+    let judge = ScriptedJudge([Make.verdict(), Make.verdict()])
+    let started = ContinuousClock.now
+
+    // A navigation, because that is where the ceiling is long enough for the
+    // difference to show. An ordinary action caps at `actionSettleTimeout`,
+    // which is short enough that a step stuck at its ceiling and a step that
+    // settled correctly take about the same time — a threshold there passes
+    // whether or not the bug is present, which is no test at all.
+    _ = await Make.loop(
+      plan: Make.plan([.navigate]),
+      judge: judge,
+      settleTimeout: .seconds(6),
+      source: TickingSource()
+    ).run()
+
+    #expect(
+      started.duration(to: ContinuousClock.now) < .seconds(2.5),
+      "one label counting down held the step at its settle ceiling")
+  }
+
+  /// The other half, and the reason this is not simply a weaker check: an
+  /// element appearing or disappearing is exactly the signal settling exists
+  /// to wait for. A shell that has not filled in yet has *fewer elements*, not
+  /// different words, so it must still reset stillness.
+  @Test("an element arriving still resets stillness")
+  func anArrivingElementResets() {
+    let shell = CandidateSet(elements: [
+      Make.domElement(handle: "e0", label: "Home"),
+      Make.domElement(handle: "e1", label: "Search"),
+    ])
+    let ticked = CandidateSet(elements: [
+      Make.domElement(handle: "e0", label: "Home"),
+      Make.domElement(handle: "e1", label: "Search — 3 new"),
+    ])
+    let arrived = CandidateSet(elements: [
+      Make.domElement(handle: "e0", label: "Home"),
+      Make.domElement(handle: "e1", label: "Search"),
+      Make.domElement(handle: "e2", label: "the message from Dr Rahman"),
+    ])
+
+    #expect(shell.shape() == ticked.shape(), "a label changing is not the page arriving")
+    #expect(shell.shape() != arrived.shape(), "a new element is the page arriving")
+    #expect(shell.describe() != ticked.describe(), "and the content did change")
+  }
+}

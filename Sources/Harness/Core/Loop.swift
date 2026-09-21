@@ -594,6 +594,10 @@ public actor AgentLoop {
       by: arriving
         ? settleTimeout : min(settleTimeout, Constants.Execution.actionSettleTimeout))
     let quietDeadline = started.advanced(by: Constants.Execution.noChangeTimeout)
+    /// The **shape** of the previous poll — what could be acted on, not what
+    /// it said. See `CandidateSet.shape()`: a label that ticks is not a page
+    /// still arriving, and comparing text meant a timeline with a video on it
+    /// could never be still.
     var previous: String?
     /// The node count from the previous poll, kept apart from the element
     /// fingerprint so the two can be judged on their own terms.
@@ -621,12 +625,18 @@ public actor AgentLoop {
       // page that had not finished arriving and escalated with "no candidates
       // to choose from", on a page that had twelve of them a moment later.
       guard let elements = try? await source.observe(),
-        let described = try? CandidateFilter.reduce(elements).describe()
+        let reduced = try? CandidateFilter.reduce(elements)
       else {
         guard ContinuousClock.now < deadline else { break }
         try? await Task.sleep(for: Constants.Execution.settlePollInterval)
         continue
       }
+      // Two different questions, asked of two different renderings. Whether
+      // the screen has *changed since the action* is about content, so it
+      // reads the labels. Whether it has *stopped changing* is about the set
+      // of available actions, so it does not.
+      let described = reduced.describe()
+      let shape = reduced.shape()
       // The element list *and* how finished the page claims to be. A shell with
       // a navigation rail on it is stable at twelve elements while the content
       // the step needs is still being built — see `ElementSource.readiness()`.
@@ -679,7 +689,7 @@ public actor AgentLoop {
         growing = Double(nodes) > Double(previousNodes) * Constants.Execution.settleGrowthFactor
       }
 
-      if !described.isEmpty, described == previous, !growing {
+      if !reduced.isEmpty, shape == previous, !growing {
         let since = stillSince ?? ContinuousClock.now
         stillSince = since
         Log.debug(
@@ -692,7 +702,7 @@ public actor AgentLoop {
             + "changed=\(changed) growing=\(growing)")
         stillSince = nil
       }
-      previous = described
+      previous = shape
       previousNodes = nodes
       guard ContinuousClock.now < deadline else { break }
       try? await Task.sleep(for: Constants.Execution.settlePollInterval)

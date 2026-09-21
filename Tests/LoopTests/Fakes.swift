@@ -140,6 +140,18 @@ enum Make {
     )
   }
 
+  /// A web element. `handle` is the identity the snapshot's WeakMap hands out,
+  /// which is what survives the element's own text changing.
+  static func domElement(
+    handle: String, label: String = "Compose", role: String = "button"
+  ) -> Element {
+    Element(
+      ref: .dom(handle: handle, selector: "\(role)[\(label)]", label: label, submitLabel: ""),
+      role: role, label: label, enabled: true, inViewport: true,
+      bounds: CGRect(x: 0, y: 0, width: 40, height: 20)
+    )
+  }
+
   /// A verdict with everything inert. Each test overrides only the field it
   /// is about, so a routing assertion cannot pass for an unrelated reason.
   static func verdict(
@@ -290,4 +302,29 @@ actor InertExecutor: Executor, ExecutorProviding {
   func execute(_ action: Action) async throws -> ExecutionResult {
     ExecutionResult(dispatched: false, via: .bidi)
   }
+}
+
+/// A page with a clock on it.
+///
+/// Every element keeps its identity and its role; one label counts down, once
+/// per observation, forever. This is x.com's timeline with a video in it.
+actor TickingSource: ElementSource {
+  nonisolated let kind: SourceKind = .bidi
+  nonisolated var reportsReadiness: Bool { true }
+  private var tick = 30
+  private let others: Int
+
+  init(others: Int = 5) { self.others = others }
+
+  func observe() async throws -> [Element] {
+    tick -= 1
+    var elements = (0..<others).map {
+      Make.domElement(handle: "e\($0)", label: "row \($0)")
+    }
+    elements.append(
+      Make.domElement(handle: "e99", label: "a video, 0:\(tick) remaining"))
+    return elements
+  }
+
+  func readiness() async -> String { "3000" }
 }

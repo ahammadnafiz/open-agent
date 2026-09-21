@@ -133,4 +133,46 @@ public struct CandidateSet: Sendable, Equatable {
       .map { "<\($0.role)> \($0.label)\($0.enabled ? "" : " (disabled)")" }
       .joined(separator: "\n")
   }
+
+  /// What can be acted on, without what it currently says.
+  ///
+  /// **A screen that is still is not the same as a screen whose every
+  /// character is unchanged.** `describe()` renders labels, and on a live page
+  /// some label is always moving: a video's remaining time, a relative
+  /// timestamp, a view count, an unread badge. Comparing that text to decide
+  /// whether a page has finished arriving means a page with a clock on it
+  /// never has.
+  ///
+  /// Measured on x.com's timeline — 57 candidates, 56 of them byte-identical
+  /// poll after poll, and one video's duration counting `0:15, 0:14, 0:13`
+  /// once a second. Stillness could never accumulate and the step ran to the
+  /// full ten-second ceiling. Nothing was loading.
+  ///
+  /// This is the same lesson `SnapshotScript.guardFunction` already learned:
+  /// the executor's staleness guard dropped text for exactly this reason,
+  /// because an Instagram conversation row rewrites its own preview every few
+  /// seconds without moving. The element id says it is the same node; the
+  /// label only says what the node currently reads.
+  ///
+  /// So identity, role and whether it is enabled — the things that decide
+  /// whether the set of available actions has changed. A new or vanished
+  /// element still resets stillness, which is what protects the case settling
+  /// exists for: a shell that has not filled in yet has fewer elements, not
+  /// different words.
+  ///
+  /// Only the DOM has an identity stable across observations. `ax` paths are
+  /// stable only within one snapshot — `ElementRef.ax` says so — so native
+  /// targets keep the old text comparison.
+  public func shape() -> String {
+    elements
+      .map { element in
+        switch element.ref {
+        case .dom(let handle, _, _, _):
+          "\(handle)|\(element.role)|\(element.enabled ? 1 : 0)"
+        case .ax, .captured:
+          "<\(element.role)> \(element.label)\(element.enabled ? "" : " (disabled)")"
+        }
+      }
+      .joined(separator: "\n")
+  }
 }
