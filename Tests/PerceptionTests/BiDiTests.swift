@@ -66,12 +66,13 @@ struct SnapshotTests {
   static func rawAction(
     id: String = "e1", role: String = "button", label: String = "Post",
     kind: String = "click", disabled: Bool = false, occluded: Bool = false,
-    submit: String = ""
+    submit: String = "", value: String = ""
   ) -> [String: Any] {
     [
       "id": id, "role": role, "label": label, "kind": kind,
       "disabled": disabled, "occluded": occluded, "submit": submit,
-      "x": 10.0, "y": 20.0, "w": 80.0, "h": 30.0, "value": "", "checked": "", "expanded": "",
+      "x": 10.0, "y": 20.0, "w": 80.0, "h": 30.0, "value": value, "checked": "",
+      "expanded": "",
     ]
   }
 
@@ -102,6 +103,35 @@ struct SnapshotTests {
       ]
     ]
     #expect(BiDiSnapshot(raw).actions.count == 1)
+  }
+
+  /// **The page reported these and the Swift side threw them away.** Both
+  /// `value` and `focused` were parsed off every snapshot and never reached an
+  /// `Element`, so a filled field described itself exactly like an empty one
+  /// and a click that moved only the caret was invisible to the judge.
+  ///
+  /// Asserted on the mapping rather than on the snapshot, because decoding the
+  /// field was never the part that was broken — carrying it was.
+  @Test("a field's contents and the caret reach the element")
+  func carriesValueAndFocus() throws {
+    let field = try #require(
+      SnapshotAction(Self.rawAction(id: "e41", role: "textbox", label: "Message", value: "hi")))
+    let other = try #require(SnapshotAction(Self.rawAction(id: "e7", label: "Send")))
+
+    let typed = BiDiSource.element(field, focusedID: "e41", screenOrigin: .zero)
+    #expect(typed.value == "hi", "the field's contents never left the snapshot")
+    #expect(typed.focused, "the page said where the caret was and nothing carried it")
+    // Identity is unchanged by what was typed — the half that is easy to break
+    // while fixing the other half.
+    #expect(typed.label == "Message")
+
+    let elsewhere = BiDiSource.element(other, focusedID: "e41", screenOrigin: .zero)
+    #expect(!elsewhere.focused, "every element claimed the caret")
+
+    // A page with the caret on nothing it collected reports an empty id, and
+    // no element's handle is empty — so nothing may match it.
+    let nothingFocused = BiDiSource.element(other, focusedID: "", screenOrigin: .zero)
+    #expect(!nothingFocused.focused)
   }
 
   /// An occluded control is in the viewport and cannot be clicked — a modal or

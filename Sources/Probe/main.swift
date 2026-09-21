@@ -564,8 +564,11 @@ enum Probe {
       print("labelled+actionable  \(elements.count)")
       print("survived the filter  \(candidates.count)")
       print("")
+      // Exactly the line the judge is handed, annotations and all. Printing
+      // the bare label is what let a focused field and a filled one look
+      // identical to the one tool whose job is to show what this tier sees.
       for (index, element) in candidates.elements.prefix(40).enumerated() {
-        print("  \(pad("e\(index)", 5))\(pad(element.role, 20))\(element.label)")
+        print("  \(pad("e\(index)", 5))\(element.described)")
       }
       if candidates.count > 40 { print("  … \(candidates.count - 40) more") }
     } catch {

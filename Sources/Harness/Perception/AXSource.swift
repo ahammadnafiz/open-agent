@@ -89,10 +89,17 @@ public struct AXSource: ElementSource {
 
     guard let window = resolveWindow(app: app) else { return nil }
 
+    // Read once for the whole walk, then compared node by node. The other way
+    // round — `focused(among:)` — re-resolves every candidate's path from the
+    // window root to find the one, which is fine for the single lookup
+    // `pressKey` does and far too much to pay on every observation.
+    let focus = AXPrimitives.element(app, kAXFocusedUIElementAttribute as String)
+
     var elements: [Element] = []
     var visited = 0
     let deadline = ContinuousClock.now + Constants.AX.walkDeadline
-    walk(window, path: [], into: &elements, visited: &visited, deadline: deadline)
+    walk(
+      window, path: [], focus: focus, into: &elements, visited: &visited, deadline: deadline)
 
     // An empty result is a failed attempt, not a valid observation — that is
     // exactly the case the retry loop exists for.
@@ -128,6 +135,7 @@ public struct AXSource: ElementSource {
   private func walk(
     _ element: AXUIElement,
     path: [Int],
+    focus: AXUIElement?,
     into out: inout [Element],
     visited: inout Int,
     deadline: ContinuousClock.Instant
@@ -150,6 +158,15 @@ public struct AXSource: ElementSource {
           role: role,
           label: label,
           enabled: enabled,
+          // What it holds, kept apart from what it is called — `Element.value`
+          // has the measurement. The label precedence stops at the placeholder,
+          // so without this a field that had just been typed into described
+          // itself exactly as it had before.
+          value: AXPrimitives.value(element),
+          // What the keyboard is pointing at. A click into a text field moves
+          // nothing else on the screen, and this is the one thing about it that
+          // becomes true.
+          focused: focus.map { CFEqual($0, element) } ?? false,
           // AX only reports elements the window actually lays out, and
           // the window itself was proven on screen above. A zero frame
           // is the one case that is genuinely not rendered.
@@ -160,7 +177,9 @@ public struct AXSource: ElementSource {
     }
 
     for (index, child) in AXPrimitives.children(element).enumerated() {
-      walk(child, path: path + [index], into: &out, visited: &visited, deadline: deadline)
+      walk(
+        child, path: path + [index], focus: focus, into: &out, visited: &visited,
+        deadline: deadline)
     }
   }
 

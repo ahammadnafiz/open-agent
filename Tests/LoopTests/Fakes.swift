@@ -70,6 +70,10 @@ actor ScriptedJudge: StepJudge {
   private var script: [StepVerdict]
   private(set) var callCount = 0
   private(set) var lastContext: StepContext?
+  /// Every context, in order. `lastContext` cannot answer a question about the
+  /// step *before* the final one, and `verifyLastStep` makes a call of its own
+  /// — so the interesting judgement is rarely the last.
+  private(set) var contexts: [StepContext] = []
   /// How long each answer takes. A real Jev call is ~600 ms, and whether that
   /// is paid inside a wait or after it is the thing some tests are about.
   private let latency: Duration
@@ -85,6 +89,7 @@ actor ScriptedJudge: StepJudge {
   func step(_ context: StepContext, budgetRemaining: Duration) async throws -> StepVerdict {
     callCount += 1
     lastContext = context
+    contexts.append(context)
     startedAt.append(born.duration(to: ContinuousClock.now))
     if latency > .zero { try? await Task.sleep(for: latency) }
     if script.count > 1 { return script.removeFirst() }
@@ -142,11 +147,13 @@ actor RecordingHUD: HUDBridge {
 
 enum Make {
   static func element(
-    label: String = "Compose", role: String = "AXButton", path: [Int] = [0]
+    label: String = "Compose", role: String = "AXButton", path: [Int] = [0],
+    value: String = "", focused: Bool = false
   ) -> Element {
     Element(
       ref: .ax(path: path, role: role, label: label),
-      role: role, label: label, enabled: true, inViewport: true,
+      role: role, label: label, enabled: true, value: value, focused: focused,
+      inViewport: true,
       bounds: CGRect(x: 0, y: 0, width: 40, height: 20)
     )
   }
@@ -215,6 +222,7 @@ enum Make {
     budget: Budget = Budget(),
     settleTimeout: Duration = .zero,
     source: (any ElementSource)? = nil,
+    capture: (any ScreenCapturing)? = nil,
     // Defaults to ON so that every test written about the gate keeps testing
     // the gate. `Constants.Safety.askBeforeIrreversible` is what ships, and
     // exactly one test asserts that value — see "the sheet is off by default".
@@ -225,6 +233,7 @@ enum Make {
       sessionID: "s_test", pid: 0,
       source: source ?? FakeSource(elements: elements, focusedLabel: focusedLabel),
       jev: judge, executors: executor, hud: hud,
+      capture: capture,
       budget: budget,
       asksBeforeIrreversible: asksBeforeIrreversible,
       // The fake screen never changes, so a real settle would be paid in full
@@ -366,4 +375,24 @@ actor ShiftingSource: ElementSource {
   }
 
   func readiness() async -> String { "1000" }
+}
+
+/// A screen that answers differently once the action has landed.
+///
+/// Unlike `ChangingSource` this is driven by the executor rather than by a
+/// count of observations, so a test about *what the action did* does not also
+/// depend on how many times the loop reads the page before acting.
+actor ActedSource: ElementSource {
+  nonisolated let kind: SourceKind = .ax
+  private let before: [Element]
+  private let after: [Element]
+  private var acted = false
+
+  init(before: [Element], after: [Element]) {
+    self.before = before
+    self.after = after
+  }
+
+  func landed() { acted = true }
+  func observe() async throws -> [Element] { acted ? after : before }
 }

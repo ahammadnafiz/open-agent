@@ -128,10 +128,11 @@ public struct CandidateSet: Sendable, Equatable {
   }
 
   /// A compact rendering for the Jev `state`. Filtered, never raw.
+  ///
+  /// Per-element format lives on `Element.described`, so this and
+  /// `ElementSource.describe(_:)` cannot drift apart.
   public func describe() -> String {
-    elements
-      .map { "<\($0.role)> \($0.label)\($0.enabled ? "" : " (disabled)")" }
-      .joined(separator: "\n")
+    elements.map(\.described).joined(separator: "\n")
   }
 
   /// What can be acted on, without what it currently says.
@@ -163,6 +164,11 @@ public struct CandidateSet: Sendable, Equatable {
   /// Only the DOM has an identity stable across observations. `ax` paths are
   /// stable only within one snapshot — `ElementRef.ax` says so — so native
   /// targets keep the old text comparison.
+  ///
+  /// **Deliberately not `Element.described`,** which this otherwise resembles.
+  /// `described` carries focus and field contents because the judge needs to
+  /// see them; neither changes what can be acted on, and a caret arriving or a
+  /// character landing must not read as a page still building itself.
   public func shape() -> String {
     elements
       .map { element in

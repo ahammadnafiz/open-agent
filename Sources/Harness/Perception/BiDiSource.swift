@@ -125,31 +125,50 @@ public actor BiDiSource: ElementSource {
         + "viewport \(Int(snapshot.viewport.width))x\(Int(snapshot.viewport.height)) "
         + snapshot.funnel)
 
-    return snapshot.actions.map { action in
-      Element(
-        ref: .dom(
-          handle: action.id,
-          selector: "\(action.role)[\(action.label)]",
-          label: action.label,
-          submitLabel: action.submit
-        ),
-        role: action.role,
-        label: action.label,
-        enabled: !action.disabled,
-        // An occluded control is in the viewport and cannot be clicked: a modal
-        // or a cookie banner is over it. Reported as out-of-viewport so the
-        // deterministic filter drops it, rather than offering a candidate that
-        // would silently click the overlay instead.
-        inViewport: !action.occluded,
-        // Offset into screen space, so `bounds` means the same thing here as it
-        // does for the accessibility tier — which is what the overlay converts
-        // from. The executor is untouched: it recomputes its click point from
-        // the element's own rect at act time, in the page coordinates
-        // `input.performActions` expects.
-        bounds: action.bounds.offsetBy(
-          dx: snapshot.screenOrigin.x, dy: snapshot.screenOrigin.y)
-      )
+    return snapshot.actions.map {
+      Self.element(
+        $0, focusedID: snapshot.focusedID, screenOrigin: snapshot.screenOrigin)
     }
+  }
+
+  /// One action, as the loop sees it.
+  ///
+  /// **Separated from `observe()` so it can be asserted without a browser.**
+  /// The page reported `value` and `focused` from the beginning and the Swift
+  /// side dropped both on the floor — the same shape of defect as `readiness()`
+  /// dispatching statically to `""`, and this codebase has now written it
+  /// twice. A snapshot field that nothing can prove reaches an `Element` is a
+  /// snapshot field waiting to go quiet again.
+  static func element(
+    _ action: SnapshotAction, focusedID: String, screenOrigin: CGPoint
+  ) -> Element {
+    Element(
+      ref: .dom(
+        handle: action.id,
+        selector: "\(action.role)[\(action.label)]",
+        label: action.label,
+        submitLabel: action.submit
+      ),
+      role: action.role,
+      label: action.label,
+      enabled: !action.disabled,
+      // What the field holds, which is what makes a filled one distinguishable
+      // from an empty one, and where the keyboard is, which is what makes a
+      // click into that field visible at all. See `Element.value`.
+      value: action.value,
+      focused: !focusedID.isEmpty && action.id == focusedID,
+      // An occluded control is in the viewport and cannot be clicked: a modal
+      // or a cookie banner is over it. Reported as out-of-viewport so the
+      // deterministic filter drops it, rather than offering a candidate that
+      // would silently click the overlay instead.
+      inViewport: !action.occluded,
+      // Offset into screen space, so `bounds` means the same thing here as it
+      // does for the accessibility tier — which is what the overlay converts
+      // from. The executor is untouched: it recomputes its click point from
+      // the element's own rect at act time, in the page coordinates
+      // `input.performActions` expects.
+      bounds: action.bounds.offsetBy(dx: screenOrigin.x, dy: screenOrigin.y)
+    )
   }
 
   public nonisolated var reportsReadiness: Bool { true }

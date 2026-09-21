@@ -24,6 +24,36 @@ public struct Element: Sendable, Hashable, Codable {
   /// `aria-label ∨ innerText ∨ value ∨ placeholder ∨ title`, already trimmed.
   public let label: String
   public let enabled: Bool
+  /// What the control currently *contains*, when that is not what it is
+  /// *called*. Empty for everything that holds nothing.
+  ///
+  /// **Kept apart from `label` because they answer different questions.**
+  /// `label` is identity — which control this is — and `AXPrimitives.label`
+  /// deliberately prefers a placeholder over a value so that a field does not
+  /// become a different element the moment someone types in it. That is the
+  /// right rule for choosing a target and the wrong one for judging whether
+  /// typing worked: the text went in, the label still read `Message`, and
+  /// `screen_before` and `screen_now` were byte-identical across a step that
+  /// had fully succeeded. Measured live on Finder's search field — after
+  /// typing, `AXValue` reads `Bangla QR report` while the label precedence
+  /// never reaches it.
+  ///
+  /// So identity stays in `label`, where selection reads it, and content lands
+  /// here, where `described` renders it for verification.
+  public let value: String
+  /// Whether this element holds the keyboard.
+  ///
+  /// **A click into a text field changes nothing else.** No label moves, no
+  /// control appears or disappears, and the only thing that is now true which
+  /// was not true before is that keystrokes will land here. Without this the
+  /// two screens compare equal, `progressed` came back 0.22–0.24 on a click
+  /// that had worked perfectly, and the loop retried it — then scored
+  /// `looping` 0.91 against its own retry. A plain click-then-type plan could
+  /// not get past its first step.
+  ///
+  /// Both tiers already knew the answer: the DOM snapshot reports `focused`
+  /// and `AXSource` can read `AXFocusedUIElement`. Neither reached the state.
+  public let focused: Bool
   public let inViewport: Bool
   /// Read by `CandidateFilter`, by vision when rendering marks, and by the
   /// overlay when drawing the target ring. **It never reaches an `Action`, a
@@ -42,6 +72,8 @@ public struct Element: Sendable, Hashable, Codable {
     role: String,
     label: String,
     enabled: Bool,
+    value: String = "",
+    focused: Bool = false,
     inViewport: Bool,
     bounds: CGRect,
     visionLabel: String? = nil
@@ -50,6 +82,8 @@ public struct Element: Sendable, Hashable, Codable {
     self.role = role
     self.label = label
     self.enabled = enabled
+    self.value = value
+    self.focused = focused
     self.inViewport = inViewport
     self.bounds = bounds
     self.visionLabel = visionLabel
@@ -58,8 +92,51 @@ public struct Element: Sendable, Hashable, Codable {
   /// What `Enter` would activate if this element were focused. DOM only.
   public var submitLabel: String? { ref.submitLabel }
 
+  /// **Tolerant of fixtures recorded before a field existed.**
+  ///
+  /// `Probe capture-fixtures` commits real captures from live pages, and S7
+  /// asserts against them. Those files are evidence, not test scaffolding —
+  /// re-recording them to add a key would throw away the provenance that makes
+  /// them worth having. A capture taken before `value` and `focused` existed
+  /// has no opinion about either, and empty-and-unfocused is exactly that.
+  ///
+  /// Only `init(from:)` is hand-written; `encode(to:)` stays synthesised, so
+  /// anything written from here on carries both keys.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    ref = try container.decode(ElementRef.self, forKey: .ref)
+    role = try container.decode(String.self, forKey: .role)
+    label = try container.decode(String.self, forKey: .label)
+    enabled = try container.decode(Bool.self, forKey: .enabled)
+    value = try container.decodeIfPresent(String.self, forKey: .value) ?? ""
+    focused = try container.decodeIfPresent(Bool.self, forKey: .focused) ?? false
+    inViewport = try container.decode(Bool.self, forKey: .inViewport)
+    bounds = try container.decode(CGRect.self, forKey: .bounds)
+    visionLabel = try container.decodeIfPresent(String.self, forKey: .visionLabel)
+  }
+
   /// A captured target nothing could name — `Constants.Safety.confirmUnnamedCaptured`.
   public var isCapturedWithNoLabel: Bool { ref.isCapturedWithNoLabel }
+
+  /// This element as one line of a Jev `state`.
+  ///
+  /// **The single rendering.** It was written out twice — once here on
+  /// `ElementSource` and once on `CandidateSet` — and only the second was ever
+  /// called. Two copies of the format that decides what the judge can see is
+  /// how one of them silently stops carrying a field.
+  ///
+  /// The value is suppressed when it merely repeats the label, which is the
+  /// common case for a file row or a DOM input whose accessible name *is* its
+  /// contents. Rendering `<AXRow> report.pdf = "report.pdf"` spends tokens to
+  /// say nothing, and Jev's documented failure mode is accuracy falling as the
+  /// state grows with irrelevant content.
+  public var described: String {
+    var line = "<\(role)> \(label)"
+    if focused { line += " (focused)" }
+    if !enabled { line += " (disabled)" }
+    if !value.isEmpty, value != label { line += " = \"\(value)\"" }
+    return line
+  }
 }
 
 /// Everything actionable a source can see, plus the rendering the Jev `state` gets.
@@ -120,8 +197,6 @@ extension ElementSource {
   /// failure mode is that accuracy falls as `state` grows with irrelevant
   /// content. Filter before describing; never send a raw tree.
   public func describe(_ elements: [Element]) -> String {
-    elements
-      .map { "<\($0.role)> \($0.label)\($0.enabled ? "" : " (disabled)")" }
-      .joined(separator: "\n")
+    elements.map(\.described).joined(separator: "\n")
   }
 }

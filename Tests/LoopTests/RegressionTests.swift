@@ -1085,3 +1085,109 @@ struct SettleOverlapTests {
       "the answer made before the element arrived was acted on anyway")
   }
 }
+
+/// Three defects, one root cause: **progress was judged from a description of
+/// the screen that left out what had actually changed.**
+///
+/// A click into a text field moves only focus. Typing changes only a value
+/// whose label deliberately does not track it. Both were invisible in
+/// `screen_now`, so the judge compared two identical screens and concluded
+/// nothing had happened — on steps that had worked perfectly. The third is the
+/// same failure one layer out: the escalation that exists *because* text was
+/// not enough lost its pixels and did not say so.
+@Suite("The judge is shown what changed")
+struct StateVisibilityTests {
+
+  // MARK: - A screen the judge cannot tell apart
+
+  /// **Clicking a text field changes nothing a11y-visible except focus.** No
+  /// label moves, no control appears, nothing is enabled or disabled. So
+  /// `screen_before` and `screen_now` came back byte-identical, `progressed`
+  /// scored 0.22–0.24 on a click that had worked perfectly, and the loop
+  /// retried it — then scored `looping` 0.91 against its own retry. A plain
+  /// click-then-type plan could not get past its first step in such an app.
+  ///
+  /// The source knew all along: `AXSource` can read `AXFocusedUIElement` and
+  /// the DOM snapshot already reports `focused`. Neither reached the state.
+  ///
+  /// Asserted on what the judge was *given*, not on what it answered — the
+  /// judge here is scripted, and a test that checked its score would only be
+  /// checking the script.
+  @Test("a click that only moves focus is visible to the judge")
+  func focusOnlyClickIsVisible() async {
+    let idle = [
+      Make.element(label: "Message", role: "AXTextField", path: [0]),
+      Make.element(label: "Send", role: "AXButton", path: [1]),
+    ]
+    let clicked = [
+      Make.element(label: "Message", role: "AXTextField", path: [0], focused: true),
+      Make.element(label: "Send", role: "AXButton", path: [1]),
+    ]
+    let source = ActedSource(before: idle, after: clicked)
+    let executor = RecordingExecutor { await source.landed() }
+    let judge = ScriptedJudge([Make.verdict()])
+
+    _ = await Make.loop(
+      plan: Make.plan([.click, .type]),
+      judge: judge,
+      executor: executor,
+      source: source
+    ).run()
+
+    let contexts = await judge.contexts
+    let typeStep = try? #require(contexts.dropFirst().first)
+    #expect(
+      typeStep?.screenBefore != typeStep?.screenNow,
+      "the click landed and the judge was handed two identical screens")
+    #expect(
+      typeStep?.screenNow.contains("(focused)") == true,
+      "nothing in the state says where the keyboard is now pointing")
+  }
+
+  // MARK: - Typed text the judge cannot read
+
+  /// **The text went in and the state never said so.** `AXPrimitives.label`
+  /// prefers a placeholder over a value, deliberately, so that a field does not
+  /// become a different element the moment someone types into it. That is the
+  /// right rule for choosing a target and the wrong one for judging whether
+  /// typing worked: the screenshot showed the text in the field, the candidate
+  /// still reported the placeholder, and the loop scored `looping` 0.72 on a
+  /// step that had fully succeeded.
+  ///
+  /// Measured live on Finder's search field: after typing, `AXValue` reads
+  /// `Bangla QR report` while the label precedence never reaches it. The text
+  /// was in the tree the whole time — nothing was reading it.
+  @Test("typed text reaches the judge without changing the target's identity")
+  func typedTextIsVisible() async {
+    let typed = "Bangla QR report ML pipeline run"
+    let empty = [Make.element(label: "Message", role: "AXTextField", path: [0], focused: true)]
+    let filled = [
+      Make.element(
+        label: "Message", role: "AXTextField", path: [0], value: typed, focused: true)
+    ]
+    let source = ActedSource(before: empty, after: filled)
+    let executor = RecordingExecutor { await source.landed() }
+    let judge = ScriptedJudge([Make.verdict()])
+
+    _ = await Make.loop(
+      plan: Make.plan([.type, .pressKey]),
+      judge: judge,
+      executor: executor,
+      source: source
+    ).run()
+
+    let contexts = await judge.contexts
+    let afterTyping = try? #require(contexts.dropFirst().first)
+    #expect(
+      afterTyping?.screenNow.contains(typed) == true,
+      "the text landed in the field and the judge was never shown it")
+    // The other half of the fix, and the half that is easy to break while
+    // making the first half work. Selection reads `candidates`, and a field
+    // that renames itself to its own contents is the defect the placeholder
+    // precedence exists to prevent — `pressKey` after `type` then has nothing
+    // called `Message` to aim at.
+    #expect(
+      afterTyping?.candidates.values.contains("Message") == true,
+      "the field lost its identity to the text typed into it")
+  }
+}

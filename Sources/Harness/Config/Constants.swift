@@ -621,6 +621,14 @@ public enum Constants {
     public static let windowRetries = 8
     public static let windowRetryDelay: Duration = .milliseconds(400)
 
+    /// Characters of a control's `AXValue` kept for the Jev `state`.
+    ///
+    /// A text area's value is its entire contents, so uncapped this would let
+    /// one focused editor become the whole state. 120 matches the slice the
+    /// DOM snapshot already applies in `SnapshotScript`, so both tiers spend
+    /// the same on the same thing.
+    public static let valueLength = 120
+
     /// Electron's `AXManualAccessibility` unlock is debounced at a hard-coded
     /// 2 s in `electron_application.mm`, and every toggle restarts it.
     public static let electronUnlockDelay: Duration = .seconds(3)

@@ -57,7 +57,7 @@ because a batched question is free in wall-clock and near-free in money.
   "plan_step": { "kind": "click", "target": "the compose / post button", "payload": null },
   "last_action": { "kind": "navigate", "target": "address bar", "payload": "https://x.com/ahammad_nafiz" },
   "screen_before": "<a> Home\n<a> Explore\n<button> Post\n…",
-  "screen_now": "<dialog> Create Post\n<textbox> What is happening?!\n<button> Post (disabled)\n…",
+  "screen_now": "<dialog> Create Post\n<textbox> What is happening?! (focused) = \"Jev is fast\"\n<button> Post\n…",
   "recent_history": ["openApp Zen", "navigate x.com/ahammad_nafiz", "click compose"],
   "candidates": { "e0": "Post", "e1": "Home", "e2": "What is happening?!", "…": "…" },
   "task_context": "the x.com account @ahammad_nafiz"
@@ -72,6 +72,29 @@ reads it. See §2.5.
 `screen_before` and `screen_now` are **filtered** element lists, never raw DOM.
 Jev's documented failure mode is that accuracy falls as `state` grows with
 irrelevant content. The filter is not an optimisation; it is an accuracy measure.
+
+One line per element, rendered by `Element.described`:
+
+```
+<role> label [(focused)] [(disabled)] [= "value"]
+```
+
+The two optional annotations exist because **the things a step changes are
+often the things a plain element list leaves out.** A click into a text field
+moves only the caret; typing changes only a value whose label deliberately does
+not track it, so that the field keeps one identity across the step that fills
+it. Without `(focused)` and `= "value"` both steps handed Jev two byte-identical
+screens and were scored as having done nothing — `progressed` 0.22 on a click
+that worked, `looping` 0.72 on a type that had fully succeeded.
+
+`value` is suppressed when it merely repeats the label, which is the common case
+for a file row or an input whose accessible name *is* its contents. It is capped
+at 120 characters on both tiers, because a text area's value is its entire
+document.
+
+**`candidates` is unaffected, deliberately.** Selection reads the label alone, so
+a field does not rename itself to whatever was last typed into it — see
+`AXPrimitives.label`.
 
 ### 2.2 Verification questions
 

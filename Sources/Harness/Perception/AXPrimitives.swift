@@ -23,6 +23,36 @@ enum AXPrimitives {
     copyValue(element, attribute) as? Bool
   }
 
+  /// Another element, when the attribute holds one.
+  ///
+  /// The type check is not optional politeness: `AXUIElementCopyAttributeValue`
+  /// hands back a `CFTypeRef` and casting whatever arrives to `AXUIElement`
+  /// would trap on the attributes that hold a string.
+  static func element(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+    guard let raw = copyValue(element, attribute),
+      CFGetTypeID(raw) == AXUIElementGetTypeID()
+    else { return nil }
+    return unsafeDowncast(raw, to: AXUIElement.self)
+  }
+
+  /// What the control currently contains, when that is text.
+  ///
+  /// Separate from `label` on purpose — see `Element.value`. `label` stops at
+  /// the placeholder so a field keeps one identity across the step that fills
+  /// it; this is how the text that landed becomes visible to verification.
+  ///
+  /// `kAXValueAttribute` is not always a string: a checkbox holds a number, a
+  /// slider a float. `as? String` is the whole filter, which is why no role
+  /// allowlist is needed here.
+  ///
+  /// **Capped, because a text area's value is the entire document.** Left
+  /// whole, one focused editor would be the whole Jev `state`. The DOM
+  /// snapshot already slices at 120 characters; this matches it.
+  static func value(_ element: AXUIElement) -> String {
+    let text = cleaned(string(element, kAXValueAttribute as String) ?? "")
+    return String(text.prefix(Constants.AX.valueLength))
+  }
+
   static func children(_ element: AXUIElement) -> [AXUIElement] {
     copyValue(element, kAXChildrenAttribute as String) as? [AXUIElement] ?? []
   }

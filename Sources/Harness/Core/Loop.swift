@@ -328,7 +328,8 @@ public actor AgentLoop {
         // target has nothing `LabelDenylist` can match — ADR 0007 §3.
         element = Element(
           ref: picked.ref, role: picked.role, label: picked.label,
-          enabled: picked.enabled, inViewport: picked.inViewport, bounds: picked.bounds,
+          enabled: picked.enabled, value: picked.value, focused: picked.focused,
+          inViewport: picked.inViewport, bounds: picked.bounds,
           visionLabel: eyes.label ?? picked.visionLabel
         )
         Log.info("using host-selected mark \(index): \(element.label)")
