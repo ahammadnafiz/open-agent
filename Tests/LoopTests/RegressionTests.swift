@@ -406,10 +406,21 @@ struct RegressionTests {
     #expect(executed.first?.target == nil)
   }
 
-  @Test("targetless kinds are exactly openApp, navigate and wait")
+  /// `scroll` joined the set. A wheel needs a point, not an element, and the
+  /// thing a plan wants to scroll is a container `SnapshotScript` never
+  /// collects — so selection matched the name against whatever was nearest.
+  /// Measured on a Facebook feed: nine `scroll the news feed` steps resolved
+  /// to `Leave a comment`, `Leave a comment`, `View more comments`, each
+  /// anchoring the wheel on a comment box and each costing a Jev call. The run
+  /// exhausted its budget at step 8 of 11.
+  ///
+  /// The list is asserted exhaustively on purpose: a kind added to
+  /// `ActionKind` without a decision here is a kind that silently acquires
+  /// candidate selection, or silently loses it.
+  @Test("targetless kinds are exactly openApp, navigate, wait and scroll")
   func targetlessKinds() {
     for kind in ActionKind.allCases {
-      let expected = [.openApp, .navigate, .wait].contains(kind)
+      let expected = [.openApp, .navigate, .wait, .scroll].contains(kind)
       #expect(PlanStep.needsTarget(kind) == !expected, "\(kind.rawValue)")
     }
   }

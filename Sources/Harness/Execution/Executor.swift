@@ -47,7 +47,11 @@ public struct ExecutorRegistry: ExecutorProviding {
     // The rest still belong to AX: launching an application is a native
     // operation whatever the eventual target world turns out to be, and
     // waiting belongs to nobody in particular.
-    if kind == .navigate, let bidi { return bidi }
+    //
+    // `scroll` joined it for the same reason: a wheel names a point rather
+    // than an element, so it reaches here with no ref, and AX has no scroll
+    // to offer.
+    if kind == .navigate || kind == .scroll, let bidi { return bidi }
 
     // No target: openApp / navigate / wait. These are app-level and the AX
     // executor owns them, because launching is a native operation whatever

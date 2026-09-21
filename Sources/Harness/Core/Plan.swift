@@ -55,9 +55,20 @@ public struct PlanStep: Codable, Sendable, Equatable {
   /// `openApp`, `navigate` and `wait` do not, so the loop must not send them
   /// through candidate selection — there is nothing to select, and routing them
   /// that way made the first step of the v1 reference task unreachable.
+  ///
+  /// **`scroll` does not either, and requiring one made it unplannable.** A
+  /// wheel needs a point, not an element, and the point that means "scroll
+  /// this page" is the middle of the viewport. But selection was still run
+  /// against a name, and the thing a plan wants to scroll — a feed, a message
+  /// list, a page — is a container, which `SnapshotScript` never collects
+  /// because it is not actionable. So the name matched whatever was nearest:
+  /// measured on a Facebook feed, nine `scroll the news feed` steps resolved
+  /// to `Leave a comment`, `Leave a comment`, `View more comments`, and
+  /// anchored the wheel on a comment box each time. Each one also cost a Jev
+  /// selection call, and the run exhausted its budget at step 8 of 11.
   public static func needsTarget(_ kind: ActionKind) -> Bool {
     switch kind {
-    case .openApp, .navigate, .wait: false
+    case .openApp, .navigate, .wait, .scroll: false
     default: true
     }
   }

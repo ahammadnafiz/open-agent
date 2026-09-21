@@ -111,6 +111,17 @@ asked for.
 and pixel tiers refuse it rather than pressing the target, which is what they
 used to do.
 
+**A `scroll` step names no element.** Write `"target"` as prose for the log —
+`"the news feed"` — and expect no selection against it: a wheel needs a point,
+and the point is the middle of the viewport. Scroll steps therefore cost no
+Jev selection call, so a plan can hold several. Measured: four scrolls down a
+Wikipedia article, `$0.00067` and 16s for the whole run.
+
+**A browser plan needs a `navigate` step.** Without one nothing names the site,
+and the run lands on whatever tab the connect-time guess picked — which can be
+a blank one. If the page is already open, still write the `navigate`; an
+already-open tab on that host is adopted rather than reloaded.
+
 Each extra step is one Jev call: about $0.0002 and two seconds. That is the
 whole price of a run that reads as deliberate rather than teleported.
 

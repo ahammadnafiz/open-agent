@@ -57,6 +57,16 @@ reported twenty-one candidates from an unrelated tab in the same browser, with
 now names the address that was actually read, so a mismatch is visible in the
 response rather than inferred from the labels.
 
+**A `scroll` step names no on-screen element**, like `openApp`, `navigate` and
+`wait`. A wheel needs a point, and the container a plan wants to scroll — a
+feed, a message list, a page — is never a candidate, because the snapshot
+collects only what can be acted on. Selection against that name matched
+whatever was nearest instead: measured on a Facebook feed, nine `scroll the
+news feed` steps resolved to `Leave a comment`, `Leave a comment`, `View more
+comments`, each anchoring the wheel on a comment box and each costing a Jev
+call. The step's `target` is now prose for the log, the wheel goes to the
+middle of the viewport, and no selection call is spent.
+
 `run` and `resume` carry session state on disk between invocations rather than
 holding a process open. A coding agent's tool calls are separate processes with
 gaps between them, so a long-lived daemon would be one more thing to supervise

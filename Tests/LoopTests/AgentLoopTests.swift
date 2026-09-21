@@ -82,15 +82,39 @@ struct AgentLoopTests {
     #expect(result.status == .needsPlan, "rung 2 replans instead of retrying")
   }
 
+  /// A real loop, as `Constants.Jev.looping` describes one: *"Recent history
+  /// is repeating with no screen change."* The fixture used to pair a high
+  /// `looping` with the default `progressed` of 0.97 — a screen that changed
+  /// completely while also looping, which is not a combination the constant's
+  /// measurements contain (0.02–0.06 progressed on a genuine no-op). It now
+  /// describes the phenomenon it is named after.
   @Test("looping escalates rather than continuing")
   func loopingEscalates() async {
     let judge = ScriptedJudge([
       Make.verdict(),
-      Make.verdict(looping: Constants.Jev.looping),
+      Make.verdict(progressed: 0.04, unchanged: 0.88, looping: Constants.Jev.looping),
     ])
     let result = await Make.loop(plan: Make.plan([.click, .click]), judge: judge).run()
     #expect(result.status == .needsEyes)
     #expect(result.reason.contains("looping"))
+  }
+
+  /// **Repetition is the whole nature of some actions.** Routing read only
+  /// the first half of the question and escalated on the repetition alone, so
+  /// a plan of scroll steps was unrunnable: measured on a Facebook feed, three
+  /// scrolls scored `progressed` 0.86, 0.73, 0.65 — the judge could see the
+  /// page moving — and the fourth escalated on `looping 0.74`.
+  @Test("repeating an action that is moving the screen is not looping")
+  func progressingRepetitionContinues() async {
+    let judge = ScriptedJudge([
+      Make.verdict(),
+      Make.verdict(progressed: 0.73, looping: 0.74),
+      Make.verdict(progressed: 0.65, taskDone: Constants.Jev.taskDone, looping: 0.78),
+    ])
+    let result = await Make.loop(
+      plan: Make.plan([.scroll, .scroll, .scroll]), judge: judge
+    ).run()
+    #expect(result.status == .completed, "got \(result.status): \(result.reason)")
   }
 
   /// Right screen, wrong instance. Every other verification question answers

@@ -1006,9 +1006,29 @@ public actor AgentLoop {
     // about nothing and their values must not route anything.
     guard lastAction != nil else { return nil }
 
-    if verdict.looping >= Constants.Jev.looping {
+    // **The question is a conjunction and only half of it was being read.**
+    // `Constants.Jev.looping` documents what it measures: *"Recent history is
+    // repeating with no screen change."* Routing tested the repetition and
+    // ignored the screen, so an action whose whole nature is repetition was
+    // indistinguishable from an agent stuck on one.
+    //
+    // Measured on a Facebook feed: three `scroll` steps scored `progressed`
+    // 0.86, 0.73 and 0.65 — the judge could see the page moving — and the
+    // fourth escalated on `looping 0.74`, a value sitting between the bands
+    // the constant was calibrated against (0.04–0.15 when not looping, 0.95
+    // when looping). In that middle the second signal is what decides.
+    //
+    // A real loop does not survive this: an action that changes nothing
+    // scores `progressed` at 0.02–0.06, well under the threshold, and still
+    // escalates. And an action that repeats *and* moves the screen without
+    // getting anywhere is what `Budget` is for.
+    if verdict.looping >= Constants.Jev.looping,
+      verdict.progressed < Constants.Jev.progressed
+    {
       return await escalate(
-        since: started, reason: "looping \(fmt(verdict.looping))", candidates: candidates
+        since: started,
+        reason: "looping \(fmt(verdict.looping)) progressed \(fmt(verdict.progressed))",
+        candidates: candidates
       )
     }
 

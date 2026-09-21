@@ -189,6 +189,15 @@ public actor BiDiSource: ElementSource {
   /// that is never stated reads exactly like an answer.
   public func pageURL() async -> String { latest?.url ?? "" }
 
+  /// The middle of the page, which is where "scroll this" means.
+  ///
+  /// `nil` when the tab has never been laid out — `viewport` is zero then, and
+  /// its centre is the top-left corner, which is not the middle of anything.
+  func viewportCentre() -> CGPoint? {
+    guard let size = latest?.viewport, size.width > 0, size.height > 0 else { return nil }
+    return CGPoint(x: size.width / 2, y: size.height / 2)
+  }
+
   public func readiness() async -> String {
     // **A document that says it is still loading is not settled, however still
     // it looks.** Instagram's inbox parks at ~507 nodes with `readyState:

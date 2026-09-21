@@ -1235,3 +1235,56 @@ struct WindowDiagnosisTests {
     }
   }
 }
+
+
+/// **Selection was being run to produce a coordinate.** A wheel needs a point,
+/// and the container a plan wants to scroll — a feed, a message list, a page —
+/// is never in the candidate list, because `SnapshotScript` collects only what
+/// can be acted on. So the name matched whatever was nearest: measured on a
+/// Facebook feed, nine `scroll the news feed` steps resolved to `Leave a
+/// comment`, `Leave a comment`, `View more comments`, and anchored the wheel on
+/// a comment box each time. Each one also spent a Jev selection call, and the
+/// run exhausted its budget at step 8 of 11.
+@Suite("A scroll names a point, not an element")
+struct TargetlessScrollTests {
+
+  /// A snapshot whose only job is to report a laid-out viewport.
+  static let snapshot = #"""
+    {"result":{"type":"object","value":[
+      [{"type":"string","value":"url"},{"type":"string","value":"https://example.com/feed"}],
+      [{"type":"string","value":"viewport"},{"type":"object","value":[
+        [{"type":"string","value":"w"},{"type":"number","value":1200.0}],
+        [{"type":"string","value":"h"},{"type":"number","value":800.0}]]}]]}}
+    """#
+
+  @Test("scroll names no element, like navigate and wait")
+  func scrollNeedsNoTarget() {
+    #expect(!PlanStep.needsTarget(.scroll))
+    #expect(!PlanStep.needsTarget(.navigate))
+    #expect(PlanStep.needsTarget(.click), "a click still names what it presses")
+  }
+
+  @Test("with no target the wheel lands in the middle of the viewport")
+  func wheelGoesToTheCentre() async throws {
+    let transport = FakeBiDiTransport(replies: [
+      scrollOK(1),  // session.new
+      scrollOK(2, scrollOneContext),  // resolveContext
+      scrollOK(3, Self.snapshot),  // observe lays the viewport down
+      scrollOK(4),  // the scroll — no validate, no selection
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    let source = BiDiSource(client: client)
+    let executor = BiDiExecutor(client: client, source: source)
+    _ = try await source.observe()
+
+    let untargeted = Action(
+      kind: .scroll, target: nil, payload: nil, rationale: "the news feed")
+    #expect(try await executor.execute(untargeted).dispatched)
+
+    let sent = try #require(await transport.sent.filter { $0.contains("performActions") }.first)
+    #expect(sent.contains("wheel"))
+    #expect(sent.contains("\"x\":600"), "1200 wide, so the centre is 600")
+    #expect(sent.contains("\"y\":400"), "800 tall, so the centre is 400")
+  }
+}

@@ -70,8 +70,22 @@ public struct BiDiExecutor: Executor {
       // asked to see further down a list of issues pressed the first one
       // instead, navigated away, and the next observation answered about
       // somewhere else entirely. The wheel is what the verb means.
-      let handle = try Self.handle(action)
-      let point = try await validate(handle)
+      //
+      // **And a wheel names a point, not an element.** A plan reaches here
+      // with no target now (`PlanStep.needsTarget`), because the thing it
+      // wants to scroll is a container the snapshot never collects — so the
+      // middle of the viewport is the answer, and no selection call is spent
+      // arriving at it. An explicit target still works: `act --kind scroll
+      // --target e17` scrolls the pane that element sits in.
+      let point: CGPoint
+      if action.target != nil {
+        point = try await validate(Self.handle(action))
+      } else if let centre = await source.viewportCentre() {
+        point = centre
+      } else {
+        throw ExecutionError.actionUnavailable(
+          role: "bidi", wanted: "a laid-out viewport to scroll")
+      }
       try await client.performActions([Self.scrollSequence(at: point)])
       return ExecutionResult(dispatched: true, via: .bidi)
 
