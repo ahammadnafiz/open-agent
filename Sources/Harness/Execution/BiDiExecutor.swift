@@ -212,24 +212,36 @@ public struct BiDiExecutor: Executor {
     String(handle.drop(while: { !$0.isNumber }))
   }
 
-  private static func resolveScript(handle: String) -> String {
+  static func resolveScript(handle: String) -> String {
     """
     (() => {
       const el = window.__openAgent?.nodes?.get(\(numeric(handle)));
       if (!el || !el.isConnected) return { missing: true };
+      // **Fingerprint the element before moving it.** The guard is
+      // `role|left|top|disabled`, and `scrollIntoView` changes `top` by
+      // construction — so resolving a target that was below the fold scrolled
+      // it to the middle of the viewport and then accused it of having moved.
+      // Measured on prosemirror.net: expected `textbox|377|852|0`, found
+      // `textbox|377|321|0`, and the step was refused with "an unchanged
+      // target". Same element, same node handle; the 531 points were ours.
+      //
+      // Every target that needs scrolling hit this, which is most targets on
+      // a page longer than a screen.
+      const role = window.__oaRole(el);
+      const guard = window.__oaGuard(el, role);
       el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
       const r = el.getBoundingClientRect();
       const cx = Math.min(Math.max(r.left + r.width / 2, 0), window.innerWidth - 1);
       const cy = Math.min(Math.max(r.top + r.height / 2, 0), window.innerHeight - 1);
       const top = document.elementFromPoint(cx, cy);
       const occluded = !(top && (top === el || el.contains(top) || top.contains(el)));
-      const role = window.__oaRole(el);
       return {
         x: cx, y: cy, occluded: occluded,
         // One definition, shared with the snapshot. See
         // `SnapshotScript.guardFunction` for why this used to be written twice
-        // and why the two never matched.
-        guard: window.__oaGuard(el, role),
+        // and why the two never matched — and note it is computed above, before
+        // anything on this page has been scrolled.
+        guard: guard,
       };
     })()
     """

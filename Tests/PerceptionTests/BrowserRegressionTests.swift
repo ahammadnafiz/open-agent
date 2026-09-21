@@ -1091,3 +1091,46 @@ struct PrivilegedContextTests {
   }
 }
 
+/// Re-resolving a target must not be what makes it look stale.
+@Suite("The guard is taken before the element is moved")
+struct TargetGuardOrderingTests {
+
+  /// **The validation scrolled the element, then accused it of moving.**
+  ///
+  /// `__oaGuard` is `role|left|top|disabled`, taken from
+  /// `getBoundingClientRect()`, which is viewport-relative — so `top` changes
+  /// whenever the page scrolls. `validate` scrolls the target to the centre of
+  /// the viewport before reading it, which changes `top` for any target that
+  /// was not already there.
+  ///
+  /// Measured on prosemirror.net: the snapshot recorded `textbox|377|852|0`,
+  /// re-resolution reported `textbox|377|321|0`, and the click was refused
+  /// with *"an unchanged target"*. Same element, same node handle — the 531
+  /// points of movement were the agent's own scroll. Every target below the
+  /// fold met this, which on a page longer than one screen is most of them.
+  @Test("the fingerprint is computed before scrollIntoView")
+  func guardPrecedesScroll() throws {
+    let script = BiDiExecutor.resolveScript(handle: "e19")
+    // The call, not the word — the script carries a comment explaining this
+    // very ordering, and matching that instead would pass for the wrong reason.
+    let guardAt = try #require(script.range(of: "window.__oaGuard(el"))
+    let scrollAt = try #require(script.range(of: "el.scrollIntoView("))
+    #expect(
+      guardAt.lowerBound < scrollAt.lowerBound,
+      "scrolling the target first is what made it fail its own staleness check")
+  }
+
+  /// The click point is the opposite case and must stay after the scroll: it
+  /// is the one value that has to describe where the element is *now*.
+  /// ADR 0007 allows exactly this, and nothing else, to be measured at act
+  /// time.
+  @Test("the click point is computed after scrollIntoView")
+  func clickPointFollowsScroll() throws {
+    let script = BiDiExecutor.resolveScript(handle: "e19")
+    let scrollAt = try #require(script.range(of: "el.scrollIntoView("))
+    let rectAt = try #require(script.range(of: "el.getBoundingClientRect()"))
+    #expect(
+      scrollAt.lowerBound < rectAt.lowerBound,
+      "the click point has to describe where the element ended up")
+  }
+}
