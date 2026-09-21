@@ -70,12 +70,23 @@ actor ScriptedJudge: StepJudge {
   private var script: [StepVerdict]
   private(set) var callCount = 0
   private(set) var lastContext: StepContext?
+  /// How long each answer takes. A real Jev call is ~600 ms, and whether that
+  /// is paid inside a wait or after it is the thing some tests are about.
+  private let latency: Duration
+  /// When each call started, measured from this judge's creation.
+  private(set) var startedAt: [Duration] = []
+  private let born = ContinuousClock.now
 
-  init(_ script: [StepVerdict]) { self.script = script }
+  init(_ script: [StepVerdict], latency: Duration = .zero) {
+    self.script = script
+    self.latency = latency
+  }
 
   func step(_ context: StepContext, budgetRemaining: Duration) async throws -> StepVerdict {
     callCount += 1
     lastContext = context
+    startedAt.append(born.duration(to: ContinuousClock.now))
+    if latency > .zero { try? await Task.sleep(for: latency) }
     if script.count > 1 { return script.removeFirst() }
     return script[0]
   }
@@ -327,4 +338,32 @@ actor TickingSource: ElementSource {
   }
 
   func readiness() async -> String { "3000" }
+}
+
+/// A page that gains an element partway through settling.
+///
+/// Time-based rather than counted, because the thing under test is *when* the
+/// change lands relative to the quiet window — after the speculative
+/// judgement has been started, before the window closes.
+actor ShiftingSource: ElementSource {
+  nonisolated let kind: SourceKind = .bidi
+  nonisolated var reportsReadiness: Bool { true }
+  private let before: [Element]
+  private let after: [Element]
+  private let shiftAfter: Duration
+  private var firstSeen: ContinuousClock.Instant?
+
+  init(before: [Element], after: [Element], shiftAfter: Duration = .milliseconds(900)) {
+    self.before = before
+    self.after = after
+    self.shiftAfter = shiftAfter
+  }
+
+  func observe() async throws -> [Element] {
+    let start = firstSeen ?? ContinuousClock.now
+    firstSeen = start
+    return start.duration(to: ContinuousClock.now) >= shiftAfter ? after : before
+  }
+
+  func readiness() async -> String { "1000" }
 }

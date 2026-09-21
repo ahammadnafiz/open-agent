@@ -1008,3 +1008,80 @@ struct TickingLabelRegressionTests {
     #expect(shell.describe() != ticked.describe(), "and the content did change")
   }
 }
+
+/// **The quiet window and the judgement that follows it needed nothing from
+/// each other, and ran one after the other anyway.**
+@Suite("A navigation's wait pays for the next judgement")
+struct SettleOverlapTests {
+
+  /// A navigation waits 1.2s for the screen to hold still, then spends roughly
+  /// another 600ms asking Jev what to do next. For the whole of that first
+  /// 1.2s nothing is using the network.
+  ///
+  /// So the judgement now starts once the screen has held still for half the
+  /// window. The assertion is about *when* the second call happens, not how
+  /// long the run took: it has to begin before the first step's settle has
+  /// finished, which is the only thing that makes it free.
+  @Test("the next step is judged while the page is still settling")
+  func theNextJudgementStartsDuringSettle() async {
+    let judge = ScriptedJudge([Make.verdict()], latency: .milliseconds(300))
+
+    _ = await Make.loop(
+      plan: Make.plan([.navigate, .click]),
+      judge: judge,
+      settleTimeout: .seconds(4),
+      source: FakeSource(elements: [Make.domElement(handle: "e0", label: "Compose")])
+    ).run()
+
+    let started = await judge.startedAt
+    #expect(started.count >= 2, "the run should have judged at least twice")
+    // The navigation dispatches at roughly the first judgement plus its
+    // latency; its quiet window is `navigationQuiet` on top of that. A second
+    // judgement starting inside that window is one that cost nothing.
+    let window = Constants.Execution.navigationQuiet
+    #expect(
+      started[1] - started[0] < window,
+      "the second judgement waited for the settle to finish instead of sharing it")
+  }
+
+  /// The guarantee is untouched: a screen that is not the same shape when the
+  /// window closes must be judged again, not acted on from a stale answer.
+  /// This is what makes the overlap free rather than a shortcut — being wrong
+  /// costs one Jev call and no wall-clock time.
+  @Test("a screen that changed shape is judged again")
+  func achangedShapeIsRejudged() async {
+    // Scripted so the two answers are distinguishable by what they select.
+    // Call 1 is the navigation. Call 2 is the speculative answer, made while
+    // only `e0` existed. Call 3 is the re-judgement, which can see `e1`.
+    // Counting calls is not enough — `verifyLastStep` makes one of its own, so
+    // a stale answer and a correct one both leave "at least three". What
+    // separates them is which element got clicked.
+    let judge = ScriptedJudge([
+      Make.verdict(),
+      Make.verdict(choice: "e0", probabilities: ["e0": 0.95, "e1": 0.05]),
+      Make.verdict(choice: "e1", probabilities: ["e0": 0.05, "e1": 0.95]),
+      Make.verdict(),
+    ])
+    let executor = RecordingExecutor()
+    let source = ShiftingSource(
+      before: [Make.domElement(handle: "e0", label: "Compose")],
+      after: [
+        Make.domElement(handle: "e0", label: "Compose"),
+        Make.domElement(handle: "e1", label: "the message that just arrived"),
+      ])
+
+    _ = await Make.loop(
+      plan: Make.plan([.navigate, .click]),
+      judge: judge,
+      executor: executor,
+      settleTimeout: .seconds(4),
+      source: source
+    ).run()
+
+    let clicked = await executor.executed.first { $0.kind == .click }
+    let target = try? #require(clicked?.target)
+    #expect(
+      target?.label == "the message that just arrived",
+      "the answer made before the element arrived was acted on anyway")
+  }
+}

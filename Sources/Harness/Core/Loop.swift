@@ -71,6 +71,16 @@ public actor AgentLoop {
   /// Set by ladder rung 0. The step it wants re-attempted is not the step this
   /// iteration already picked up, so the iteration has to start again.
   private var rewoundForRetry = false
+
+  /// A judgement started before the step that needs it — see `beginSpeculation`.
+  ///
+  /// Held as three pieces rather than one struct because the shape and the plan
+  /// index have to be checked *without* waiting for the verdict. Awaiting a
+  /// judgement that is about to be thrown away would spend exactly the time
+  /// this exists to save.
+  private var speculationIndex: Int?
+  private var speculationShape: String?
+  private var speculationTask: Task<StepVerdict?, Never>?
   /// A mark the host picked off the screenshot, consumed by the next selection.
   ///
   /// Set only by `resume --eyes`. It overrides Jev's Choice for exactly one
@@ -218,30 +228,52 @@ public actor AgentLoop {
       let observeMilliseconds = observeStarted.milliseconds()
 
       // ── JUDGE ── one batched Jev call: verification + selection + risk
+      //
+      // Unless the previous step already made it. `settle` starts this exact
+      // call once the screen has held still for half its quiet window, and the
+      // answer is admissible only if the screen is still the same shape now —
+      // same plan step, same set of things that can be acted on. Anything else
+      // and it is dropped unread. See `beginSpeculation`.
       let judgeStarted = ContinuousClock.now
-      let verdict: StepVerdict
-      do {
-        verdict = try await jev.step(
-          StepContext(
-            task: task,
-            planStep: PlanStepDTO(planStep),
-            lastAction: lastAction.map(ActionDTO.init),
-            screenBefore: screenBefore,
-            screenNow: screenNow,
-            recentHistory: Array(history.suffix(Constants.Jev.historyWindow)),
-            candidates: candidates.criteria,
-            taskContext: taskContext
-          ),
-          budgetRemaining: Constants.Budget.stepTimeout
-        )
-      } catch {
-        return result(.failed, since: started, reason: "judgment failed: \(error)")
+      var verdict: StepVerdict?
+      var alreadyCharged = false
+      if speculationIndex == planIndex, speculationShape == candidates.shape(),
+        let ahead = speculationTask
+      {
+        verdict = await ahead.value
+        alreadyCharged = verdict != nil
+      }
+      clearSpeculation()
+
+      if verdict == nil {
+        do {
+          verdict = try await jev.step(
+            StepContext(
+              task: task,
+              planStep: PlanStepDTO(planStep),
+              lastAction: lastAction.map(ActionDTO.init),
+              screenBefore: screenBefore,
+              screenNow: screenNow,
+              recentHistory: Array(history.suffix(Constants.Jev.historyWindow)),
+              candidates: candidates.criteria,
+              taskContext: taskContext
+            ),
+            budgetRemaining: Constants.Budget.stepTimeout
+          )
+        } catch {
+          return result(.failed, since: started, reason: "judgment failed: \(error)")
+        }
+      }
+      guard let verdict else {
+        return result(.failed, since: started, reason: "judgment failed: no verdict")
       }
       let judgeMilliseconds = judgeStarted.milliseconds()
       var phases = Phases(
         ready: readyMilliseconds, observe: observeMilliseconds, judge: judgeMilliseconds)
-      budget.chargeDollars(verdict.usage.dollars)
-      totalCost += verdict.usage.dollars
+      if !alreadyCharged {
+        budget.chargeDollars(verdict.usage.dollars)
+        totalCost += verdict.usage.dollars
+      }
 
       // ── ROUTE ────────────────────────────────────────────────────
       if let routed = await route(
@@ -385,7 +417,7 @@ public actor AgentLoop {
       // next observation has to differ from.
       phases.act = actStarted.milliseconds()
       let settleStarted = ContinuousClock.now
-      if executionResult.dispatched { await settle(from: screenNow, after: action.kind) }
+      if executionResult.dispatched { await settle(from: screenNow, after: action) }
       phases.settle = settleStarted.milliseconds()
       // Where a step's seconds went. Every one of these is a decision someone
       // made, and the only way to argue about them is to see them.
@@ -400,6 +432,70 @@ public actor AgentLoop {
         screenNow: screenNow
       )
     }
+  }
+
+  /// Starts the judgement the *next* step will need, while this one is still
+  /// waiting out its quiet window.
+  ///
+  /// **The wait and the judgement were strictly sequential and neither needed
+  /// the other.** A navigation pays a 1.2 s stillness guarantee and then a Jev
+  /// call of about 600 ms, and for the whole of that first 1.2 s nothing is
+  /// using the network. Running them together costs nothing and is never
+  /// slower: the verdict is used only if the screen's `shape()` is identical
+  /// when the window closes, and otherwise it is dropped and the step judges
+  /// again exactly as it always did.
+  ///
+  /// Being wrong costs one Jev call — about $0.00005 — and no wall-clock time
+  /// at all, because that call ran inside a wait that was happening anyway.
+  /// It is charged either way, because it was really spent.
+  ///
+  /// The context is the *next* step's, and every piece of it is already known
+  /// here: `record` has not run yet, so `planIndex` still points at the step
+  /// that is finishing, and `before` is what it is about to store as the next
+  /// step's `screenBefore`.
+  private func beginSpeculation(
+    after lastAction: Action, screenBefore: String, screenNow: String,
+    candidates: CandidateSet
+  ) {
+    let next = planIndex + 1
+    guard plan.steps.indices.contains(next) else { return }
+    let context = StepContext(
+      task: task,
+      planStep: PlanStepDTO(plan.steps[next]),
+      lastAction: ActionDTO(lastAction),
+      screenBefore: screenBefore,
+      screenNow: screenNow,
+      recentHistory: Array(
+        (history + [lastAction.summary]).suffix(Constants.Jev.historyWindow)),
+      candidates: candidates.criteria,
+      taskContext: taskContext
+    )
+    speculationIndex = next
+    speculationShape = candidates.shape()
+    speculationTask = Task { [weak self] in
+      await self?.judgeAhead(context) ?? nil
+    }
+  }
+
+  /// Runs a speculative judgement and charges what it cost, used or not.
+  private func judgeAhead(_ context: StepContext) async -> StepVerdict? {
+    do {
+      let verdict = try await jev.step(
+        context, budgetRemaining: Constants.Budget.stepTimeout)
+      budget.chargeDollars(verdict.usage.dollars)
+      totalCost += verdict.usage.dollars
+      return verdict
+    } catch {
+      // A speculative failure is not a step failure. The step will ask again.
+      Log.debug("the judgement started during settle did not land: \(error)")
+      return nil
+    }
+  }
+
+  private func clearSpeculation() {
+    speculationIndex = nil
+    speculationShape = nil
+    speculationTask = nil
   }
 
   /// Where one step's milliseconds went.
@@ -476,7 +572,7 @@ public actor AgentLoop {
     // was read at 157 nodes with no links and `readyState: loading`, and the
     // next step escalated with "no candidates to choose from".
     let settleStarted = ContinuousClock.now
-    if executionResult.dispatched { await settle(from: screenBefore, after: action.kind) }
+    if executionResult.dispatched { await settle(from: screenBefore, after: action) }
     phases.settle = settleStarted.milliseconds()
     Log.info(phases.line(step: stepIndex))
 
@@ -576,7 +672,11 @@ public actor AgentLoop {
   /// finished but the page still has a busy marker on it.
   private static let busyMarker = "busy:"
 
-  private func settle(from before: String, after kind: ActionKind) async {
+  /// - Parameter before: the screen as it was before `action` ran. It is also,
+  ///   at both call sites, exactly what `record` stores as the *next* step's
+  ///   `screenBefore` — which is what lets a judgement be started from in here.
+  private func settle(from before: String, after action: Action) async {
+    let kind = action.kind
     let arriving = (kind == .navigate || kind == .openApp)
     /// How long the screen has to hold still before this returns.
     ///
@@ -695,6 +795,20 @@ public actor AgentLoop {
         Log.debug(
           "settle poll t=\(started.milliseconds())ms still=\(since.milliseconds())ms "
             + "of \(quiet) nodes=\(measured) changed=\(changed)")
+        // **The window is dead time, and so is the judgement that follows it.**
+        // Once the screen has held still for half of what it owes, the rest of
+        // the wait is long enough to hide a Jev call inside — measured at
+        // ~600 ms against a window of 1.2 s. Half, rather than immediately,
+        // because the first stillness on a page that is still arriving is
+        // usually a shell between bursts: x.com reaches one at t=368 ms and
+        // then moves four more times. Waiting out half the window first makes
+        // the guess cheap to be wrong about and usually right.
+        if arriving, speculationIndex == nil,
+          ContinuousClock.now - since >= quiet / 2
+        {
+          beginSpeculation(
+            after: action, screenBefore: before, screenNow: described, candidates: reduced)
+        }
         if changed, ContinuousClock.now - since >= quiet { return }
       } else {
         Log.debug(
