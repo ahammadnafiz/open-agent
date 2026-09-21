@@ -91,20 +91,35 @@ public struct BiDiExecutor: Executor {
   ///
   /// Two attempts, then refuse. Continuing on to a `publish` with the wrong
   /// text in the box is the outcome worth failing to avoid.
+  ///
+  /// **The first attempt types as fast as the wire allows; only the retry
+  /// paces itself.** The cadence exists so a page that reacts per keystroke
+  /// gets time to react, but almost none of them need it, and it is not
+  /// cheap: every `pause` tick costs what it asks for plus about 45 ms of
+  /// WebDriver overhead, which measured as `act=2147ms` to enter a 42-
+  /// character post on X against `act=518ms` for the same text with no pauses.
+  ///
+  /// Retrying a failure with the identical strategy is just waiting for a
+  /// different answer, so the two attempts are now *different* attempts: burst
+  /// first, and if the field disagrees about what it holds, type it again the
+  /// slow way. The read-back is what makes this safe to try — a page that
+  /// genuinely needs the cadence says so, in the only way that matters, and
+  /// gets it.
   private func type(_ text: String, into handle: String) async throws {
     let wanted = text.trimmingCharacters(in: .whitespacesAndNewlines)
     var found = ""
 
     for attempt in 1...Self.typeAttempts {
+      let paced = attempt > 1
       try await focus(handle)
       try await client.performActions([Self.clearSequence()])
-      try await client.performActions([Self.keySequence(text)])
+      try await client.performActions([Self.keySequence(text, paced: paced)])
 
       found = try await fieldText(handle)
       if found.trimmingCharacters(in: .whitespacesAndNewlines) == wanted { return }
       Log.warn(
         "typing attempt \(attempt) left \(found.count) characters where \(text.count) "
-          + "were asked for; clearing and retyping")
+          + "were asked for; retyping\(paced ? "" : " at keystroke pace")")
     }
 
     throw ExecutionError.actionUnavailable(
@@ -262,7 +277,11 @@ public struct BiDiExecutor: Executor {
     ]
   }
 
-  static func keySequence(_ text: String) -> [String: Any] {
+  /// - Parameter paced: whether to space the keystrokes out. False delivers
+  ///   the whole string as fast as `performActions` will carry it, which is
+  ///   what every field tried so far actually wants; `type(_:into:)` turns it
+  ///   on for the retry when a field says otherwise.
+  static func keySequence(_ text: String, paced: Bool = true) -> [String: Any] {
     var actions: [[String: Any]] = []
     // The pause is what makes typing look typed — `performActions` would
     // otherwise deliver a whole sentence in one frame. It is also, measured,
@@ -281,7 +300,7 @@ public struct BiDiExecutor: Executor {
       actions.append(["type": "keyDown", "value": value])
       actions.append(["type": "keyUp", "value": value])
       sincePause += 1
-      if sincePause == group {
+      if paced, sincePause == group {
         actions.append([
           "type": "pause",
           "duration": Constants.Typing.webKeystrokeMilliseconds * group,

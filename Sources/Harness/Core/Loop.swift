@@ -238,6 +238,8 @@ public actor AgentLoop {
         return result(.failed, since: started, reason: "judgment failed: \(error)")
       }
       let judgeMilliseconds = judgeStarted.milliseconds()
+      var phases = Phases(
+        ready: readyMilliseconds, observe: observeMilliseconds, judge: judgeMilliseconds)
       budget.chargeDollars(verdict.usage.dollars)
       totalCost += verdict.usage.dollars
 
@@ -265,7 +267,8 @@ public actor AgentLoop {
           rationale: planStep.target
         )
         if let early = await performTargetless(
-          action, verdict: verdict, planStep: planStep, since: started, stepStarted: stepStarted
+          action, verdict: verdict, planStep: planStep, since: started,
+          stepStarted: stepStarted, phases: phases
         ) {
           return early
         }
@@ -380,15 +383,13 @@ public actor AgentLoop {
       // iteration reads the screen and judges whether it did. `screenNow` is
       // the screen as it was *before* this action, which is exactly what the
       // next observation has to differ from.
-      let actMilliseconds = actStarted.milliseconds()
+      phases.act = actStarted.milliseconds()
       let settleStarted = ContinuousClock.now
       if executionResult.dispatched { await settle(from: screenNow, after: action.kind) }
+      phases.settle = settleStarted.milliseconds()
       // Where a step's seconds went. Every one of these is a decision someone
       // made, and the only way to argue about them is to see them.
-      Log.info(
-        "step \(stepIndex) timing: ready=\(readyMilliseconds)ms "
-          + "observe=\(observeMilliseconds)ms judge=\(judgeMilliseconds)ms "
-          + "act=\(actMilliseconds)ms settle=\(settleStarted.milliseconds())ms")
+      Log.info(phases.line(step: stepIndex))
 
       // ── RECORD ───────────────────────────────────────────────────
       // Verification of THIS step arrives in the NEXT iteration's batch, so the
@@ -398,6 +399,26 @@ public actor AgentLoop {
         verdict: verdict, confirmed: confirmed, stepStarted: stepStarted,
         screenNow: screenNow
       )
+    }
+  }
+
+  /// Where one step's milliseconds went.
+  ///
+  /// **The step that most needed this was the one path that did not have it.**
+  /// The timing line lived only on the targeted branch, and `navigate` is
+  /// targetless — so the action that replaces the whole screen and pays the
+  /// longest settle in the system was invisible in the log. A three-step run
+  /// printed two timing lines, and the missing one was 6.9 s of a 12.5 s run.
+  struct Phases {
+    let ready: Int
+    let observe: Int
+    let judge: Int
+    var act = 0
+    var settle = 0
+
+    func line(step: Int) -> String {
+      "step \(step) timing: ready=\(ready)ms observe=\(observe)ms "
+        + "judge=\(judge)ms act=\(act)ms settle=\(settle)ms"
     }
   }
 
@@ -411,8 +432,10 @@ public actor AgentLoop {
     verdict: StepVerdict,
     planStep: PlanStep,
     since started: ContinuousClock.Instant,
-    stepStarted: ContinuousClock.Instant
+    stepStarted: ContinuousClock.Instant,
+    phases: Phases
   ) async -> LoopResult? {
+    var phases = phases
     let effective = Irreversibility.classify(
       action, target: nil, declaredByPlanner: planStep.declaredIrreversible
     )
@@ -433,6 +456,7 @@ public actor AgentLoop {
       confirmed = true
     }
 
+    let actStarted = ContinuousClock.now
     let executionResult: ExecutionResult
     do {
       let executor = try executors.executor(for: nil, kind: action.kind)
@@ -443,6 +467,7 @@ public actor AgentLoop {
       Log.warn("execution failed at step \(stepIndex): \(error)")
       executionResult = ExecutionResult(dispatched: false, via: source.kind)
     }
+    phases.act = actStarted.milliseconds()
 
     // **The steps that need this most were the ones not getting it.** Settling
     // lived only on the targeted path, and `navigate` and `openApp` are
@@ -450,7 +475,10 @@ public actor AgentLoop {
     // two that were judged immediately, before anything had arrived. Instagram
     // was read at 157 nodes with no links and `readyState: loading`, and the
     // next step escalated with "no candidates to choose from".
+    let settleStarted = ContinuousClock.now
     if executionResult.dispatched { await settle(from: screenBefore, after: action.kind) }
+    phases.settle = settleStarted.milliseconds()
+    Log.info(phases.line(step: stepIndex))
 
     record(
       action: action, result: executionResult, sourceKind: source.kind,
@@ -541,10 +569,17 @@ public actor AgentLoop {
 
   private func settle(from before: String, after kind: ActionKind) async {
     let arriving = (kind == .navigate || kind == .openApp)
-    let required =
-      arriving
-      ? Constants.Execution.navigationStableChecks
-      : Constants.Execution.settleStableChecks
+    /// How long the screen has to hold still before this returns.
+    ///
+    /// **Stated as a duration rather than a number of polls.** A poll count
+    /// only means "this long" at one particular sampling rate, so the two were
+    /// impossible to change independently: looking more often to notice
+    /// stillness sooner also silently shortened the guarantee it was there to
+    /// provide. Measured on x.com, the candidate list stopped changing at
+    /// t=1655 ms and the step did not return until t=2869 ms — the page had
+    /// arrived and the loop was counting to eight at 170 ms a turn.
+    let quiet =
+      arriving ? Constants.Execution.navigationQuiet : Constants.Execution.actionQuiet
     let started = ContinuousClock.now
     let deadline = started.advanced(
       by: arriving
@@ -554,7 +589,8 @@ public actor AgentLoop {
     /// The node count from the previous poll, kept apart from the element
     /// fingerprint so the two can be judged on their own terms.
     var previousNodes: Int?
-    var stable = 0
+    /// When the screen was first seen to repeat. `nil` whenever it last moved.
+    var stillSince: ContinuousClock.Instant?
     // **Nothing to compare against is not evidence that nothing happened.** On
     // the first step there is no previous screen, so the change gate has no
     // signal — and treating "same as nothing" as "unchanged" made a navigation
@@ -563,8 +599,12 @@ public actor AgentLoop {
     // an empty screen never satisfies it.
     var changed = before.isEmpty
 
-    while ContinuousClock.now < deadline {
-      try? await Task.sleep(for: Constants.Execution.settlePollInterval)
+    // **Look first, sleep second.** The poll used to open with its interval,
+    // so every settle in the system paid one before it had looked at anything
+    // — including the ones where the action had already landed and the screen
+    // was done. It also delayed noticing that the screen had *changed*, which
+    // is what starts the clock on everything else here.
+    while true {
       // **A failed observation here means "not yet", not "give up".** During a
       // navigation the document is being replaced, so the snapshot script has
       // nothing to run against and throws — and returning on that turned the
@@ -573,7 +613,11 @@ public actor AgentLoop {
       // to choose from", on a page that had twelve of them a moment later.
       guard let elements = try? await source.observe(),
         let described = try? CandidateFilter.reduce(elements).describe()
-      else { continue }
+      else {
+        guard ContinuousClock.now < deadline else { break }
+        try? await Task.sleep(for: Constants.Execution.settlePollInterval)
+        continue
+      }
       // The element list *and* how finished the page claims to be. A shell with
       // a navigation rail on it is stable at twelve elements while the content
       // the step needs is still being built — see `ElementSource.readiness()`.
@@ -581,7 +625,9 @@ public actor AgentLoop {
       if readiness == "loading" {
         previous = nil
         previousNodes = nil
-        stable = 0
+        stillSince = nil
+        guard ContinuousClock.now < deadline else { break }
+        try? await Task.sleep(for: Constants.Execution.settlePollInterval)
         continue
       }
       // **A spinner does not reset stability.** It used to, and on a page that
@@ -625,13 +671,22 @@ public actor AgentLoop {
       }
 
       if !described.isEmpty, described == previous, !growing {
-        stable += 1
-        if changed, stable >= required { return }
+        let since = stillSince ?? ContinuousClock.now
+        stillSince = since
+        Log.debug(
+          "settle poll t=\(started.milliseconds())ms still=\(since.milliseconds())ms "
+            + "of \(quiet) nodes=\(measured) changed=\(changed)")
+        if changed, ContinuousClock.now - since >= quiet { return }
       } else {
-        stable = 0
+        Log.debug(
+          "settle poll t=\(started.milliseconds())ms RESET nodes=\(measured) "
+            + "changed=\(changed) growing=\(growing)")
+        stillSince = nil
       }
       previous = described
       previousNodes = nodes
+      guard ContinuousClock.now < deadline else { break }
+      try? await Task.sleep(for: Constants.Execution.settlePollInterval)
     }
   }
 

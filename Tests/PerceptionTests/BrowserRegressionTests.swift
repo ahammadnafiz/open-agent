@@ -420,17 +420,32 @@ struct DOMBoundsRegressionTests {
     #expect(onScreen == action.bounds)
   }
 
-  /// A hand does not cross 800 points in a third of a second. Fitts's law puts
-  /// that reach at roughly 0.7s, so the average speed has to be near 1,100
-  /// points per second, not 2,600.
-  @Test("the pointer moves at a speed a hand could produce")
-  func pointerSpeedIsHuman() {
+  /// **The pointer narrates a decision and must not outlast it.**
+  ///
+  /// This assertion used to say the opposite, and it was argued well: a hand
+  /// does not cross 800 points in a third of a second, Fitts's law puts that
+  /// reach near 0.7s, so the pointer should take at least half a second. That
+  /// is the right model for predicting a human and the wrong one for drawing
+  /// an agent — nothing here is reaching, and the decision was already made
+  /// before the first frame.
+  ///
+  /// Measured on a real X step: `act=1011ms` against `judge=626ms`. Drawing
+  /// the decision cost more than making it, on every targeted step of every
+  /// task. So the contract is bounded by the work now, not by anatomy.
+  ///
+  /// Travel still has to read as travel — below roughly 0.1s a movement is a
+  /// cut rather than a motion — and the anticipation ring, which is the part
+  /// that actually informs, is untouched.
+  @Test("the pointer narrates a step without outlasting it")
+  func pointerDoesNotOutlastTheDecision() {
     let reach = 800.0
     let seconds = min(
       max(reach / Constants.HUD.pixelsPerSecond, Constants.HUD.minMoveSeconds),
       Constants.HUD.maxMoveSeconds)
-    #expect(seconds > 0.5, "a long reach should not read as a jump")
-    #expect(seconds < 1.2, "nor as a crawl — this still has a task to finish")
+    #expect(seconds >= 0.1, "below this a movement reads as a cut, not a motion")
+    #expect(
+      Constants.HUD.worstCaseOverheadSeconds < 0.6,
+      "the overlay must not cost more than the decision it draws — judge measures ~0.6s")
   }
 }
 
@@ -808,6 +823,39 @@ struct TypingCadenceTests {
     #expect(actions.filter { $0["type"] as? String == "pause" }.count == 1)
     #expect(actions.last?["type"] as? String == "keyUp")
   }
+
+  /// **The cadence is what a field gets when it has asked for it, not by
+  /// default.** Measured on x.com's composer: 42 characters cost `act=2147ms`
+  /// paced and `act=518ms` unpaced, and the read-back confirmed the same text
+  /// both times. Paying 1.6s on every `type` to be ready for the fields that
+  /// need per-keystroke timing is the wrong way round — try it fast, and let
+  /// the field say.
+  @Test("an unpaced burst carries every keystroke and no pauses")
+  func unpacedBurstHasNoPauses() throws {
+    let text = String(repeating: "a", count: Constants.Typing.webKeystrokeGroup * 3)
+    let sequence = BiDiExecutor.keySequence(text, paced: false)
+    let actions = try #require(sequence["actions"] as? [[String: Any]])
+
+    #expect(actions.filter { $0["type"] as? String == "pause" }.isEmpty)
+    #expect(actions.filter { $0["type"] as? String == "keyDown" }.count == text.count)
+    #expect(actions.filter { $0["type"] as? String == "keyUp" }.count == text.count)
+  }
+
+  /// **A retry that repeats the failed strategy is just waiting for a
+  /// different answer.** The two attempts in `type(_:into:)` are only worth
+  /// two attempts if they differ, so the burst and the paced retry must not
+  /// produce the same sequence.
+  @Test("the retry types differently from the first attempt")
+  func retryDiffersFromFirstAttempt() throws {
+    let text = String(repeating: "a", count: Constants.Typing.webKeystrokeGroup * 2)
+    let burst = try #require(
+      BiDiExecutor.keySequence(text, paced: false)["actions"] as? [[String: Any]])
+    let paced = try #require(
+      BiDiExecutor.keySequence(text, paced: true)["actions"] as? [[String: Any]])
+
+    #expect(burst.count < paced.count, "the paced retry has to actually pace something")
+    #expect(paced.contains { $0["type"] as? String == "pause" })
+  }
 }
 
 
@@ -1042,3 +1090,4 @@ struct PrivilegedContextTests {
     #expect(!BiDiClient.isPrivileged("https://example.com"))
   }
 }
+

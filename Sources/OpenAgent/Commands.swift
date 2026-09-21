@@ -222,6 +222,13 @@ enum Commands {
       fail(Credentials.missingKeyGuidance)
     }
 
+    // **Pay the TLS handshake somewhere other than the first step.** Every
+    // invocation is a fresh process with a cold connection pool, and attaching
+    // to the browser below takes a second or two during which nothing is using
+    // the network. Started here, never awaited — see `JevClient.warm()`.
+    let warming = Task { await jev.warm() }
+    defer { warming.cancel() }
+
     // The target world is a property of the step, not of the task — a task can
     // cross the boundary. `--browser` decides which source the loop starts on.
     let source: any ElementSource

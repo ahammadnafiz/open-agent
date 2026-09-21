@@ -16,10 +16,15 @@ actor FakeTransport: JevTransport {
 
   private var replies: [Reply]
   private(set) var sentRequests: [URLRequest] = []
+  /// Every base URL `warm` was asked to open, so a test can prove the call
+  /// reaches the transport rather than the protocol's default.
+  private(set) var warmed: [URL] = []
 
   init(_ replies: [Reply]) { self.replies = replies }
 
   var callCount: Int { sentRequests.count }
+
+  func warm(_ baseURL: URL) async { warmed.append(baseURL) }
 
   func send(_ request: URLRequest, timeout: Duration) async throws -> (Data, HTTPURLResponse) {
     sentRequests.append(request)

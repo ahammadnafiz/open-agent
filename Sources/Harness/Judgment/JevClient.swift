@@ -7,6 +7,21 @@ import Foundation
 /// the network — SPEC.md § Testing Strategy.
 public protocol JevTransport: Sendable {
   func send(_ request: URLRequest, timeout: Duration) async throws -> (Data, HTTPURLResponse)
+
+  /// Opens the connection before the first step needs it.
+  ///
+  /// **A protocol requirement, not only an extension member.** A method
+  /// supplied just in an extension dispatches statically through
+  /// `any JevTransport`, so the live transport's implementation would never be
+  /// reached and this would be dead code that reads like a feature — a mistake
+  /// this codebase has already made twice.
+  func warm(_ baseURL: URL) async
+}
+
+extension JevTransport {
+  /// Transports with no connection to open — the offline ones `swift test`
+  /// uses — get this and do nothing.
+  public func warm(_ baseURL: URL) async {}
 }
 
 /// The live transport. **Holds one `URLSession` for the process lifetime.**
@@ -17,8 +32,8 @@ public protocol JevTransport: Sendable {
 /// warm connection away every time.
 ///
 /// A session spans several `run`/`resume` invocations, which are separate
-/// processes, so the warm connection dies between them. The first Jev call after
-/// a resume pays the cold ~900 ms. That is expected, not a regression.
+/// processes, so the warm connection dies between them — see `warm()`, which
+/// is how that cost is paid somewhere other than the first step.
 public final class URLSessionTransport: JevTransport {
   private let session: URLSession
 
@@ -27,6 +42,28 @@ public final class URLSessionTransport: JevTransport {
     config.httpAdditionalHeaders = ["Content-Type": "application/json"]
     config.waitsForConnectivity = false
     session = URLSession(configuration: config)
+  }
+
+  /// Opens the connection before anything needs it.
+  ///
+  /// **Every invocation is a new process, so every invocation paid the cold
+  /// handshake on the step the user was waiting for.** Measured: `judge` runs
+  /// 1342–1410 ms on the first step of a run and 481–664 ms on every step
+  /// after it, and the difference is TCP and TLS to the vendor's edge.
+  ///
+  /// It is entirely dead time that overlaps something else the agent has to do
+  /// anyway — attaching to the browser, finding the right tab, reading the
+  /// cookie jar — so it is started before that work and never waited on.
+  ///
+  /// The request carries **no credential**: it exists to open a socket, not to
+  /// ask anything, and an unauthenticated response warms the pool exactly as
+  /// well as an authorized one. Failure is not an error — if the network is
+  /// down, the real call will say so with a real message.
+  public func warm(_ baseURL: URL) async {
+    var request = URLRequest(url: baseURL)
+    request.httpMethod = "HEAD"
+    request.timeoutInterval = 5
+    _ = try? await session.data(for: request)
   }
 
   public func send(_ request: URLRequest, timeout: Duration) async throws -> (Data, HTTPURLResponse)
@@ -106,6 +143,12 @@ public actor JevClient: StepJudge {
   }
 
   // MARK: - The step battery
+
+  /// Opens the HTTP connection ahead of the first step. Fire and forget; see
+  /// `URLSessionTransport.warm(_:)` for what this is worth and why it is safe.
+  public func warm() async {
+    await transport.warm(baseURL)
+  }
 
   /// One batched request carrying verification, selection and intent risk.
   ///

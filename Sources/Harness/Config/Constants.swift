@@ -360,19 +360,32 @@ public enum Constants {
     /// its content absent; a step judged there sees a page that is technically
     /// present and has nothing on it.
     public static let settleTimeout: Duration = .seconds(10)
-    public static let settlePollInterval: Duration = .milliseconds(150)
 
-    /// How many identical observations in a row count as settled, **after the
-    /// screen has been seen to change.**
+    /// How often `settle` looks.
+    ///
+    /// **This used to be the unit stillness was measured in, and that made it
+    /// two decisions wearing one number.** Eight stable polls at 150 ms meant
+    /// "1.2 s of stillness" and "check six times a second" could not be
+    /// changed independently, so looking more often silently weakened the
+    /// guarantee. They are now separate: this is only the sampling rate, and
+    /// `navigationQuiet` / `actionQuiet` own how long the screen must hold
+    /// still. Sampling faster now costs nothing but a few cheap snapshots and
+    /// buys back the quantisation — measured, a page that went still at
+    /// t=1655 ms was not released until t=2869 ms, and 1214 ms of that was
+    /// counting.
+    public static let settlePollInterval: Duration = .milliseconds(60)
+
+    /// How long the screen must hold still to count as settled, **after it
+    /// has been seen to change.**
     ///
     /// Ten polls — 1.5s of stillness — was the price of not using the change
     /// itself as a signal. Waiting for the screen to move is far stronger
     /// evidence that the action landed than waiting for it to hold still, and
-    /// once it has moved, three quiet polls is a pause long enough to trust.
+    /// once it has moved, a short quiet pause is long enough to trust.
     ///
     /// The whole wait cost about 4.7s of every 7s step. This is the number
     /// that made a five-step task take half a minute.
-    public static let settleStableChecks = 2
+    public static let actionQuiet: Duration = .milliseconds(300)
 
     /// How much the DOM may grow between two polls and still count as still.
     ///
@@ -420,7 +433,16 @@ public enum Constants {
     /// Instagram's inbox holds at 526 nodes and `readyState: complete` for a
     /// beat, then fills in its conversations — so a step judged after 450ms of
     /// quiet sees a navigation rail and calls it the page.
-    public static let navigationStableChecks = 8
+    /// The same, after a navigation.
+    ///
+    /// This is the single largest deliberate wait in the system and it is
+    /// **not** quantisation, so it did not move. Measured on x.com, the page
+    /// genuinely stopped changing at t=1655 ms and this number is why the step
+    /// ran to t=2869 ms. Lowering it needs evidence about the case it was
+    /// bought for — Instagram's inbox holding at 526 nodes with
+    /// `readyState: complete` before its conversations arrive — not an
+    /// argument about wanting the agent to be quicker.
+    public static let navigationQuiet: Duration = .milliseconds(1_200)
 
     /// How long to let an ordinary action's effects land.
     ///
@@ -711,20 +733,32 @@ public enum Constants {
     /// can watch is an agent nobody can interrupt.
     public static let motionEnabled = true
 
-    /// Pointer speed. Chosen to read as deliberate rather than instant —
-    /// an instantaneous jump conveys no direction, and direction is the
-    /// information the overlay exists to carry. Not measured; tune by eye.
-    /// **A hand does not move at 2,600 px/s.** Pointing obeys Fitts's law —
-    /// roughly `0.2 + 0.15·log₂(D/W + 1)` seconds — which puts a 800px reach to
-    /// a 100px target at about 0.7s, or an average near 1,100 px/s including
-    /// the acceleration and settle at each end. The old value crossed that same
-    /// distance in 0.31s, which reads as a jump rather than a movement.
-    public static let pixelsPerSecond: Double = 1_500
+    /// Pointer speed.
+    ///
+    /// **This is narration, and it was sitting on the critical path.**
+    /// Measured on a real X step: `act=1011ms`, of which roughly 690 ms was
+    /// the cursor flying to a target the executor could have been told about
+    /// immediately. Three targeted steps in a task, and the animation alone
+    /// cost more than every Jev call in the run put together.
+    ///
+    /// The previous value was argued from Fitts's law — a *hand* reaching for
+    /// a target averages near 1,100 px/s. That is the right model for
+    /// predicting a human and the wrong one for drawing an agent: nothing here
+    /// is reaching, and the user is watching a report of a decision that has
+    /// already been made. What the motion has to do is carry direction, and
+    /// direction survives being fast.
+    ///
+    /// The anticipation ring is untouched, because that is the part that
+    /// actually informs — see `anticipationSeconds`.
+    public static let pixelsPerSecond: Double = 3_200
 
     /// Floor and ceiling on travel time, so a short hop still reads as
     /// movement and a corner-to-corner sweep does not stall the step.
-    public static let minMoveSeconds: Double = 0.22
-    public static let maxMoveSeconds: Double = 0.7
+    ///
+    /// The ceiling is what a full-screen sweep costs, and it was being paid on
+    /// most steps: 0.7 s of every targeted step, every time.
+    public static let minMoveSeconds: Double = 0.10
+    public static let maxMoveSeconds: Double = 0.30
 
     /// How long the target ring is visible before the cursor sets off.
     ///
@@ -734,14 +768,17 @@ public enum Constants {
     /// for speed.
     public static let anticipationSeconds: Double = 0.14
 
-    /// Press-and-release, then a beat before the ring clears. Below ~0.1 s
-    /// the click reads as a flicker rather than as an action.
-    public static let pressSeconds: Double = 0.10
-    public static let settleSeconds: Double = 0.08
+    /// Press-and-release, then a beat before the ring clears.
+    ///
+    /// These run *alongside* the executor rather than in front of it, so they
+    /// only cost wall-clock time when the dispatch is faster than the
+    /// animation — which, for a click, it always is.
+    public static let pressSeconds: Double = 0.07
+    public static let settleSeconds: Double = 0.05
 
-    /// Worst case added per step: anticipation + maxMove + press + settle
-    /// = 0.99 s. Typical: ~0.6 s. Over a 10-step task that is 6 s against a
-    /// 90 s ceiling. Acceptable; revisit if `maxSteps` tasks become normal.
+    /// Worst case added per targeted step: anticipation + maxMove + press +
+    /// settle = 0.56 s, from 0.99 s. Typical is now ~0.35 s. Over a 10-step
+    /// task that is 3.5 s against a 90 s ceiling.
     public static let worstCaseOverheadSeconds: Double =
       anticipationSeconds + maxMoveSeconds + pressSeconds + settleSeconds
   }

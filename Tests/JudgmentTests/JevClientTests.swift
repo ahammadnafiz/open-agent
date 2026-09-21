@@ -257,3 +257,40 @@ final class SleepRecorder: @unchecked Sendable {
     return recorded
   }
 }
+
+/// Opening the connection before the first step needs it.
+@Suite("The connection is warmed off the critical path")
+struct ConnectionWarmingTests {
+
+  /// **The trap this is guarding is dispatch, not behaviour.** `warm` has a
+  /// do-nothing default so offline transports need not implement it, and a
+  /// default supplied only in an extension would be the version every call
+  /// through `any JevTransport` resolved to — statically, at compile time,
+  /// with the real implementation never running. This codebase has shipped
+  /// that bug twice, and both times the feature looked present and did
+  /// nothing.
+  @Test("warming reaches the transport, not the protocol default")
+  func warmReachesTheTransport() async throws {
+    let transport = FakeTransport([])
+    let client = JevClient(apiKey: "test-key", transport: transport)
+
+    await client.warm()
+
+    let warmed = await transport.warmed
+    #expect(warmed == [Constants.Jev.baseURL])
+  }
+
+  /// Warming is an optimisation, so it must not consume a scripted reply or
+  /// otherwise count as a request. A step issued afterwards is still the
+  /// first thing the transport is asked to send.
+  @Test("warming does not count as a request")
+  func warmingIsNotARequest() async throws {
+    let transport = FakeTransport([])
+    let client = JevClient(apiKey: "test-key", transport: transport)
+
+    await client.warm()
+
+    let sent = await transport.callCount
+    #expect(sent == 0)
+  }
+}
