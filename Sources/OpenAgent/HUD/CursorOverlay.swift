@@ -25,6 +25,11 @@ public final class CursorOverlay {
   private var panel: NSPanel?
   private let motion = CursorMotion()
 
+  /// The application this overlay is narrating, or `nil` for the `overlay`
+  /// demo, which narrates nothing and should always draw.
+  private var stagePID: pid_t?
+  private var activationObserver: NSObjectProtocol?
+
   /// Multiplies pointer velocity. 1.0 is `Constants.HUD.pixelsPerSecond`.
   ///
   /// Exists so the motion can be judged at half and double speed without a
@@ -71,14 +76,68 @@ public final class CursorOverlay {
 
   public func show() {
     if panel == nil { build() }
-    panel?.orderFrontRegardless()
     state.isVisible = true
+    syncVisibility()
   }
 
   public func hide() {
     state.isVisible = false
     state.verb = ""
     state.target = nil
+    panel?.orderOut(nil)
+  }
+
+  // MARK: - The stage
+
+  /// Names the application this overlay is narrating.
+  ///
+  /// **The overlay is drawn at `.screenSaver` level across the union of every
+  /// display, which means it floats above everything the user has open.** That
+  /// is right while they are looking at the application the agent is driving
+  /// and wrong the instant they are not: the agent works in WhatsApp, the user
+  /// switches to Zen, and a cursor appears to press buttons in Zen. Nothing
+  /// moved — the overlay simply never knew whose window it was standing in.
+  ///
+  /// The panel cannot be ordered into another process's window list, so
+  /// "appear in the window it is working in" is enforced the only way it can
+  /// be: the overlay draws while that application is frontmost and orders
+  /// itself out while it is not. The agent keeps working either way. What
+  /// stops is the claim that the user can see it happening.
+  public func bind(toApplication pid: pid_t) {
+    guard stagePID != pid else { return }
+    stagePID = pid
+    if panel == nil { build() }
+    observeActivation()
+    syncVisibility()
+  }
+
+  /// Whether the narrated application is the one in front of the user.
+  ///
+  /// An unbound overlay always draws. That is the `overlay` demo, which
+  /// narrates no application and would otherwise be invisible.
+  static func draws(stage: pid_t?, frontmost: pid_t?) -> Bool {
+    guard let stage else { return true }
+    return stage == frontmost
+  }
+
+  private func observeActivation() {
+    guard activationObserver == nil else { return }
+    // `NSWorkspace` has its own notification centre; this notification does
+    // not arrive on `NotificationCenter.default`. It fires on every app
+    // activation, which covers both leaving the stage and returning to it.
+    activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+      forName: NSWorkspace.didActivateApplicationNotification,
+      object: nil, queue: .main
+    ) { _ in MainActor.assumeIsolated { CursorOverlay.shared.syncVisibility() } }
+  }
+
+  private func syncVisibility() {
+    let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+    guard state.isVisible, Self.draws(stage: stagePID, frontmost: front) else {
+      panel?.orderOut(nil)
+      return
+    }
+    panel?.orderFrontRegardless()
   }
 
   private func build() {

@@ -8,6 +8,10 @@ import SwiftUI
 /// `Harness`, which never imports AppKit.
 struct AppHUD: HUDBridge {
 
+  /// The application being driven. The overlay draws only while this is the
+  /// application in front of the user — see `CursorOverlay.bind(toApplication:)`.
+  let pid: pid_t
+
   /// **Narration and execution are one call.**
   ///
   /// The ring lands on the target, the user gets
@@ -34,6 +38,10 @@ struct AppHUD: HUDBridge {
     // where the least familiar thing is happening — Open Question Q9.
     let isCaptured = target.ref.sourceKind == .captured
 
+    // Idempotent, and cheap after the first step. It is done here rather than
+    // at construction because the overlay is main-actor isolated and this is
+    // the first point in the step that is already on it.
+    await CursorOverlay.shared.bind(toApplication: pid)
     await CursorOverlay.shared.move(
       to: target.bounds,
       verb: action.kind.rawValue,

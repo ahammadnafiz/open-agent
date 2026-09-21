@@ -300,7 +300,7 @@ enum Commands {
     let loop = AgentLoop(
       task: session.task, taskContext: session.taskContext, plan: session.plan,
       sessionID: session.id, pid: pid, source: source, jev: jev,
-      executors: executors, hud: AppHUD(),
+      executors: executors, hud: AppHUD(pid: pid),
       capture: ScreenCapture(), artifactsDirectory: Session.directory,
       resumeFrom: resumeState,
       pendingEyes: pendingEyes
