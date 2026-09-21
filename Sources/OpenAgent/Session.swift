@@ -17,6 +17,19 @@ struct Session: Codable, Sendable {
   /// Whether this task drives the browser. Carried so `resume` reconnects to
   /// the same world the task started in.
   var browser = false
+  /// The site this task is about, when the plan does not say.
+  ///
+  /// The tab a browser run works in is settled from the plan's first
+  /// `navigate` — that step names the site. A plan with no navigation names
+  /// nothing, so the tab fell back to whichever one `resolveContext()` had
+  /// guessed at connect time: measured, a scroll-only plan meant for a
+  /// Facebook feed scrolled a blank tab nine times. `--url` is how such a
+  /// plan says where it is. Persisted, because `resume` has to land in the
+  /// same tab.
+  ///
+  /// Named `site`, not `url`: `url` on this type is already where the session
+  /// is saved on disk.
+  var site: String?
   var state: AgentLoop.LoopState
   /// What the last invocation was waiting for, so `resume` can refuse a
   /// session that is not waiting for anything.

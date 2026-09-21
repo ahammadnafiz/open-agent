@@ -1288,3 +1288,114 @@ struct TargetlessScrollTests {
     #expect(sent.contains("\"y\":400"), "800 tall, so the centre is 400")
   }
 }
+
+
+/// **A blank tab is not the site that was asked for.** `tab(for:)` opened one
+/// whenever a url was named and nothing matched, which is right when a
+/// `navigate` step is about to load it and wrong every other time. Measured: a
+/// scroll-only plan named `facebook.com`, was handed a fresh `about:blank`,
+/// scrolled it nine times and scored `progressed 0.15` — no error anywhere,
+/// and every log line true.
+@Suite("Naming a site is not the same as opening one")
+struct TabCreationTests {
+
+  /// `getTree`, then `getTree` again for the top-level contexts, then the
+  /// window name of the one tab — which is not the agent's.
+  static func replies(tabURL: String) -> [String] {
+    let tree = #"{"contexts":[{"context":"ctx-1","url":"\#(tabURL)"}]}"#
+    return [
+      tabOK(1),  // session.new
+      tabOK(2, tree),  // resolveContext
+      tabOK(3, tree),  // topLevelContexts
+      tabOK(4, #"{"result":{"type":"string","value":""}}"#),  // window.name — theirs
+    ]
+  }
+
+  @Test("a tab already on the site is used, and nothing is opened")
+  func adoptsTheOpenTab() async throws {
+    let transport = FakeBiDiTransport(
+      replies: Self.replies(tabURL: "https://www.facebook.com/feed") + [tabOK(5)])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+
+    _ = try await client.tab(for: "https://www.facebook.com/", creating: false)
+    let opened = await transport.methods().filter { $0 == "browsingContext.create" }
+    #expect(opened.isEmpty, "the site was already open — nothing to create")
+  }
+
+  /// The gap this closes: with nothing coming to fill it, a new tab would be
+  /// answered about as if it were the site.
+  @Test("no tab on the site and nothing to fill one is an error, not a blank page")
+  func refusesToOpenWhatNothingFills() async throws {
+    let transport = FakeBiDiTransport(replies: Self.replies(tabURL: "https://example.com/"))
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+
+    await #expect(throws: BiDiError.noTabOnSite("https://www.facebook.com/")) {
+      _ = try await client.tab(for: "https://www.facebook.com/", creating: false)
+    }
+    let opened = await transport.methods().filter { $0 == "browsingContext.create" }
+    #expect(opened.isEmpty, "refusing means opening nothing")
+  }
+
+  /// **The case two passing unit tests and a green suite all missed.** The
+  /// refusal sat after preference 2 — "a tab this agent opened before" —
+  /// which asks nothing about the site. Measured live: a run navigated the
+  /// agent's own tab from Facebook to a GitHub issues page, and the next
+  /// `observe --url facebook.com` adopted that tab and reported the issues
+  /// list as the answer about Facebook.
+  @Test("an agent tab on another site is not adopted for a named site")
+  func doesNotAdoptTheAgentTabOnAnotherSite() async throws {
+    let tree = #"{"contexts":[{"context":"ctx-1","url":"https://github.com/pacifio/atlas"}]}"#
+    let transport = FakeBiDiTransport(replies: [
+      tabOK(1),  // session.new
+      tabOK(2, tree),  // resolveContext
+      tabOK(3, tree),  // topLevelContexts
+      // window.name says this one IS the agent's, from an earlier run.
+      tabOK(4, #"{"result":{"type":"string","value":"__open_agent_tab"}}"#),
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+
+    await #expect(throws: BiDiError.noTabOnSite("https://www.facebook.com/")) {
+      _ = try await client.tab(for: "https://www.facebook.com/", creating: false)
+    }
+  }
+
+  /// With no site named, that preference is exactly right — it is how
+  /// `observe --browser` and a resume land in the tab the run was using.
+  @Test("with no site named the agent's own tab is still preferred")
+  func adoptsTheAgentTabWhenNoSiteIsNamed() async throws {
+    let tree = #"{"contexts":[{"context":"ctx-1","url":"https://github.com/pacifio/atlas"}]}"#
+    let transport = FakeBiDiTransport(replies: [
+      tabOK(1), tabOK(2, tree), tabOK(3, tree),
+      tabOK(4, #"{"result":{"type":"string","value":"__open_agent_tab"}}"#),
+      tabOK(5),  // activate, on adopting it
+      tabOK(6),
+    ])
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+    #expect(try await client.tab(for: nil, creating: false) == "ctx-1")
+  }
+
+  /// A plan with a `navigate` step still opens one — that step is about to
+  /// load it, so the tab is not blank for long.
+  @Test("a navigation about to land may still open a tab")
+  func stillOpensForANavigation() async throws {
+    let transport = FakeBiDiTransport(replies: Self.replies(tabURL: "https://example.com/"))
+    let client = BiDiClient(port: 9333, makeTransport: { _ in transport })
+    try await client.connect()
+
+    // It gets past the refusal and on to opening, where the scripted replies
+    // run out — which is the assertion: the error is not `noTabOnSite`.
+    do {
+      _ = try await client.tab(for: "https://www.facebook.com/", creating: true)
+    } catch let error as BiDiError {
+      #expect(error != .noTabOnSite("https://www.facebook.com/"))
+    }
+  }
+}
+
+private func tabOK(_ id: Int, _ result: String = "{}") -> String {
+  #"{"type":"success","id":\#(id),"result":\#(result)}"#
+}

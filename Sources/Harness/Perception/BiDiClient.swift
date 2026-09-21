@@ -74,6 +74,13 @@ public enum BiDiError: Error, Equatable, Sendable {
   case disconnected
   /// The snapshot script threw inside the page.
   case scriptFailed(String)
+  /// A site was named and no tab is showing it.
+  ///
+  /// Only raised when nothing is coming to fill a new tab. A plan with a
+  /// `navigate` step opens one and loads it; a plan without one, and
+  /// `observe`, would get a blank page and report about it as if it were the
+  /// site — which is the failure this whole verb exists to avoid.
+  case noTabOnSite(String)
 }
 
 /// The socket, behind a seam.
@@ -438,7 +445,14 @@ public actor BiDiClient {
   /// task against a page that had nothing to do with it — measured: a leftover
   /// Instagram login tab from an earlier run produced `blocked 0.91` at step 0,
   /// before the agent had navigated anywhere or done anything at all.
-  public func tab(for url: String? = nil) async throws -> String {
+  /// - Parameter creating: whether a tab may be opened when none is showing
+  ///   the site. True for a plan with a `navigate` step, which is about to
+  ///   load the page. **False everywhere else** — a blank tab nothing will
+  ///   fill is not the site that was asked for, and acting on it reads as an
+  ///   answer about that site. Measured: a scroll-only plan named
+  ///   `facebook.com`, got a fresh `about:blank`, scrolled it nine times and
+  ///   scored `progressed 0.15` with nothing wrong in any log.
+  public func tab(for url: String? = nil, creating: Bool = true) async throws -> String {
     let contexts = try await topLevelContexts()
 
     // Once this run has a tab, it keeps it. Re-deciding every step is how an
@@ -481,6 +495,20 @@ public actor BiDiClient {
       }
     }
 
+    // A site was named, no tab is showing it, and nothing is coming to load
+    // one. **Stop here rather than falling through to preference 2**, which
+    // asks a different question — "did this agent open a tab before" — and
+    // answers it without reference to the site. Measured: a run navigated the
+    // agent's tab from Facebook to a GitHub issues page, and the next
+    // `observe --url facebook.com` adopted that same tab and reported the
+    // issues list, confidently, as the answer about Facebook. An agent tab on
+    // another site is still another site.
+    //
+    // With a navigation coming this is the right preference and is left
+    // alone: the step is about to load the named site into that tab, which is
+    // how a run reuses its own tab instead of piling up new ones.
+    if !creating, let url { throw BiDiError.noTabOnSite(url) }
+
     // 2. A tab this agent opened before, found by window name rather than by
     //    id — BiDi context ids are not stable across sessions, so the id a run
     //    writes down is not the id its own resume sees for the same tab.
@@ -506,7 +534,7 @@ public actor BiDiClient {
 
     // 3. Nothing to reuse. Open one — but only when a navigation is about to
     //    fill it, so a blank tab is never left behind for its own sake.
-    guard url != nil else { return try context() }
+    guard let url else { return try context() }
 
     // Opened from the tab the user is looking at, so it lands in the workspace
     // their sessions live in. Otherwise it inherits whichever container

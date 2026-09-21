@@ -23,6 +23,7 @@ enum Commands {
       let session = Session(
         id: Session.newID(), task: task, taskContext: options.taskContext,
         plan: Plan(steps: []), appName: options.app ?? "", browser: options.browser,
+        site: options.url,
         state: .init(history: [], planIndex: 0, stepIndex: 0, screenBefore: "", totalCost: 0),
         waitingFor: .needsPlan, candidates: nil
       )
@@ -48,7 +49,7 @@ enum Commands {
     let appName = options.app ?? frontmostAppName()
     var session = Session(
       id: Session.newID(), task: task, taskContext: options.taskContext,
-      plan: plan, appName: appName, browser: options.browser,
+      plan: plan, appName: appName, browser: options.browser, site: options.url,
       state: .init(history: [], planIndex: 0, stepIndex: 0, screenBefore: "", totalCost: 0),
       waitingFor: nil, candidates: nil
     )
@@ -160,26 +161,46 @@ enum Commands {
   /// another can see it in the response instead of inferring it from the
   /// labels.
   static func observeBrowser(url: String?) async {
+    let client: BiDiClient
+    let source: BiDiSource
     do {
-      let (client, source) = try await browserSession()
-      // The same tab a run would work in.
-      _ = try await client.tab(for: url)
-      let candidates = try CandidateFilter.reduce(try await source.observe())
-      let text = await source.pageText()
-      let page = await source.pageURL()
-      await client.close()
-      emit(
-        HostResponse(
-          session: "-", status: .completed, step: 0,
-          elapsedMilliseconds: 0, costUSD: 0,
-          candidates: candidates.criteria,
-          text: text.isEmpty ? nil : text,
-          reason: "observed \(candidates.count) candidates on \(page)"
-        )
-      )
+      (client, source) = try await browserSession()
     } catch {
       fail(describe(error))
     }
+
+    // **Everything past `connect` has to end the session, including the way
+    // out.** `fail` exits the process, and a process that exits between
+    // `connect` and `close` leaves the browser holding its one WebDriver
+    // session for a client that no longer exists — so the next invocation
+    // finds `sessionHeldElsewhere` and restarts the browser to clear it. That
+    // is a window closing in the user's face for an error that had nothing to
+    // do with them, and `drive` already learned it once.
+    //
+    // It was latent here until `tab(for:creating:)` gave this block a throw
+    // anyone could reach: one `observe` of a site with no tab open cost a Zen
+    // restart, which restored the tabs *unloaded*, which made the next
+    // `observe` report that site as not open either.
+    let response: HostResponse
+    do {
+      // The same tab a run would work in.
+      _ = try await client.tab(for: url, creating: false)
+      let candidates = try CandidateFilter.reduce(try await source.observe())
+      let text = await source.pageText()
+      let page = await source.pageURL()
+      response = HostResponse(
+        session: "-", status: .completed, step: 0,
+        elapsedMilliseconds: 0, costUSD: 0,
+        candidates: candidates.criteria,
+        text: text.isEmpty ? nil : text,
+        reason: "observed \(candidates.count) candidates on \(page)"
+      )
+    } catch {
+      await client.close()
+      fail(describe(error))
+    }
+    await client.close()
+    emit(response)
   }
 
   // MARK: - act
@@ -269,10 +290,19 @@ enum Commands {
         //
         // The plan's first navigation says which site this is about, which is
         // what lets an already-open tab on that site be used instead of a
-        // second copy of it. A plan with no navigation names no site, and then
-        // nothing is opened at all.
+        // second copy of it — and it is about to load that tab, so one may be
+        // opened for it.
+        //
+        // A plan with no navigation names no site, and the tab then fell back
+        // to whatever `resolveContext()` guessed at connect time: measured, a
+        // scroll-only plan meant for a Facebook feed scrolled a blank tab nine
+        // times and scored `progressed 0.15`, with nothing wrong in any log.
+        // `--url` is how such a plan says where it is. It may only *match*,
+        // never open — nothing in it would load a new tab, and acting on a
+        // blank one is the failure above wearing a different hat.
+        let navigatesTo = session.plan.steps.first(where: { $0.kind == .navigate })?.payload
         _ = try await client.tab(
-          for: session.plan.steps.first(where: { $0.kind == .navigate })?.payload)
+          for: navigatesTo ?? session.site, creating: navigatesTo != nil)
         do {
           // The AX executor still exists: `openApp` and native fallbacks are
           // reachable from a browser task.
@@ -575,6 +605,10 @@ enum Commands {
     case ExecutionError.focusNotAccepted:
       return "The application never accepted focus on that element, so nothing was typed. "
         + "Typing anyway would have sent the keys wherever focus actually is."
+    case BiDiError.noTabOnSite(let site):
+      return "No tab is open on \(site). Nothing here navigates — `observe` reads a page "
+        + "and a plan with no `navigate` step loads none — so opening a blank tab would "
+        + "only answer about a page that is not the one you asked for."
     case CandidateError.noCandidates:
       return "Nothing labelled and actionable is on screen."
     case JevError.missingAPIKey:

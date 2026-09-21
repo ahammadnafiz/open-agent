@@ -34,7 +34,7 @@ it. `Budget.maxEscalations` is the ceiling that keeps it honest.
 ## 2. The verbs
 
 ```bash
-open-agent run "<task>" --plan plan.json
+open-agent run "<task>" --plan plan.json [--url <site>]
 open-agent resume <session> --eyes <n> | --eyes none
 open-agent resume <session> --plan plan.json
 open-agent observe [--app <name> | --browser [--url <site>]]
@@ -56,6 +56,18 @@ reported twenty-one candidates from an unrelated tab in the same browser, with
 `completed` and no hint that it had answered about somewhere else. The `reason`
 now names the address that was actually read, so a mismatch is visible in the
 response rather than inferred from the labels.
+
+**A browser plan whose steps include no `navigate` must pass `--url`.** The
+tab a run works in is settled from the plan's first navigation, because that
+step names the site. With no navigation the site is unnamed, and the tab fell
+back to whichever one `resolveContext()` guessed at connect time — measured, a
+scroll-only plan meant for a Facebook feed scrolled a blank tab nine times and
+scored `progressed 0.15`, with nothing wrong in any log. `--url` names it.
+
+It matches, it never opens: a tab nothing is going to load is not the site that
+was asked for, and `no tab is open on <site>` is the honest answer. A plan
+*with* a `navigate` step still opens one, since that step is about to fill it.
+The same rule governs `observe --browser --url`.
 
 **A `scroll` step names no on-screen element**, like `openApp`, `navigate` and
 `wait`. A wheel needs a point, and the container a plan wants to scroll — a

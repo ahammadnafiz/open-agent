@@ -24,7 +24,12 @@ enum CLI {
     var session: String?
     var planPath: String?
     var app: String?
-    /// Which page `observe --browser` is about.
+    /// Which page this invocation is about.
+    ///
+    /// On `run`, only needed when the plan has no `navigate` step to name the
+    /// site — a scroll-only plan, say. It matches an already-open tab and
+    /// never opens one, because nothing in such a plan would load it.
+    ///
     ///
     /// **Without it, `observe --browser` reads a tab nobody named.** `tab()`
     /// given no url cannot match on a site and cannot find the tab an earlier
@@ -173,7 +178,7 @@ enum CLI {
     open-agent — a computer-use agent driven by the coding agent you already run
 
       open-agent run "<task>" [--plan plan.json] [--app <name> | --browser]
-                              [--context "<instance>"]
+                              [--url <site>] [--context "<instance>"]
       open-agent resume <session> --eyes <n> --label "the send icon"
       open-agent resume <session> --eyes none
       open-agent resume <session> --plan plan.json
